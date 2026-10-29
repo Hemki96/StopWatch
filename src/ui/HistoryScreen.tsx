@@ -4,7 +4,8 @@ import { isComplete } from '../domain/lauf'
 import { schnellsteZeit } from '../domain/analyse'
 import { formatStrecke, formatTime } from '../domain/format'
 import { SCHWIMMARTEN, type Lauf } from '../domain/types'
-import { ChevronRightIcon } from './icons'
+import { Bestaetigung } from './Bestaetigung'
+import { ChevronRightIcon, TrashIcon } from './icons'
 import { LaufDetail } from './LaufDetail'
 
 const datumFormat = new Intl.DateTimeFormat('de-DE', {
@@ -27,6 +28,7 @@ export function HistoryScreen() {
   const app = useApp()
   const [offenerLauf, setOffenerLauf] = useState<string | null>(null)
   const [satzEdit, setSatzEdit] = useState<{ id: string; wert: string } | null>(null)
+  const [satzLoeschen, setSatzLoeschen] = useState<{ id: string; anzahl: number } | null>(null)
 
   const speichereSatz = () => {
     if (!satzEdit) return
@@ -85,7 +87,7 @@ export function HistoryScreen() {
 
         {gruppen.map((gruppe) => (
           <section key={gruppe.id} className="mb-6">
-            <div className="mb-2 flex items-baseline justify-between gap-2">
+            <div className="mb-2 flex items-center justify-between gap-2">
               <h2 className="shrink-0 text-[11px] font-bold uppercase tracking-wider text-muted">
                 {gruppe.datum
                   ? datumFormat.format(new Date(`${gruppe.datum}T12:00:00`))
@@ -113,6 +115,18 @@ export function HistoryScreen() {
                   className="min-w-0 truncate text-xs text-muted underline decoration-dotted underline-offset-2"
                 >
                   {gruppe.titel}
+                </button>
+              )}
+              {gruppe.id === 'ohne-satz' ? null : (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setSatzLoeschen({ id: gruppe.id, anzahl: gruppe.laeufe.length })
+                  }
+                  aria-label={`Satz löschen, ${gruppe.laeufe.length} Läufe`}
+                  className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted"
+                >
+                  <TrashIcon className="h-4 w-4" />
                 </button>
               )}
             </div>
@@ -158,6 +172,22 @@ export function HistoryScreen() {
       {offenerLauf ? (
         <LaufDetail laufId={offenerLauf} onClose={() => setOffenerLauf(null)} />
       ) : null}
+
+      <Bestaetigung
+        open={satzLoeschen !== null}
+        titel="Satz löschen?"
+        text={
+          satzLoeschen
+            ? `${satzLoeschen.anzahl} ${satzLoeschen.anzahl === 1 ? 'Lauf wird' : 'Läufe werden'} mitgelöscht. Das lässt sich nicht rückgängig machen.`
+            : ''
+        }
+        bestaetigenLabel="Satz löschen"
+        onBestaetigen={() => {
+          if (satzLoeschen) app.loescheSatz(satzLoeschen.id)
+          setSatzLoeschen(null)
+        }}
+        onAbbrechen={() => setSatzLoeschen(null)}
+      />
     </div>
   )
 }

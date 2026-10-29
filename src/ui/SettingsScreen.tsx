@@ -1,13 +1,21 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useApp } from '../app/AppProvider'
+import { useInstallPrompt } from '../app/pwa'
 import { formatStrecke } from '../domain/format'
 import { SCHWIMMARTEN } from '../domain/types'
 import { csvDateiname, laeufeAlsCsv } from '../export/csv'
 import { speichereDatei, waehleDatei } from '../export/datei'
+import { leseSpeicherSchutz, schuetzeSpeicher, type SpeicherSchutz } from '../storage/persistenz'
+import {
+  pruefeBackup,
+  zusammenfassungText,
+  type Backup,
+} from '../storage/backup'
 import { clearAll, exportBackup, importBackup } from '../storage/repository'
 import { Bestaetigung } from './Bestaetigung'
 import { KonfigurationSheet } from './KonfigurationSheet'
-import { DownloadIcon, MoonIcon, SunIcon, UploadIcon } from './icons'
+import { Sheet } from './Sheet'
+import { CheckIcon, DownloadIcon, MoonIcon, SunIcon, UploadIcon } from './icons'
 
 function Karte({ children }: { children: React.ReactNode }) {
   return <div className="overflow-hidden rounded-2xl border border-line bg-surface">{children}</div>
@@ -43,8 +51,26 @@ function Zeile({
 
 export function SettingsScreen() {
   const app = useApp()
+  const install = useInstallPrompt()
   const [sheet, setSheet] = useState(false)
   const [frageLoeschen, setFrageLoeschen] = useState(false)
+  const [speicher, setSpeicher] = useState<SpeicherSchutz>('unbekannt')
+  const [importVorschau, setImportVorschau] = useState<{ backup: Backup; text: string } | null>(
+    null,
+  )
+  const [importMeldung, setImportMeldung] = useState<string | null>(null)
+
+  useEffect(() => {
+    void leseSpeicherSchutz().then(setSpeicher)
+  }, [])
+
+  const fordereSpeicherSchutz = async () => {
+    const status = await schuetzeSpeicher()
+    setSpeicher(status)
+    if (status === 'geschuetzt') app.zeigeToast('Speicher ist jetzt dauerhaft geschützt.')
+    else if (status === 'ungeschuetzt')
+      app.zeigeToast('Der Browser hat den Schutz noch nicht gewährt.')
+  }
 
   const konfiguration = app.einstellungen.konfiguration
   const art = SCHWIMMARTEN.find((s) => s.wert === konfiguration.schwimmart)?.label ?? ''
@@ -67,12 +93,34 @@ export function SettingsScreen() {
     const datei = await waehleDatei('application/json')
     if (!datei) return
     try {
-      const inhalt = JSON.parse(await datei.text())
-      await importBackup(inhalt)
-      await app.neuLaden()
-      app.zeigeToast('Backup importiert.')
+      const inhalt: unknown = JSON.parse(await datei.text())
+      const pruefung = pruefeBackup(inhalt)
+      if (!pruefung.ok) {
+        setImportMeldung(pruefung.fehler)
+        return
+      }
+      setImportVorschau({
+        backup: pruefung.backup,
+        text: zusammenfassungText(pruefung.zusammenfassung),
+      })
     } catch {
-      app.zeigeToast('Datei konnte nicht gelesen werden.')
+      setImportMeldung('Die Datei ist kein gültiges JSON.')
+    }
+  }
+
+  const fuehreImportAus = async () => {
+    if (!importVorschau) return
+    const { backup, text } = importVorschau
+    try {
+      await importBackup(backup)
+      await app.neuLaden()
+      setImportVorschau(null)
+      app.zeigeToast(`Übernommen: ${text}.`)
+    } catch (fehler) {
+      setImportVorschau(null)
+      setImportMeldung(
+        fehler instanceof Error ? fehler.message : 'Das Backup konnte nicht geschrieben werden.',
+      )
     }
   }
 
@@ -87,12 +135,37 @@ export function SettingsScreen() {
           Darstellung
         </h2>
         <Karte>
-          <Zeile
-            label={app.theme === 'dark' ? 'Dunkles Design' : 'Helles Design'}
-            wert="Antippen zum Wechseln"
-            onClick={app.toggleTheme}
-            icon={app.theme === 'dark' ? <MoonIcon className="h-5 w-5" /> : <SunIcon className="h-5 w-5" />}
-          />
+          <div className="px-4 py-3.5">
+            <p className="mb-2 text-sm font-medium">Design</p>
+            <div role="radiogroup" aria-label="Design" className="grid grid-cols-3 gap-2">
+              {(
+                [
+                  { wert: 'system', label: 'System', icon: null },
+                  { wert: 'light', label: 'Hell', icon: <SunIcon className="h-4 w-4" /> },
+                  { wert: 'dark', label: 'Dunkel', icon: <MoonIcon className="h-4 w-4" /> },
+                ] as const
+              ).map(({ wert, label, icon }) => {
+                const aktiv = app.themeEinstellung === wert
+                return (
+                  <button
+                    key={wert}
+                    type="button"
+                    role="radio"
+                    aria-checked={aktiv}
+                    onClick={() => app.setzeTheme(wert)}
+                    className={`flex h-11 items-center justify-center gap-1.5 rounded-xl border text-sm font-semibold ${
+                      aktiv
+                        ? 'border-accent bg-accent text-accent-fg'
+                        : 'border-line bg-surface2 text-fg'
+                    }`}
+                  >
+                    {icon}
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
         </Karte>
 
         <h2 className="mb-2 mt-6 px-1 text-[11px] font-bold uppercase tracking-wider text-muted">
@@ -128,6 +201,17 @@ export function SettingsScreen() {
             icon={<UploadIcon className="h-5 w-5" />}
           />
           <Zeile
+            label={speicher === 'geschuetzt' ? 'Speicher geschützt' : 'Speicher dauerhaft sichern'}
+            wert={
+              speicher === 'geschuetzt'
+                ? 'Der Browser löscht die Daten nicht bei Platzmangel'
+                : speicher === 'ungeschuetzt'
+                  ? 'Antippen, um den Schutz anzufordern'
+                  : 'Wird von diesem Browser nicht unterstützt'
+            }
+            onClick={() => void fordereSpeicherSchutz()}
+          />
+          <Zeile
             label="Alle Daten löschen"
             onClick={() => setFrageLoeschen(true)}
             gefahr
@@ -142,15 +226,70 @@ export function SettingsScreen() {
         <h2 className="mb-2 mt-6 px-1 text-[11px] font-bold uppercase tracking-wider text-muted">
           Installation
         </h2>
-        <p className="px-1 text-xs leading-relaxed text-muted">
-          iPhone: Teilen-Symbol → „Zum Home-Bildschirm“. Android: Menü → „App installieren“. Danach
-          startet die App ohne Browserleiste und funktioniert offline.
-        </p>
+        <Karte>
+          {install.installiert ? (
+            <div className="flex items-center gap-3 px-4 py-3.5">
+              <CheckIcon className="h-5 w-5 text-ok" />
+              <span className="flex-1 text-sm font-medium">Als App installiert</span>
+            </div>
+          ) : install.kannInstallieren ? (
+            <Zeile
+              label="App installieren"
+              wert="Vollbild, ohne Browserleiste, offline nutzbar"
+              onClick={() => void install.installiere()}
+              icon={<DownloadIcon className="h-5 w-5" />}
+            />
+          ) : (
+            <p className="px-4 py-3.5 text-xs leading-relaxed text-muted">{install.anleitung}</p>
+          )}
+        </Karte>
 
-        <p className="mt-8 text-center text-[11px] text-muted">Beckenrand 0.1.0</p>
+        {install.installiert ? null : (
+          <p className="mt-3 px-1 text-xs leading-relaxed text-muted">
+            Auf dem iPhone schützt erst die Installation die Daten: Solange die App nicht auf dem
+            Home-Bildschirm liegt, kann Safari den lokalen Speicher nach längerer Nichtnutzung
+            verwerfen. Sichere zusätzlich regelmäßig ein Backup.
+          </p>
+        )}
+
+        <div className="mt-8 text-center text-[11px] leading-relaxed text-muted">
+          <p>Beckenrand 0.1.0</p>
+          <p>Offline nutzbar — alle Daten bleiben auf diesem Gerät.</p>
+        </div>
       </div>
 
       <KonfigurationSheet open={sheet} onClose={() => setSheet(false)} modus="einstellungen" />
+
+      <Bestaetigung
+        open={importVorschau !== null}
+        titel="Backup importieren?"
+        text={
+          importVorschau
+            ? `Vorhandene Daten bleiben erhalten. Übernommen werden: ${importVorschau.text}.`
+            : ''
+        }
+        bestaetigenLabel="Importieren"
+        onBestaetigen={() => void fuehreImportAus()}
+        onAbbrechen={() => setImportVorschau(null)}
+      />
+
+      <Sheet
+        open={importMeldung !== null}
+        titel="Import nicht möglich"
+        onClose={() => setImportMeldung(null)}
+      >
+        <p className="text-sm leading-relaxed text-muted">{importMeldung}</p>
+        <p className="mt-3 text-xs leading-relaxed text-muted">
+          Der vorhandene Bestand wurde nicht verändert.
+        </p>
+        <button
+          type="button"
+          onClick={() => setImportMeldung(null)}
+          className="mt-5 h-12 w-full rounded-xl bg-accent text-sm font-semibold text-accent-fg"
+        >
+          Schließen
+        </button>
+      </Sheet>
 
       <Bestaetigung
         open={frageLoeschen}

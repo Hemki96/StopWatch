@@ -177,6 +177,7 @@ export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetP
                 <select
                   value={bahn.schwimmerId ?? ''}
                   onChange={(e) => app.setzeSchwimmer(bahn.id, e.target.value || null)}
+                  aria-label={`Schwimmer für Bahn ${bahn.nummer}`}
                   className="h-11 flex-1 rounded-xl border border-line bg-surface2 px-3 text-sm"
                 >
                   <option value="">— kein Schwimmer —</option>
@@ -208,6 +209,7 @@ export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetP
                     liste[index] = e.target.value || null
                     app.setzeEinstellungen({ ...app.einstellungen, schwimmerProBahn: liste })
                   }}
+                  aria-label={`Schwimmer für Bahn ${index + 1}`}
                   className="h-11 flex-1 rounded-xl border border-line bg-surface2 px-3 text-sm"
                 >
                   <option value="">— kein Schwimmer —</option>
