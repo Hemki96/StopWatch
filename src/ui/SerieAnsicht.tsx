@@ -227,159 +227,167 @@ function Zeile({
   const hatUeberholung = zeile.offene.length > 1
   const neuesteOffene = zeile.offene.at(-1)
 
-  // Die Zeile ist ein Knopf, weil Tap, Enter und Leertaste dieselbe Aktion
-  // auslösen; das `aria-label` nennt Name, Runde und Status, weil Farbe und
-  // Zahl allein den Zustand nicht vermitteln.
+  // Die Messfläche ist ein Knopf, weil Tap, Enter und Leertaste dieselbe
+  // Aktion auslösen; das `aria-label` nennt Name, Runde und Status, weil Farbe
+  // und Zahl allein den Zustand nicht vermitteln. Der Zielknopf steht als
+  // Geschwister daneben (#60): kein Knopf in einem `role="button"`, und ein Tap
+  // auf der Zeile löst nie das Ziel aus.
   return (
     <div
-      role="button"
-      tabIndex={0}
-      data-status={zeile.status}
-      aria-keyshortcuts={kannRueckgaengig ? 'Backspace Delete' : undefined}
-      aria-label={`Reihe ${basis.reihe}, Bahn ${basis.nummer}${name ? `, ${name}` : ''}, Runde ${angezeigteRunde} von ${gesamt}, ${STATUS_LABEL[zeile.status]}`}
-      // Die Zahl der Zwischenzeiten ergänzt den Vorlesetext als Beschreibung,
-      // ohne den Namen der Zeile zu verändern.
-      aria-describedby={zeigtZwischenzeiten ? zwischenzeitId : undefined}
-      onPointerDown={startPress}
-      onPointerUp={endPress}
-      onPointerCancel={cancelPress}
-      onContextMenu={(e) => e.preventDefault()}
-      onClick={(e) => {
-        // Der "Ziel"-Knopf ist eingebettet und bedient sich selbst.
-        if (e.target !== e.currentTarget) return
-        if (klickRef.current || !kannTippen) return
-        haptic(8)
-        onTap(zeile.index, performance.now(), Date.now())
-      }}
-      onKeyDown={(e) => {
-        if (e.target !== e.currentTarget) return
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          if (!kannTippen) return
-          merkeKlick()
-          haptic(8)
-          onTap(zeile.index, performance.now(), Date.now())
-        }
-        // Tastatur-Äquivalent zum langen Drücken (siehe LaneTile).
-        if ((e.key === 'Backspace' || e.key === 'Delete') && kannRueckgaengig) {
-          e.preventDefault()
-          onUndo(zeile.index)
-        }
-      }}
-      className={`relative flex select-none items-center gap-3 overflow-hidden rounded-2xl border-2 p-3 transition-[background-color,border-color,opacity] duration-75 rail:rounded-3xl rail:p-4 ${
+      data-reihe={basis.reihe}
+      data-bahn={basis.nummer}
+      className={`flex select-none items-stretch overflow-hidden rounded-2xl border-2 transition-[background-color,border-color,opacity] duration-75 rail:rounded-3xl ${
         gedrueckt ? 'brightness-105 opacity-80' : ''
       } ${rand}`}
-      // Die Liste ist scrollbar; `pan-y` erlaubt Wischen, ohne den Tap zu verlieren.
-      // Die Zeit skaliert mit der Zeilenbreite, nicht mit dem Viewport.
-      style={{
-        WebkitTouchCallout: 'none',
-        WebkitUserSelect: 'none',
-        touchAction: 'pan-y',
-        containerType: 'inline-size',
-      }}
     >
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className="rounded-md bg-surface2 px-1.5 py-0.5 text-[11px] font-bold tracking-wide text-muted">
-            {basis.nummer}
-          </span>
-          <span className="truncate text-sm font-semibold">{name ?? 'Ohne Namen'}</span>
-          <span className="ml-auto shrink-0 rounded-md bg-surface2 px-1.5 py-0.5 text-[10px] font-bold text-muted">
-            R{angezeigteRunde}/{gesamt}
-          </span>
+      <div
+        role="button"
+        tabIndex={0}
+        data-status={zeile.status}
+        aria-keyshortcuts={kannRueckgaengig ? 'Backspace Delete' : undefined}
+        aria-label={`Reihe ${basis.reihe}, Bahn ${basis.nummer}${name ? `, ${name}` : ''}, Runde ${angezeigteRunde} von ${gesamt}, ${STATUS_LABEL[zeile.status]}`}
+        // Die Zahl der Zwischenzeiten ergänzt den Vorlesetext als Beschreibung,
+        // ohne den Namen der Zeile zu verändern.
+        aria-describedby={zeigtZwischenzeiten ? zwischenzeitId : undefined}
+        onPointerDown={startPress}
+        onPointerUp={endPress}
+        onPointerCancel={cancelPress}
+        onContextMenu={(e) => e.preventDefault()}
+        onClick={(e) => {
+          // Nur ein Klick direkt auf der Messfläche zählt; der Zielknopf liegt
+          // außerhalb und erreicht diesen Handler nicht.
+          if (e.target !== e.currentTarget) return
+          if (klickRef.current || !kannTippen) return
+          haptic(8)
+          onTap(zeile.index, performance.now(), Date.now())
+        }}
+        onKeyDown={(e) => {
+          if (e.target !== e.currentTarget) return
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            if (!kannTippen) return
+            merkeKlick()
+            haptic(8)
+            onTap(zeile.index, performance.now(), Date.now())
+          }
+          // Tastatur-Äquivalent zum langen Drücken (siehe LaneTile).
+          if ((e.key === 'Backspace' || e.key === 'Delete') && kannRueckgaengig) {
+            e.preventDefault()
+            onUndo(zeile.index)
+          }
+        }}
+        className="relative flex min-w-0 flex-1 items-center gap-3 p-3 rail:p-4"
+        // Die Liste ist scrollbar; `pan-y` erlaubt Wischen, ohne den Tap zu verlieren.
+        // Die Zeit skaliert mit der Zeilenbreite, nicht mit dem Viewport.
+        style={{
+          WebkitTouchCallout: 'none',
+          WebkitUserSelect: 'none',
+          touchAction: 'pan-y',
+          containerType: 'inline-size',
+        }}
+      >
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="rounded-md bg-surface2 px-1.5 py-0.5 text-[11px] font-bold tracking-wide text-muted">
+              {basis.nummer}
+            </span>
+            <span className="truncate text-sm font-semibold">{name ?? 'Ohne Namen'}</span>
+            <span className="ml-auto shrink-0 rounded-md bg-surface2 px-1.5 py-0.5 text-[10px] font-bold text-muted">
+              R{angezeigteRunde}/{gesamt}
+            </span>
+          </div>
+
+          <div className="mt-1 flex items-baseline gap-2">
+            <span
+              className={`tabular whitespace-nowrap font-semibold leading-none ${zeitFarbe}`}
+              style={{ fontSize: 'clamp(1.75rem, 7cqw, 2.75rem)' }}
+            >
+              {zeile.status === 'bereit'
+                ? '—'
+                : zeile.status === 'geplant'
+                  ? formatCountdown(zeit)
+                  : formatTime(zeit)}
+            </span>
+            <span className="truncate text-[11px] text-muted">{zielText}</span>
+          </div>
+          {abweichung !== null ? (
+            <span
+              className={`tabular mt-0.5 block text-[11px] ${
+                abweichung < 0 ? 'text-ok' : abweichung > 0 ? 'text-danger' : 'text-muted'
+              }`}
+              aria-label={`Abweichung ${formatDelta(abweichung)} zur Vorrunde`}
+            >
+              {formatDelta(abweichung)} zur Vorrunde
+            </span>
+          ) : null}
+
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-muted">
+            {letzteZeit !== null && zeile.status !== 'fertig' ? (
+              <span className="tabular">zuletzt {formatTime(letzteZeit)}</span>
+            ) : null}
+            {zeigtZwischenzeiten && zwischenzeit ? (
+              <span id={zwischenzeitId} className="tabular">
+                {formatZwischenzeiten(zwischenzeit.erfasst, zwischenzeit.gesamt)}
+              </span>
+            ) : null}
+            {hatUeberholung && neuesteOffene?.lauf.wiederholung ? (
+              <span className="rounded bg-warn/15 px-1.5 py-0.5 font-bold text-warn">
+                R{neuesteOffene.lauf.wiederholung} läuft schon
+              </span>
+            ) : null}
+            {zeile.status === 'bereit' ? <span>Startet mit dem Startknopf</span> : null}
+          </div>
         </div>
 
-        <div className="mt-1 flex items-baseline gap-2">
+        {/* Ein Segment pro geplanter Wiederholung; gefüllt bis zur zuletzt
+            beendeten Runde. Rein dekorativ, der Stand steht als Text daneben. */}
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-3 bottom-1 flex h-1 gap-px"
+        >
+          {Array.from({ length: gesamt }, (_, index) => (
+            <span
+              key={index}
+              className={`flex-1 rounded-sm ${index < geschafft ? 'bg-fg/70' : 'bg-line'}`}
+            />
+          ))}
+        </span>
+
+        {/* Haltedauer als Text, damit langes Drücken nicht als Anschlag
+            missverstanden wird; der Balken zeigt die verbleibende Zeit. */}
+        {kannRueckgaengig && gedrueckt ? (
           <span
-            className={`tabular whitespace-nowrap font-semibold leading-none ${zeitFarbe}`}
-            style={{ fontSize: 'clamp(1.75rem, 7cqw, 2.75rem)' }}
+            data-haltend="true"
+            className="pointer-events-none absolute inset-x-3 top-1/2 flex -translate-y-1/2 flex-col items-center gap-1 rounded-lg bg-warn px-2 py-1.5 text-center text-[10px] font-bold text-black"
           >
-            {zeile.status === 'bereit'
-              ? '—'
-              : zeile.status === 'geplant'
-                ? formatCountdown(zeit)
-                : formatTime(zeit)}
-          </span>
-          <span className="truncate text-[11px] text-muted">{zielText}</span>
-        </div>
-        {abweichung !== null ? (
-          <span
-            className={`tabular mt-0.5 block text-[11px] ${
-              abweichung < 0 ? 'text-ok' : abweichung > 0 ? 'text-danger' : 'text-muted'
-            }`}
-            aria-label={`Abweichung ${formatDelta(abweichung)} zur Vorrunde`}
-          >
-            {formatDelta(abweichung)} zur Vorrunde
+            Halten: Anschlag zurücknehmen
+            {reduzierteBewegung ? null : (
+              <span aria-hidden="true" className="h-[3px] w-full overflow-hidden rounded-full bg-black/25">
+                <span
+                  className="block h-full w-full origin-left bg-black"
+                  style={{ animation: `langdruck ${LANGDRUCK_MS}ms linear forwards` }}
+                />
+              </span>
+            )}
           </span>
         ) : null}
-
-        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-muted">
-          {letzteZeit !== null && zeile.status !== 'fertig' ? (
-            <span className="tabular">zuletzt {formatTime(letzteZeit)}</span>
-          ) : null}
-          {zeigtZwischenzeiten && zwischenzeit ? (
-            <span id={zwischenzeitId} className="tabular">
-              {formatZwischenzeiten(zwischenzeit.erfasst, zwischenzeit.gesamt)}
-            </span>
-          ) : null}
-          {hatUeberholung && neuesteOffene?.lauf.wiederholung ? (
-            <span className="rounded bg-warn/15 px-1.5 py-0.5 font-bold text-warn">
-              R{neuesteOffene.lauf.wiederholung} läuft schon
-            </span>
-          ) : null}
-          {zeile.status === 'bereit' ? <span>Startet mit dem Startknopf</span> : null}
-        </div>
       </div>
 
-      {/* Nur bei offener Strecke braucht es einen eigenen Zielknopf; bei fester
-          Strecke beendet der letzte Anschlag die Runde. Der Knopf stoppt die
-          Weitergabe, sonst würde das Ziel zusätzlich als Anschlag zählen. */}
+      {/* Ziel als eigene Fläche rechts neben der Messung: nur bei offener
+          Strecke nötig, weil bei fester Strecke der letzte Anschlag die Runde
+          beendet. Als Geschwister der Messfläche löst ein Tap auf der Zeile ihn
+          nicht aus. */}
       {offeneStrecke && kannTippen ? (
         <button
           type="button"
-          onPointerDown={(e) => e.stopPropagation()}
-          onPointerUp={(e) => e.stopPropagation()}
           onClick={() => {
             haptic(8)
             onFinish(zeile.index, performance.now(), Date.now())
           }}
-          className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg bg-ok px-2.5 py-2 text-[10px] font-bold text-black"
+          className="mr-3 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center self-center rounded-lg bg-ok px-2.5 py-2 text-[10px] font-bold text-black rail:mr-4"
         >
           Ziel
         </button>
-      ) : null}
-
-      {/* Ein Segment pro geplanter Wiederholung; gefüllt bis zur zuletzt
-          beendeten Runde. Rein dekorativ, der Stand steht als Text daneben. */}
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-3 bottom-1 flex h-1 gap-px"
-      >
-        {Array.from({ length: gesamt }, (_, index) => (
-          <span
-            key={index}
-            className={`flex-1 rounded-sm ${index < geschafft ? 'bg-fg/70' : 'bg-line'}`}
-          />
-        ))}
-      </span>
-
-      {/* Haltedauer als Text, damit langes Drücken nicht als Anschlag
-          missverstanden wird; der Balken zeigt die verbleibende Zeit. */}
-      {kannRueckgaengig && gedrueckt ? (
-        <span
-          data-haltend="true"
-          className="pointer-events-none absolute inset-x-3 top-1/2 flex -translate-y-1/2 flex-col items-center gap-1 rounded-lg bg-warn px-2 py-1.5 text-center text-[10px] font-bold text-black"
-        >
-          Halten: Anschlag zurücknehmen
-          {reduzierteBewegung ? null : (
-            <span aria-hidden="true" className="h-[3px] w-full overflow-hidden rounded-full bg-black/25">
-              <span
-                className="block h-full w-full origin-left bg-black"
-                style={{ animation: `langdruck ${LANGDRUCK_MS}ms linear forwards` }}
-              />
-            </span>
-          )}
-        </span>
       ) : null}
     </div>
   )
