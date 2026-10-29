@@ -11,7 +11,7 @@
  */
 
 import { expect, test } from '@playwright/test'
-import { oeffneApp } from './helfer'
+import { oeffneApp, warteAufZielzeiten } from './helfer'
 
 /** Tippt drei Längen an und prüft, dass die vierte Länge ansteht. */
 async function pruefeVierLaengen(page: import('@playwright/test').Page): Promise<void> {
@@ -87,4 +87,83 @@ test('wechselt im Konfigurations-Sheet von Meter auf Yards', async ({ page }) =>
   await page.reload()
   await expect(page.locator('[data-tab-status="aktiv"]')).toBeVisible()
   await expect(page.getByText('25 yd · 100 yd · Freistil · 6 Bahnen')).toBeVisible()
+})
+
+test('zeigt einen Yard-Lauf in Verlauf, Detail und getrennten Bestzeiten', async ({ page }) => {
+  await oeffneApp(page)
+
+  // Mia wird angelegt und der ersten Bahn zugeordnet.
+  await page.getByRole('button', { name: 'Schwimmer' }).tap()
+  await page.getByRole('button', { name: 'Schwimmer hinzufügen' }).click()
+  await page.getByLabel('Name').fill('Mia')
+  await page.getByRole('button', { name: 'Speichern' }).click()
+  await page.getByRole('button', { name: 'Timer' }).tap()
+  await page.getByRole('button', { name: /m ·/ }).first().click()
+  const konfiguration = page.getByRole('dialog')
+  await konfiguration.getByLabel('Schwimmer für Reihe 1, Bahn 1').selectOption({ label: 'Mia' })
+  await konfiguration.getByRole('button', { name: 'Schließen', exact: true }).click()
+
+  // Erster Lauf: 100 m im 50-m-Becken, zwei Längen.
+  await page.getByRole('button', { name: 'Start', exact: true }).tap()
+  const meterBahn = page.getByRole('button', { name: /Bahn 1, Mia, läuft$/ })
+  await expect(meterBahn).toBeVisible()
+  await meterBahn.dispatchEvent('click')
+  await page.waitForTimeout(100)
+  await meterBahn.dispatchEvent('click')
+  await expect(page.getByRole('button', { name: /Bahn 1, Mia, im Ziel$/ })).toBeVisible()
+
+  // Nächster Lauf auf Yards umstellen; der laufende Meter-Lauf bleibt bestehen.
+  await page.getByRole('button', { name: 'Mehr' }).tap()
+  await page.getByRole('button', { name: /50 m-Becken/ }).click()
+  const einstellungen = page.getByRole('dialog')
+  await einstellungen
+    .locator('section', { hasText: 'Einheit' })
+    .getByRole('button', { name: 'Yards' })
+    .tap()
+  await einstellungen.getByRole('button', { name: 'Schließen', exact: true }).click()
+  await page.getByRole('button', { name: 'Timer' }).tap()
+
+  // „+“ legt den nächsten Lauf mit den neuen Einstellungen an.
+  await page.getByRole('button', { name: 'Weiteren Lauf anlegen' }).tap()
+  await expect(page.getByText('25 yd · 100 yd · Freistil · 6 Bahnen')).toBeVisible()
+  await page.getByRole('button', { name: 'Start alle', exact: true }).tap()
+  const yardBahn = page.getByRole('button', { name: /Bahn 1, Mia, läuft$/ })
+  // Die ersten drei Anschläge lassen die vierte Länge offen; der vierte Tap
+  // beendet die Bahn und ändert das `aria-label` auf „im Ziel“.
+  for (let i = 0; i < 3; i += 1) {
+    await yardBahn.dispatchEvent('click')
+    await expect(yardBahn).toHaveAttribute('data-anschlaege', String(i + 1))
+    if (i < 2) await page.waitForTimeout(60)
+  }
+  await yardBahn.dispatchEvent('click')
+  await expect(page.getByRole('button', { name: /Bahn 1, Mia, im Ziel$/ })).toBeVisible()
+  await warteAufZielzeiten(page, 2)
+
+  // Schwimmer-Tab: Meter- und Yard-Becken erzeugen getrennte Bestzeiten.
+  await page.getByRole('button', { name: 'Schwimmer' }).tap()
+  const mia = page.locator('li', { hasText: 'Mia' })
+  await mia.getByRole('button', { expanded: false }).click()
+  await expect(page.getByText('100 m · Freistil · 50 m', { exact: true })).toBeVisible()
+  await expect(page.getByText('100 yd · Freistil · 25 yd', { exact: true })).toBeVisible()
+
+  // Verlauf und Detail nennen Strecke, Becken, Längen und Pace in Yards.
+  await page.getByRole('button', { name: 'Verlauf' }).tap()
+  await page.getByRole('button', { name: /6 Bahnen · 100 yd/ }).tap()
+  await expect(page.getByRole('heading', { name: /6 Bahnen · 100 yd/ })).toBeVisible()
+  await expect(page.getByText(/25 yd-Becken/)).toBeVisible()
+  await expect(page.getByText('25 yd', { exact: true })).toBeVisible()
+  await expect(page.getByText(/Pace .*\/ 100 yd/)).toBeVisible()
+
+  // Nach einem Reload bleiben Anzeige und Bestzeiten-Gruppen erhalten. Die
+  // Reihenfolge prüft zuerst den Schwimmer-Tab, weil das Lauf-Detail als
+  // Vollbild über der Navigation liegt.
+  await page.reload()
+  await expect(page.locator('[data-tab-status="aktiv"]')).toBeVisible()
+  await page.getByRole('button', { name: 'Schwimmer' }).tap()
+  await page.locator('li', { hasText: 'Mia' }).getByRole('button', { expanded: false }).click()
+  await expect(page.getByText('100 yd · Freistil · 25 yd', { exact: true })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Verlauf' }).tap()
+  await page.getByRole('button', { name: /6 Bahnen · 100 yd/ }).tap()
+  await expect(page.getByRole('heading', { name: /6 Bahnen · 100 yd/ })).toBeVisible()
 })

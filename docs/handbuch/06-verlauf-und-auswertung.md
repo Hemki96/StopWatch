@@ -59,8 +59,8 @@ angezeigt werden, etwa unberührte Wiederholungen einer Serie. Vorher ein Backup
 Ein Tipp auf einen Lauf öffnet das Detail. Es zeigt:
 
 - Datum und Startuhrzeit,
-- Anzahl Bahnen und Strecke,
-- Beckenlänge, Schwimmart und ggf. Startversatz,
+- Anzahl Bahnen und Strecke **in der Einheit des Laufs**,
+- Beckenlänge in derselben Einheit, Schwimmart und ggf. Startversatz,
 - bei Serien und Wettkämpfen die Runde bzw. den Lauf und den Takt,
 - einen Hinweis, wenn der Lauf unvollständig ist.
 
@@ -75,7 +75,7 @@ Pro Bahn:
 | **Zielzeit** | Die Finish-Zeit, oder `—` |
 | **Bestzeit / Delta** | `Bestzeit`, `+01,23 zum PB` oder `-00,45 zum PB` |
 | **manuell** | Die Zielzeit wurde von Hand eingetragen oder korrigiert |
-| **Pace** | Zeit pro 100 m, nur bei fester Strecke |
+| **Pace** | Zeit pro 100 in der Einheit des Laufs (`/ 100 m` oder `/ 100 yd`), nur bei fester Strecke |
 
 Die Schwimmerzuordnung lässt sich auch nachträglich ändern. Die Zeiten bleiben dabei erhalten. Das
 ist nützlich, wenn eine Bahn während des Laufs falsch zugeordnet war.
@@ -84,7 +84,8 @@ ist nützlich, wenn eine Bahn während des Laufs falsch zugeordnet war.
 
 Unter jeder Bahn stehen die Anschläge:
 
-- Bei fester Strecke mit der Distanz, z. B. `50 m`, `100 m`.
+- Bei fester Strecke mit der Distanz in der Einheit des Laufs, z. B. `50 m`, `100 m` oder
+  `25 yd`, `50 yd`, `75 yd`, `100 yd`.
 - Bei offener Strecke ebenfalls mit der kumulierten Distanz.
 - Im Wettkampf mit **Ziel** statt einer Längenbezeichnung.
 - Das letzte Finish trägt das Badge **Ziel**.
@@ -127,8 +128,9 @@ Eine **Bestzeit (PB)** gilt je Kombination aus:
 - Schwimmart,
 - Beckenlänge.
 
-Kurzbahn und Langbahn sind bewusst getrennt, weil sie nicht vergleichbar sind. Offene Strecken
-erzeugen keine Bestzeit.
+Kurzbahn und Langbahn sind bewusst getrennt, weil sie nicht vergleichbar sind. Meter- und
+Yard-Becken sind ebenfalls getrennt: 100 yd sind 91,44 m und ergeben eine eigene Bestzeit. Offene
+Strecken erzeugen keine Bestzeit.
 
 Eine Zielzeit zählt, sobald sie als Finish erfasst ist. Ein Lauf, in dem nicht alle Bahnen im Ziel
 sind, wird im Verlauf und im Detail als **unvollständig** markiert; die vorhandenen Zielzeiten
@@ -151,7 +153,8 @@ Regressionstest in `e2e/schwimmer.spec.ts` hält sie fest.
 
 Ein Tipp klappt die Bestzeiten auf:
 
-- Gruppen nach Strecke, Schwimmart und Beckenlänge, z. B. `100 m · Freistil · 50 m`.
+- Gruppen nach Strecke, Schwimmart, Beckenlänge **und Einheit**, z. B. `100 m · Freistil · 50 m`
+  oder `100 yd · Freistil · 25 yd`. Meter- und Yard-Becken erzeugen getrennte Bestzeiten.
 - Die schnellste Zeit ist grün markiert.
 - Darunter stehen die Zeiten chronologisch mit Datum (Tag/Monat).
 - Manuell korrigierte Zeiten tragen den Hinweis **korrigiert**.
