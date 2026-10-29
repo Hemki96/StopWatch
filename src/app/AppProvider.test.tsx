@@ -20,6 +20,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Training } from '../domain/types'
 import { isComplete } from '../domain/lauf'
 import { clearAll, loadAll } from '../storage/repository'
+import { BACKUP_FORMAT, BACKUP_VERSION } from '../storage/backup'
 import { render, warteAuf } from '../test/render'
 import { AppProvider, leseEinstellungen, useApp, type AppContextValue } from './AppProvider'
 
@@ -717,6 +718,37 @@ describe('AppProvider', () => {
     act(() => app.wert().setzeTheme('dark'))
     expect(app.wert().theme).toBe('dark')
     expect(document.documentElement.classList.contains('dark')).toBe(true)
+  })
+
+  // Die Einstellungen lesen Backup und Speicherschutz nicht mehr direkt aus
+  // `storage/`. Der Provider reicht beides durch; dieser Test sichert die
+  // Naht: Backup-Erzeugung, Prüfung mit Vorschau und der Speicherschutz.
+  it('reicht Backup und Speicherschutz über den Kontext durch', async () => {
+    vi.stubGlobal('navigator', {
+      storage: { persisted: async () => true, persist: async () => true },
+    })
+    const app = await geladeneApp()
+    await warteAuf(() => app.wert().speicherSchutz === 'geschuetzt')
+
+    const backup = await app.wert().exportiereBackup()
+    expect(backup.format).toBe(BACKUP_FORMAT)
+    expect(backup.version).toBe(BACKUP_VERSION)
+    expect(backup.laeufe).toEqual([])
+
+    const pruefung = app.wert().pruefeBackupFuerImport(backup)
+    expect(pruefung.ok).toBe(true)
+    if (pruefung.ok) {
+      expect(pruefung.text).toBe('0 Schwimmer, 0 Wettkämpfe, 0 Trainings, 0 Sätze, 0 Läufe')
+    }
+    expect(app.wert().pruefeBackupFuerImport(null)).toEqual({
+      ok: false,
+      fehler: 'Die Datei enthält kein JSON-Objekt.',
+    })
+
+    await act(async () => {
+      await app.wert().fordereSpeicherSchutz()
+    })
+    expect(app.wert().speicherSchutz).toBe('geschuetzt')
   })
 
   // `useApp` außerhalb des Providers ist ein Programmierfehler und muss laut

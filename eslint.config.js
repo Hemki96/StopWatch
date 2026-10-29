@@ -51,4 +51,30 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // Schichtregel aus docs/entwicklung/architektur.md: `ui/` nutzt app/,
+    // domain/ und export/, aber nie storage/ direkt. Lesen und Prüfen laufen
+    // über `app/`; dieser Check verhindert einen Rückfall.
+    files: ['src/ui/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: [
+                '../storage',
+                '../storage/*',
+                '../../storage',
+                '../../storage/*',
+                '**/storage/**',
+              ],
+              message:
+                'ui/ darf nicht direkt aus storage/ importieren; nutze app/ (siehe docs/entwicklung/architektur.md).',
+            },
+          ],
+        },
+      ],
+    },
+  },
 )

@@ -7,9 +7,10 @@
  * damit die Einstellungen ihn anzeigen können.
  *
  * Datenfluss: `main.tsx` ruft beim Start einmal `schuetzeSpeicherBeimStart` auf;
- * die Einstellungen lesen mit `leseSpeicherSchutz` und fordern bei Bedarf mit
- * `schuetzeSpeicher` erneut an. Alle Funktionen sind fehlertolerant: Fehlt die
- * API oder wirft sie, gilt der Zustand als `unbekannt` und die App läuft weiter.
+ * die Oberfläche liest den Zustand über `app/daten.ts` (`AppProvider`) und
+ * fordert bei Bedarf mit `schuetzeSpeicher` erneut an. Alle Funktionen sind
+ * fehlertolerant: Fehlt die API oder wirft sie, gilt der Zustand als
+ * `unbekannt` und die App läuft weiter.
  *
  * Wichtig: Ein erteilter Schutz ist eine Zusage des Browsers, keine Garantie.
  * Er verhindert das Verwerfen durch Speicherdruck, ersetzt aber kein Backup.
