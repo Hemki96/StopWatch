@@ -18,6 +18,7 @@ import { AnalyseScreen } from './AnalyseScreen'
 import { Bestaetigung } from './Bestaetigung'
 import { ChevronRightIcon, TrashIcon } from './icons'
 import { LaufDetail } from './LaufDetail'
+import { MehrLaden, SAETZE_JE_SEITE } from './MehrLaden'
 import { laeufeNachSatz } from './analyseMemo'
 
 /** Tagesdatum der Gruppenüberschrift, deutsch und kurz. */
@@ -30,15 +31,6 @@ const datumFormat = new Intl.DateTimeFormat('de-DE', {
 
 /** Uhrzeit des Laufs in der Zeile; Sekunden wären hier nur Rauschen. */
 const uhrzeitFormat = new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit' })
-
-/**
- * Höchstzahl der Satzgruppen, die der Verlauf zunächst rendert.
- *
- * Ein großer Bestand soll das Öffnen nicht ausbremsen: 50 Gruppen füllen auch
- * auf dem Tablet mehrere Bildschirme und begrenzen die DOM-Größe, ohne dass
- * die erste Ansicht leer wirkt.
- */
-const GRUPPEN_JE_SEITE = 50
 
 /**
  * Formatiert das ISO-Datum eines Satzes (`YYYY-MM-DD`). Die Uhrzeit 12:00
@@ -160,8 +152,7 @@ export function HistoryScreen() {
 
   // Die Seitengröße wächst seitenweise; `slice` hält Reihenfolge und
   // Gruppierung unverändert und lässt keine Gruppe doppelt erscheinen.
-  const sichtbareGruppen = gruppen.slice(0, seiten * GRUPPEN_JE_SEITE)
-  const weitereGruppen = gruppen.length - sichtbareGruppen.length
+  const sichtbareGruppen = gruppen.slice(0, seiten * SAETZE_JE_SEITE)
 
   return (
     <div className="flex h-full flex-col">
@@ -329,31 +320,13 @@ export function HistoryScreen() {
         ))}
         </div>
 
-        {/* Der Zähler sagt, wie viel vom Bestand bereits im DOM liegt; die
-            Statusrolle liest die Ergänzung nach „Mehr laden“ vor. Der Knopf
-            bleibt unter der Liste, damit neue Gruppen darunter wachsen und die
-            aktuelle Scrollposition nicht verschieben. */}
-        {gruppen.length > 0 ? (
-          <div className="mt-6 flex flex-col items-center gap-2">
-            <p className="text-xs text-muted" role="status">
-              {`${sichtbareGruppen.length} von ${gruppen.length} ${
-                gruppen.length === 1 ? 'Satz' : 'Sätzen'
-              } angezeigt`}
-            </p>
-            {weitereGruppen > 0 ? (
-              <button
-                type="button"
-                onClick={() => setSeiten((anzahl) => anzahl + 1)}
-                className="h-12 w-full max-w-sm rounded-xl border border-line bg-surface text-sm font-semibold"
-              >
-                Mehr laden
-                <span className="ml-2 text-xs font-normal text-muted">
-                  {weitereGruppen} {weitereGruppen === 1 ? 'weiterer Satz' : 'weitere Sätze'}
-                </span>
-              </button>
-            ) : null}
-          </div>
-        ) : null}
+        {/* Zähler und „Mehr laden“ teilen sich Verlauf und Analyse, damit beide
+            Listen gleich aussehen und gleich vorlesen. */}
+        <MehrLaden
+          sichtbar={sichtbareGruppen.length}
+          gesamt={gruppen.length}
+          onMehr={() => setSeiten((anzahl) => anzahl + 1)}
+        />
       </div>
       )}
 
