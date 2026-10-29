@@ -58,6 +58,7 @@ Für die Handy-Ansicht am Rechner zeigt `http://localhost:5173/preview.html` die
 5. [Testen](testen.md) — Testpyramide und Playwright-Eigenheiten
 6. [Bauen und Veröffentlichen](bauen-und-veroeffentlichen.md) — Vite, PWA, CI, Pages
 7. [Beitragen](beitragen.md) — Konventionen und Checkliste
+8. [Audit 2026-10-29](audit-2026-10-29.md) — Ausgangslage, Änderungen, Messungen und offene Schuld
 
 ## Leitprinzipien
 
