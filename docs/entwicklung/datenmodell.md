@@ -48,6 +48,7 @@ interface Bahn {
   schwimmerId: string | null
   startMs: number | null         // performance.now, null = nicht gestartet
   anschlaege: Anschlag[]
+  status?: 'dns' | 'dnf'         // nur Wettkampf, endgültig ohne Zeit
 }
 ```
 
@@ -182,6 +183,10 @@ nicht; das Backup validiert einen Teil davon.
 - Höchstens der letzte Anschlag hat `istFinish === true`. Ein Finish beendet die Bahn.
 - Ein nachträglich korrigierter Anschlag trägt `manuell: true`.
 - Eine Bahn mit Finish ist beendet; weitere Tipps ändern nichts.
+- `status` ist optional und nur im Wettkampf erlaubt: `dns` (nicht gestartet) oder `dnf` (nicht
+  beendet). Markierte Bahnen haben keine Zielzeit und nehmen keinen Start und keinen Anschlag mehr
+  an; sie zählen als beendet, aber nicht in Platzierung und Rückstand. Beim Laden wird `startMs`
+  auf `null` gesetzt.
 
 ### Lauf
 

@@ -55,11 +55,18 @@ export function normalizeOnLoad(lauf: Lauf): Lauf {
   // Eine Bahn mit Start, aber ohne Finish-Anschlag gilt als abgebrochen bzw.
   // durch den Reload ungültig. Die Anschläge selbst bleiben erhalten.
   // Ältere Läufe kennen keine Reihen; ihre Bahnen gehören zu Reihe 1.
-  const bahnen = lauf.bahnen.map((bahn) =>
-    bahn.startMs !== null && !isFinished(bahn)
-      ? { ...bahn, reihe: bahnReihe(bahn), startMs: null }
-      : { ...bahn, reihe: bahnReihe(bahn) },
-  )
+  const bahnen = lauf.bahnen.map((bahn) => {
+    // Der Wettkampf-Status ist endgültig und braucht keine Startzeit. Eine
+    // Bahn mit unbekanntem Status bleibt offen; ältere Backups kennen das Feld
+    // nicht. `status` wird deshalb bewusst neu gesetzt statt gespreadet.
+    const { status: roherStatus, ...rest } = bahn
+    const status = roherStatus === 'dns' || roherStatus === 'dnf' ? roherStatus : undefined
+    // Gestartete, aber offene Bahnen verlieren ihre Startzeit; bei DNS/DNF ist
+    // sie ebenfalls wertlos, weil die Bahn endgültig ohne Zeit beendet ist.
+    const startMs =
+      status || (bahn.startMs !== null && !isFinished(bahn)) ? null : bahn.startMs
+    return { ...rest, reihe: bahnReihe(bahn), startMs, ...(status ? { status } : {}) }
+  })
   return {
     ...lauf,
     startversatzMs,

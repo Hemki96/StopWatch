@@ -183,3 +183,44 @@ export async function warteAufSatzbezeichnung(page: Page, bezeichnung: string): 
     }
   }, bezeichnung)
 }
+
+
+/**
+ * Wartet, bis so viele Wettkampf-Bahnen wie erwartet einen Status tragen.
+ *
+ * @param page - Seite mit geöffneter App.
+ * @param anzahl - Mindestzahl an Bahnen mit `status: 'dns'` oder `'dnf'`.
+ * @returns Promise, das auflöst, sobald der Status in IndexedDB liegt.
+ *
+ * Wie bei den Zielzeiten ist die Anzeige sofort, das Schreiben asynchron. Erst
+ * nach diesem Warten ist ein Reload verlustfrei.
+ */
+export async function warteAufWettkampfStatus(page: Page, anzahl: number): Promise<void> {
+  await page.waitForFunction(async (erwartet) => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const anfrage = indexedDB.open('beckenrand')
+      anfrage.onsuccess = () => resolve(anfrage.result)
+      anfrage.onerror = () => reject(anfrage.error)
+    })
+    try {
+      const laeufe = await new Promise<
+        Array<{ bahnen?: Array<{ status?: string }> }>
+      >((resolve, reject) => {
+        const tx = db.transaction('lauf', 'readonly')
+        const anfrage = tx.objectStore('lauf').getAll()
+        anfrage.onsuccess = () => resolve(anfrage.result)
+        anfrage.onerror = () => reject(anfrage.error)
+      })
+      const markiert = laeufe.reduce(
+        (summe, lauf) =>
+          summe +
+          (lauf.bahnen ?? []).filter((bahn) => bahn.status === 'dns' || bahn.status === 'dnf')
+            .length,
+        0,
+      )
+      return markiert >= erwartet
+    } finally {
+      db.close()
+    }
+  }, anzahl)
+}

@@ -12,7 +12,7 @@
  * Bahn 3, Ben auf Bahn 4, beide im 100-m-Freistil-Heat eines 50-m-Wettkampfs.
  */
 import { describe, expect, it } from 'vitest'
-import { startAll, tapLane } from '../domain/lauf'
+import { setzeWettkampfStatus, startAll, tapLane } from '../domain/lauf'
 import { createWettkampf, createWettkampfLauf, createWettkampfSatz } from '../domain/wettkampf'
 import type { Schwimmer } from '../domain/types'
 import { wettkampfCsvDateiname, wettkampfErgebnisseAlsCsv } from './csv'
@@ -91,6 +91,30 @@ describe('wettkampfErgebnisseAlsCsv', () => {
     const csv = wettkampfErgebnisseAlsCsv(wettkampf, [satz], [lauf], schwimmer)
     expect(csv).toContain(';1;3;Anna;61000;01:01,00;Ziel;0')
     expect(csv).toContain(';;4;Ben;;;offen;0')
+  })
+
+  // DNS und DNF stehen als eigener Status in der Ergebnisliste; Zeit- und
+  // Platzspalten bleiben leer. Nur wirklich offene Bahnen heißen `offen`.
+  it('schreibt DNS und DNF als Status ohne Zeit', () => {
+    let lauf = createWettkampfLauf(
+      satz,
+      {
+        nummer: 1,
+        starts: [
+          { name: 'Anna', bahn: 3 },
+          { name: 'Ben', bahn: 4 },
+        ],
+      },
+      (start) => (start.name === 'Anna' ? 'a' : 'b'),
+    )
+    lauf = startAll(lauf, 0, 0)
+    lauf = setzeWettkampfStatus(lauf, lauf.bahnen[0]!.id, 'dns')
+    lauf = setzeWettkampfStatus(lauf, lauf.bahnen[1]!.id, 'dnf')
+
+    const csv = wettkampfErgebnisseAlsCsv(wettkampf, [satz], [lauf], schwimmer)
+    expect(csv).toContain(';;3;Anna;;;DNS;0')
+    expect(csv).toContain(';;4;Ben;;;DNF;0')
+    expect(csv).not.toContain(';offen;')
   })
 
   // Der Dateiname trägt das Wettkampfdatum, nicht das Exportdatum, damit die

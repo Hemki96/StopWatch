@@ -29,6 +29,7 @@ import type {
   LaufKonfiguration,
   LaufModus,
   Schwimmart,
+  WettkampfStatus,
 } from './types'
 
 /** Eingabe für `createLauf`: Bahnnummer, Reihe und optionale Schwimmerzuordnung. */
@@ -165,12 +166,21 @@ export function istWettkampfLauf(lauf: Lauf): boolean {
 }
 
 /**
+ * True, wenn die Bahn abgeschlossen ist — durch ein Ziel oder durch den
+ * Wettkampf-Status DNS/DNF. Markierte Bahnen sind endgültig: Weitere Anschläge
+ * und Starts ändern nichts mehr. Im Training gibt es keinen Status.
+ */
+export function istBahnBeendet(bahn: Bahn): boolean {
+  return isFinished(bahn) || bahn.status === 'dns' || bahn.status === 'dnf'
+}
+
+/**
  * Status ohne Zeitbezug: kennt kein „geplant“, weil dafür `now` fehlt. Eine
  * Bahn mit Startzeit in der Zukunft gilt hier als laufend; für die Anzeige mit
  * Countdown ist `laneStatusAt` die richtige Wahl.
  */
 export function laneStatus(bahn: Bahn): BahnStatus {
-  if (isFinished(bahn)) return 'beendet'
+  if (istBahnBeendet(bahn)) return 'beendet'
   if (bahn.startMs === null) return 'bereit'
   return 'laeuft'
 }
@@ -180,7 +190,7 @@ export function laneStatus(bahn: Bahn): BahnStatus {
  * „geplant“ und darf noch keine Anschläge annehmen.
  */
 export function laneStatusAt(bahn: Bahn, now: number): BahnStatus {
-  if (isFinished(bahn)) return 'beendet'
+  if (istBahnBeendet(bahn)) return 'beendet'
   if (bahn.startMs === null) return 'bereit'
   if (now < bahn.startMs) return 'geplant'
   return 'laeuft'
@@ -265,7 +275,7 @@ function updateBahn(lauf: Lauf, bahnId: string, update: (bahn: Bahn) => Bahn): L
  */
 export function startLane(lauf: Lauf, bahnId: string, now: number, wallNow: number): Lauf {
   const next = updateBahn(lauf, bahnId, (bahn) =>
-    bahn.startMs === null ? { ...bahn, startMs: now } : bahn,
+    bahn.startMs === null && !bahn.status ? { ...bahn, startMs: now } : bahn,
   )
   // Keine Änderung (unbekannte oder bereits gestartete Bahn): Anker nicht anfassen.
   if (next === lauf) return lauf
@@ -315,7 +325,8 @@ export function startAll(lauf: Lauf, now: number, wallNow: number): Lauf {
     : 0
   let changed = false
   const bahnen = lauf.bahnen.map((bahn) => {
-    if (bahn.startMs !== null || isFinished(bahn)) return bahn
+    // Markierte Bahnen (DNS/DNF) bleiben endgültig; sie bekommen keinen Start.
+    if (bahn.startMs !== null || istBahnBeendet(bahn)) return bahn
     changed = true
     return { ...bahn, startMs: now + (bahnReihe(bahn) - 1) * versatz }
   })
@@ -335,6 +346,8 @@ export function startAll(lauf: Lauf, now: number, wallNow: number): Lauf {
 export function tapLane(lauf: Lauf, bahnId: string, now: number, wallNow: number): Lauf {
   const bahn = findBahn(lauf, bahnId)
   if (!bahn) return lauf
+  // DNS/DNF ist endgültig: kein Start, kein Anschlag, kein Ziel.
+  if (bahn.status) return lauf
   if (bahn.startMs === null) return startLane(lauf, bahnId, now, wallNow)
   // Geplante Bahn (Startversatz): Der Tap wird ignoriert, bis der
   // Startzeitpunkt erreicht ist.
@@ -370,7 +383,9 @@ export function tapLane(lauf: Lauf, bahnId: string, now: number, wallNow: number
 export function finishLane(lauf: Lauf, bahnId: string, now: number, wallNow: number): Lauf {
   if (lengthCount(lauf.konfiguration) !== null && !istWettkampfLauf(lauf)) return lauf
   const bahn = findBahn(lauf, bahnId)
-  if (!bahn || bahn.startMs === null || now < bahn.startMs || isFinished(bahn)) return lauf
+  if (!bahn || bahn.status || bahn.startMs === null || now < bahn.startMs || isFinished(bahn)) {
+    return lauf
+  }
 
   const anschlag: Anschlag = {
     // Auch bei offener Strecke fortlaufend nummeriert; die Länge ist hier nur
@@ -405,7 +420,8 @@ export function setzeZielzeit(
   if (!istWettkampfLauf(lauf)) return lauf
   if (!Number.isFinite(splitMs) || splitMs < 0) return lauf
   const bahn = findBahn(lauf, bahnId)
-  if (!bahn) return lauf
+  // Ein Status ist endgültig; erst entfernen, dann eine Zeit eintragen.
+  if (!bahn || bahn.status) return lauf
 
   const zeit = Math.trunc(splitMs)
   const vorhanden = bahn.anschlaege.find((anschlag) => anschlag.istFinish)
@@ -433,6 +449,36 @@ export function setzeZielzeit(
 }
 
 /**
+ * Markiert eine offene Wettkampf-Bahn als DNS oder DNF beziehungsweise hebt
+ * die Markierung wieder auf (`null`).
+ *
+ * Nur im Wettkampf und nur für Bahnen ohne Zielzeit: Eine bereits gewertete
+ * Bahn bleibt endgültig. DNS entfernt einen vorhandenen Start, DNF lässt ihn
+ * stehen (die Bahn war im Wasser, kam aber nicht an). Anschläge gibt es auf
+ * einer solchen Bahn nicht; ein bereits erfasster Zwischenanschlag wird
+ * vorsorglich entfernt. Ohne echte Änderung kommt derselbe Lauf zurück.
+ */
+export function setzeWettkampfStatus(
+  lauf: Lauf,
+  bahnId: string,
+  status: WettkampfStatus | null,
+): Lauf {
+  if (!istWettkampfLauf(lauf)) return lauf
+  const bahn = findBahn(lauf, bahnId)
+  if (!bahn || isFinished(bahn)) return lauf
+  const naechster: WettkampfStatus | undefined = status ?? undefined
+  if ((bahn.status ?? undefined) === naechster) return lauf
+  return updateBahn(lauf, bahnId, (b) => ({
+    ...b,
+    status: naechster,
+    // DNS heißt: nie gestartet. DNF behält den Start, damit „nicht beendet“
+    // nachvollziehbar bleibt; die Anzeige zeigt ohnehin den Status.
+    startMs: naechster === 'dns' ? null : b.startMs,
+    anschlaege: naechster ? [] : b.anschlaege,
+  }))
+}
+
+/**
  * Macht die letzte Aktion einer Bahn rückgängig: Anschlag löschen, sonst Start
  * zurücknehmen. Eine unberührte Bahn bleibt unverändert.
  *
@@ -442,6 +488,11 @@ export function setzeZielzeit(
  */
 export function undoLane(lauf: Lauf, bahnId: string): Lauf {
   return updateBahn(lauf, bahnId, (bahn) => {
+    // Ein Wettkampf-Status ist die letzte Aktion dieser Bahn; Zurücknehmen
+    // entfernt ihn und macht die Bahn wieder offen.
+    if (bahn.status) {
+      return { ...bahn, status: undefined, startMs: null }
+    }
     if (bahn.anschlaege.length > 0) {
       // Ein Finish verliert damit auch seinen Status: Die Bahn läuft wieder.
       return { ...bahn, anschlaege: bahn.anschlaege.slice(0, -1) }
@@ -557,9 +608,13 @@ export function updateStrecke(
   return { ...lauf, konfiguration: { ...konfiguration } }
 }
 
-/** True, sobald alle Bahnen ein Finish haben. */
+/**
+ * True, sobald alle Bahnen abgeschlossen sind: im Training jedes Finish, im
+ * Wettkampf zusätzlich DNS/DNF. Ein Heat mit einer Zeit, DNS oder DNF auf jeder
+ * Bahn gilt damit als beendet.
+ */
 export function isComplete(lauf: Lauf): boolean {
-  return lauf.bahnen.every(isFinished)
+  return lauf.bahnen.every(istBahnBeendet)
 }
 
 /**
@@ -570,7 +625,7 @@ export function isComplete(lauf: Lauf): boolean {
  * Countdown sonst einfriert.
  */
 export function hatLaufendeBahn(lauf: Lauf | null | undefined): boolean {
-  return lauf?.bahnen.some((bahn) => bahn.startMs !== null && !isFinished(bahn)) ?? false
+  return lauf?.bahnen.some((bahn) => bahn.startMs !== null && !istBahnBeendet(bahn)) ?? false
 }
 
 /** True, sobald mindestens eine Bahn gestartet oder geplant ist (`startMs` gesetzt). */

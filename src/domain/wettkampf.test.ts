@@ -11,7 +11,7 @@
  * fortlaufend ab 1, damit Sortierung und CSV-Spalten prüfbar bleiben.
  */
 import { describe, expect, it } from 'vitest'
-import { createLauf, setzeZielzeit, startAll, tapLane } from './lauf'
+import { createLauf, setzeWettkampfStatus, setzeZielzeit, startAll, tapLane } from './lauf'
 import {
   createWettkampf,
   createWettkampfLauf,
@@ -178,5 +178,34 @@ describe('wettkampfFortschritt', () => {
     let lauf = startAll(wettkampfLauf(), 0, 0)
     lauf = tapLane(lauf, lauf.bahnen[0]!.id, 60_000, 60_000)
     expect(wettkampfFortschritt([lauf])).toEqual({ fertig: 1, gesamt: 3 })
+  })
+})
+
+
+// DNS/DNF: markierte Bahnen beenden den Heat, zählen aber nicht in Platz und
+// Rückstand. Sie stehen hinter den gewerteten Zeiten, DNS vor DNF.
+describe('DNS und DNF', () => {
+  it('wertet markierte Bahnen nicht und zeigt sie hinter den Zeiten', () => {
+    let lauf = startAll(wettkampfLauf(), 0, 0)
+    const [anna, ben, clara] = lauf.bahnen
+    lauf = tapLane(lauf, anna!.id, 60_000, 60_000)
+    lauf = setzeWettkampfStatus(lauf, ben!.id, 'dns')
+    lauf = setzeWettkampfStatus(lauf, clara!.id, 'dnf')
+
+    const ergebnis = wettkampfErgebnis(lauf)
+    // Anna (Bahn 3) gewinnt; Ben (4) ist DNS, Clara (5) DNF.
+    expect(ergebnis.map((zeile) => zeile.bahn.nummer)).toEqual([3, 4, 5])
+    expect(ergebnis.map((zeile) => zeile.status)).toEqual([null, 'dns', 'dnf'])
+    expect(ergebnis.map((zeile) => zeile.platz)).toEqual([1, null, null])
+    expect(ergebnis.slice(1).map((zeile) => zeile.rueckstandMs)).toEqual([null, null])
+  })
+
+  it('zählt DNS und DNF als entschieden', () => {
+    let lauf = startAll(wettkampfLauf(), 0, 0)
+    const [anna, ben, clara] = lauf.bahnen
+    lauf = tapLane(lauf, anna!.id, 60_000, 60_000)
+    lauf = setzeWettkampfStatus(lauf, ben!.id, 'dns')
+    lauf = setzeWettkampfStatus(lauf, clara!.id, 'dnf')
+    expect(wettkampfFortschritt([lauf])).toEqual({ fertig: 3, gesamt: 3 })
   })
 })

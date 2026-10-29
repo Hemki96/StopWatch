@@ -13,9 +13,9 @@ import { useApp } from '../app/AppProvider'
 import { useNow } from '../app/useNow'
 import { useWakeLock } from '../app/useWakeLock'
 import { formatTime } from '../domain/format'
-import { finishMs, isFinished } from '../domain/lauf'
+import { finishMs, istBahnBeendet } from '../domain/lauf'
 import { wettkampfErgebnis, wettkampfFortschritt } from '../domain/wettkampf'
-import type { Lauf, Satz } from '../domain/types'
+import type { Lauf, Satz, WettkampfStatus } from '../domain/types'
 import { wettkampfCsvDateiname, wettkampfErgebnisseAlsCsv } from '../export/csv'
 import { speichereDatei } from '../export/datei'
 import { Bestaetigung } from './Bestaetigung'
@@ -128,6 +128,7 @@ export function WettkampfScreen() {
     bahnId: string
     titel: string
     wert: number | null
+    status: WettkampfStatus | null
   } | null>(null)
   // Eine Bestätigung für beide Löscharten; `art` entscheidet über den Text.
   const [loeschen, setLoeschen] = useState<{
@@ -269,7 +270,7 @@ export function WettkampfScreen() {
                         <p className="tabular mt-2 text-xs text-muted">
                           {anzahlDisziplinen}{' '}
                           {anzahlDisziplinen === 1 ? 'Disziplin' : 'Disziplinen'} ·{' '}
-                          {fortschritt.fertig}/{fortschritt.gesamt} Zeiten
+                          {fortschritt.fertig}/{fortschritt.gesamt} entschieden
                         </p>
                       </div>
                       <ChevronRightIcon className="h-5 w-5 shrink-0 text-muted" />
@@ -369,7 +370,7 @@ export function WettkampfScreen() {
           ) : (
             <>
               <p className="tabular mb-2 px-1 text-xs text-muted">
-                {fortschritt.fertig} von {fortschritt.gesamt} Zeiten erfasst
+                {fortschritt.fertig} von {fortschritt.gesamt} entschieden
               </p>
               <ul className="grid grid-cols-1 gap-2 rail:grid-cols-2">
                 {disziplinen.map((eintrag) => {
@@ -389,7 +390,7 @@ export function WettkampfScreen() {
                           <p className="tabular text-xs text-muted">
                             {betroffeneLaeufe.length}{' '}
                             {betroffeneLaeufe.length === 1 ? 'Lauf' : 'Läufe'} ·{' '}
-                            {disziplinFortschritt.fertig}/{disziplinFortschritt.gesamt} Zeiten
+                            {disziplinFortschritt.fertig}/{disziplinFortschritt.gesamt} entschieden
                           </p>
                         </div>
                         <ChevronRightIcon className="h-5 w-5 shrink-0 text-muted" />
@@ -477,8 +478,9 @@ export function WettkampfScreen() {
   const gestartet = aktiverLauf?.bahnen.some((bahn) => bahn.startMs !== null) ?? false
   // `every` auf einer leeren Bahnliste wäre wahr; die Längenprüfung verhindert,
   // dass ein Lauf ohne Bahnen als beendet gilt.
+  // Ein Heat ist beendet, sobald jede Bahn eine Zeit, DNS oder DNF hat.
   const alleFertig =
-    !!aktiverLauf && aktiverLauf.bahnen.length > 0 && aktiverLauf.bahnen.every(isFinished)
+    !!aktiverLauf && aktiverLauf.bahnen.length > 0 && aktiverLauf.bahnen.every(istBahnBeendet)
   // Nächster Lauf innerhalb der Disziplin, sonst die nächste Disziplin; beides
   // ergibt sich aus der sortierten Liste.
   const naechsterLauf = aktiverLauf
@@ -587,6 +589,7 @@ export function WettkampfScreen() {
                     platz={zeile?.platz ?? null}
                     rueckstandMs={zeile?.rueckstandMs ?? null}
                     manuell={zeile?.manuell ?? false}
+                    status={bahn.status ?? null}
                     onTap={(bahnId, perf, wall) =>
                       app.tippeWettkampf(aktiverLauf.id, bahnId, perf, wall)
                     }
@@ -597,6 +600,7 @@ export function WettkampfScreen() {
                         bahnId: betroffeneBahn.id,
                         titel: `Zielzeit · ${schwimmerName(betroffeneBahn.schwimmerId) ?? `Bahn ${betroffeneBahn.nummer}`}`,
                         wert: finishMs(betroffeneBahn),
+                        status: betroffeneBahn.status ?? null,
                       })
                     }
                   />
@@ -618,7 +622,7 @@ export function WettkampfScreen() {
         {!aktiverLauf ? null : alleFertig ? (
           <div className="space-y-2">
             <p className="text-center text-xs font-semibold text-ok">
-              Lauf beendet · {fortschritt.fertig} von {fortschritt.gesamt} im Ziel
+              Lauf beendet · {fortschritt.fertig} von {fortschritt.gesamt} entschieden
               {/* Erster Eintrag der Ergebnisliste ist der Sieger; ohne Zeit
                   (noch offene Bahn) entfällt der Zusatz. */}
               {ergebnis[0]?.zeitMs !== null && ergebnis[0]?.zeitMs !== undefined
@@ -675,7 +679,7 @@ export function WettkampfScreen() {
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="tabular text-sm font-semibold">
-                {fortschritt.fertig} von {fortschritt.gesamt} im Ziel
+                {fortschritt.fertig} von {fortschritt.gesamt} entschieden
               </p>
               <p className="text-xs text-muted">
                 Tippe eine Bahn, sobald sie anschlägt. Langes Drücken nimmt zurück.
@@ -728,6 +732,12 @@ export function WettkampfScreen() {
         onClose={() => setZeitZiel(null)}
         titel={zeitZiel?.titel ?? 'Zielzeit'}
         wert={zeitZiel?.wert ?? null}
+        status={zeitZiel?.status ?? null}
+        onStatus={(status) => {
+          if (!zeitZiel) return
+          app.setzeWettkampfStatus(zeitZiel.laufId, zeitZiel.bahnId, status)
+          setZeitZiel(null)
+        }}
         onSave={(ms) => {
           if (!zeitZiel) return
           app.setzeWettkampfZeit(zeitZiel.laufId, zeitZiel.bahnId, ms)

@@ -12,7 +12,7 @@ import { haptic } from '../app/haptics'
 import { useReducedMotion } from '../app/useReducedMotion'
 import { elapsedMs, finishMs, laneStatusAt } from '../domain/lauf'
 import { formatDelta, formatTime } from '../domain/format'
-import type { Bahn } from '../domain/types'
+import type { Bahn, WettkampfStatus } from '../domain/types'
 import { PencilIcon } from './icons'
 
 // Haltezeit für das Zurücknehmen; kurz genug, um nicht wie ein normaler Tap zu
@@ -39,6 +39,8 @@ interface WettkampfLaneProps {
   rueckstandMs: number | null
   /** Zielzeit wurde von Hand eingetragen oder korrigiert. */
   manuell: boolean
+  /** Endgültig ohne Zeit beendet; `null` heißt offen oder gewertet. */
+  status: WettkampfStatus | null
   /** Tap: Zielanschlag mit monotoner und Wandzeit. */
   onTap: (bahnId: string, now: number, wallNow: number) => void
   /** Langes Drücken: letzten Anschlag zurücknehmen. */
@@ -64,6 +66,7 @@ export function WettkampfLane({
   platz,
   rueckstandMs,
   manuell,
+  status,
   onTap,
   onUndo,
   onZeit,
@@ -85,17 +88,19 @@ export function WettkampfLane({
     }, 0)
   }
 
-  const status = laneStatusAt(bahn, now)
+  // Der Wettkampf-Status (DNS/DNF) hat Vorrang vor der Zeitachse: Eine
+  // markierte Bahn ist endgültig beendet und zeigt keine laufende Zeit.
+  const zustand = laneStatusAt(bahn, now)
   // Fertige Bahnen zeigen die Zielzeit, laufende die verstrichene Zeit; vor
   // dem Start bleibt die Anzeige leer („—“).
   const zeit =
-    status === 'beendet'
+    zustand === 'beendet'
       ? (finishMs(bahn) ?? 0)
-      : status === 'laeuft'
+      : zustand === 'laeuft'
         ? elapsedMs(bahn, now)
         : 0
   // Nur eine gestartete oder beendete Bahn hat etwas zum Zurücknehmen.
-  const kannRueckgaengig = status !== 'bereit'
+  const kannRueckgaengig = zustand !== 'bereit'
 
   /**
    * Beginn des Drucks: Zeitpunkt sofort festhalten und bei rücknehmbarer Bahn
@@ -146,20 +151,36 @@ export function WettkampfLane({
 
   // Farbe und Rand spiegeln nur den Zustand; die Bedeutung steht zusätzlich
   // als Text in der Kachel, damit Farbe nicht allein trägt.
-  const rand =
-    status === 'laeuft'
+  // DNS bleibt neutral, DNF warnt: Die Bahn war im Wasser, ist aber nicht
+  // angekommen. Beides ist endgültig und deshalb nicht grün.
+  const rand = status
+    ? status === 'dnf'
+      ? 'border-warn/60 bg-warn/10'
+      : 'border-line bg-surface2'
+    : zustand === 'laeuft'
       ? 'border-accent/70 bg-accent/10'
-      : status === 'beendet'
+      : zustand === 'beendet'
         ? 'border-ok/50 bg-ok/10'
         : 'border-line bg-surface'
-  const zeitFarbe =
-    status === 'laeuft' ? 'text-accent' : status === 'beendet' ? 'text-ok' : 'text-muted'
+  const zeitFarbe = status
+    ? status === 'dnf'
+      ? 'text-warn'
+      : 'text-muted'
+    : zustand === 'laeuft'
+      ? 'text-accent'
+      : zustand === 'beendet'
+        ? 'text-ok'
+        : 'text-muted'
 
   // Vorlesetext: Bahn, Name, Status und ggf. Platz in einem Satz.
   const aria = [
     `Bahn ${bahn.nummer}`,
     name ?? 'ohne Namen',
-    STATUS_LABEL[status],
+    status === 'dns'
+      ? 'nicht gestartet'
+      : status === 'dnf'
+        ? 'nicht beendet'
+        : STATUS_LABEL[zustand],
     platz !== null ? `${platz}. Platz` : null,
   ]
     .filter((teil): teil is string => teil !== null)
@@ -169,7 +190,8 @@ export function WettkampfLane({
     <div
       role="button"
       tabIndex={0}
-      data-status={status}
+      data-status={zustand}
+      data-wettkampf-status={status ?? undefined}
       data-platz={platz ?? undefined}
       aria-label={aria}
       onPointerDown={startPress}
@@ -182,6 +204,8 @@ export function WettkampfLane({
         // verarbeitet und werden über `klickRef` übersprungen.
         if (event.target !== event.currentTarget) return
         if (klickRef.current) return
+        // DNS/DNF ist endgültig; ein Tap ändert nichts mehr.
+        if (status) return
         haptic(8)
         onTap(bahn.id, performance.now(), Date.now())
       }}
@@ -191,6 +215,7 @@ export function WettkampfLane({
         // nicht beim vorherigen Fokus.
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault()
+          if (status) return
           merkeKlick()
           haptic(8)
           onTap(bahn.id, performance.now(), Date.now())
@@ -212,14 +237,18 @@ export function WettkampfLane({
             {/* Statuszeile: offene Bahnen zeigen „Bereit“, laufende „läuft“,
                 beendete Platz und Rückstand. „manuell“ markiert korrigierte
                 Zielzeiten. */}
-            {status === 'bereit'
-              ? 'Bereit'
-              : status === 'laeuft'
-                ? 'läuft'
-                : platz !== null
-                  ? `${platz}. Platz${rueckstandMs && rueckstandMs > 0 ? ` · ${formatDelta(rueckstandMs)}` : ''}`
-                  : 'im Ziel'}
-            {manuell ? ' · manuell' : ''}
+            {status === 'dns'
+              ? 'nicht gestartet'
+              : status === 'dnf'
+                ? 'nicht beendet'
+                : zustand === 'bereit'
+                  ? 'Bereit'
+                  : zustand === 'laeuft'
+                    ? 'läuft'
+                    : platz !== null
+                      ? `${platz}. Platz${rueckstandMs && rueckstandMs > 0 ? ` · ${formatDelta(rueckstandMs)}` : ''}`
+                      : 'im Ziel'}
+            {!status && manuell ? ' · manuell' : ''}
           </p>
         </div>
       </div>
@@ -228,7 +257,13 @@ export function WettkampfLane({
         <span
           className={`tabular min-w-[5.2rem] text-right text-2xl font-semibold leading-none ${zeitFarbe}`}
         >
-          {status === 'bereit' ? '—' : formatTime(zeit)}
+          {status === 'dns'
+            ? 'DNS'
+            : status === 'dnf'
+              ? 'DNF'
+              : zustand === 'bereit'
+                ? '—'
+                : formatTime(zeit)}
         </span>
         <button
           type="button"

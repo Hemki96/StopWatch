@@ -13,7 +13,7 @@
  * Erzeugern; die Messzeit selbst kommt aus `lauf.ts`.
  */
 
-import { finishMs, isFinished } from './lauf'
+import { finishMs, istBahnBeendet } from './lauf'
 import { newId } from './id'
 import { truncateToHundredths } from './format'
 import {
@@ -24,6 +24,7 @@ import {
   type Satz,
   type Schwimmart,
   type Wettkampf,
+  type WettkampfStatus,
 } from './types'
 
 /** Eine Zeile einer Meldeliste: Name und Bahn innerhalb eines Laufs. */
@@ -166,6 +167,8 @@ export interface WettkampfErgebnisZeile {
   /** Abstand zur Siegerzeit; null ohne Zeit. */
   rueckstandMs: number | null
   manuell: boolean
+  /** Endgültig ohne Zeit beendet; `null` heißt offen oder gewertet. */
+  status: WettkampfStatus | null
 }
 
 /**
@@ -189,6 +192,7 @@ export function wettkampfErgebnis(lauf: Lauf): WettkampfErgebnisZeile[] {
       platz: null as number | null,
       rueckstandMs: null as number | null,
       manuell: bahn.anschlaege.some((anschlag) => anschlag.istFinish && anschlag.manuell),
+      status: bahn.status ?? null,
     }
   })
 
@@ -201,9 +205,16 @@ export function wettkampfErgebnis(lauf: Lauf): WettkampfErgebnisZeile[] {
         truncateToHundredths(a.zeitMs ?? 0) - truncateToHundredths(b.zeitMs ?? 0) ||
         a.bahn.nummer - b.bahn.nummer,
     )
+  // Ohne Zeit stehen DNS, dann DNF, dann noch offene Bahnen am Ende; innerhalb
+  // einer Gruppe bleibt die Bahnnummer die stabile Reihenfolge.
+  const rang: Record<string, number> = { dns: 0, dnf: 1 }
   const offen = zeilen
     .filter((zeile) => zeile.zeitMs === null)
-    .sort((a, b) => a.bahn.nummer - b.bahn.nummer)
+    .sort(
+      (a, b) =>
+        (a.status ? rang[a.status]! : 2) - (b.status ? rang[b.status]! : 2) ||
+        a.bahn.nummer - b.bahn.nummer,
+    )
 
   // Für den Rückstand zählt die schnellste rohe Zeit, nicht die erste Zeile
   // nach Hundertstel-Sortierung. Sonst könnte bei einem angezeigten Gleichstand
@@ -236,16 +247,17 @@ export function wettkampfErgebnis(lauf: Lauf): WettkampfErgebnisZeile[] {
 }
 
 /**
- * Anzahl gewerteter Bahnen und Bahnen insgesamt über einen oder mehrere Läufe.
- * Gedacht für die Kopfzeilen von Wettkampf, Disziplin und Lauf; gezählt wird
- * pro Bahn, nicht pro Lauf.
+ * Anzahl entschiedener Bahnen und Bahnen insgesamt über einen oder mehrere
+ * Läufe. Entschieden heißt: Zielzeit, DNS oder DNF. Gedacht für die
+ * Kopfzeilen von Wettkampf, Disziplin und Lauf; gezählt wird pro Bahn, nicht
+ * pro Lauf.
  */
 export function wettkampfFortschritt(laeufe: Lauf[]): { fertig: number; gesamt: number } {
   let fertig = 0
   let gesamt = 0
   for (const lauf of laeufe) {
     gesamt += lauf.bahnen.length
-    fertig += lauf.bahnen.filter(isFinished).length
+    fertig += lauf.bahnen.filter(istBahnBeendet).length
   }
   return { fertig, gesamt }
 }

@@ -68,17 +68,23 @@ const lauf = createLauf(
 | Funktion | Rückgabe |
 | --- | --- |
 | `isFinished(bahn)` | true, wenn ein Anschlag `istFinish` hat |
+| `istBahnBeendet(bahn)` | true bei Finish **oder** Wettkampf-Status DNS/DNF |
 | `laneStatus(bahn)` | `bereit`, `laeuft` oder `beendet` — ohne Zeitbezug, kennt kein „geplant“ |
 | `laneStatusAt(bahn, now)` | zusätzlich `geplant`, wenn `startMs > now` |
 | `elapsedMs(bahn, now)` | `max(0, now - startMs)`, sonst 0 |
 | `finishMs(bahn)` | `splitMs` des Finish-Anschlags oder `null` |
 | `lastSplit(bahn)` | letzter Anschlag oder `null` |
-| `isComplete(lauf)` | true, wenn **alle** Bahnen ein Finish haben |
+| `isComplete(lauf)` | true, wenn **alle** Bahnen beendet sind (Finish oder DNS/DNF) |
 | `hasStarted(lauf)` | true, sobald irgendeine Bahn `startMs !== null` hat |
-| `hatLaufendeBahn(lauf)` | true, solange eine gestartete Bahn nicht im Ziel ist |
+| `hatLaufendeBahn(lauf)` | true, solange eine gestartete Bahn nicht beendet ist |
 | `hatBegonnen(lauf, wallNow?)` | true, wenn der Lauf im Verlauf erscheinen soll |
 
 `hatLaufendeBahn` zählt auch **geplante** Bahnen mit, weil ihr Countdown sonst einfrieren würde.
+DNS/DNF-Bahnen sind beendet und halten die Uhr nicht wach.
+
+`setzeWettkampfStatus(lauf, bahnId, status)` markiert eine offene Wettkampf-Bahn als `dns`/`dnf`
+oder hebt die Markierung mit `null` auf. Die Funktion ist im Training und auf gewerteten Bahnen
+wirkungslos. `undoLane` entfernt eine Markierung wie eine andere letzte Aktion.
 
 `hatBegonnen` ist bewusst wanduhrbasiert:
 

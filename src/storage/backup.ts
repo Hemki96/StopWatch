@@ -352,6 +352,13 @@ function pruefeBahn(wert: unknown, pfad: string): string | null {
   if (wert.startMs !== null && !istZahl(wert.startMs)) {
     return `${pfad}: Feld "startMs" muss eine Zahl oder null sein.`
   }
+  if (
+    wert.status !== undefined &&
+    wert.status !== 'dns' &&
+    wert.status !== 'dnf'
+  ) {
+    return `${pfad}: Feld "status" muss "dns", "dnf" oder leer sein.`
+  }
   if (!Array.isArray(wert.anschlaege)) return `${pfad}: Feld "anschlaege" fehlt oder ist keine Liste.`
   for (const [i, anschlag] of wert.anschlaege.entries()) {
     const fehler = pruefeAnschlag(anschlag, `${pfad}, Anschlag ${i + 1}`)

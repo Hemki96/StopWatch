@@ -213,7 +213,15 @@ export function wettkampfErgebnisseAlsCsv(
             // Excel sie nicht als 0 zählt.
             zeile.zeitMs ?? '',
             zeile.zeitMs === null ? '' : formatTime(zeile.zeitMs),
-            zeile.zeitMs === null ? 'offen' : 'Ziel',
+            // Status statt Zeit: DNS und DNF sind endgültig und für die
+            // Ergebnisliste eindeutig; nur wirklich offene Bahnen heißen offen.
+            zeile.status === 'dns'
+              ? 'DNS'
+              : zeile.status === 'dnf'
+                ? 'DNF'
+                : zeile.zeitMs === null
+                  ? 'offen'
+                  : 'Ziel',
             zeile.manuell ? 1 : 0,
           ]
             .map(feld)

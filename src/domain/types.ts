@@ -85,6 +85,16 @@ export interface Anschlag {
 }
 
 /**
+ * Endgültiger Wettkampf-Status einer Bahn ohne Zielzeit.
+ *
+ * `dns` = did not start (nicht gestartet), `dnf` = did not finish (nicht
+ * beendet). Markierte Bahnen zählen nicht in Platzierung und Rückstand und
+ * werden im CSV als `DNS` bzw. `DNF` ausgewiesen. Im Training kommt der Status
+ * nicht vor.
+ */
+export type WettkampfStatus = 'dns' | 'dnf'
+
+/**
  * Eine Bahn ist ein einzelner Timer innerhalb eines Laufs und gehört genau
  * einem Schwimmer (oder niemandem, `schwimmerId: null`).
  */
@@ -103,6 +113,11 @@ export interface Bahn {
   /** Monotone Startzeit der Bahn (`performance.now`), null solange nicht gestartet. */
   startMs: number | null
   anschlaege: Anschlag[]
+  /**
+   * Endgültig ohne Zeit beendet (`dns`/`dnf`), nur im Wettkampf. Fehlt das Feld,
+   * ist die Bahn offen bzw. normal gewertet; ältere Backups laden unverändert.
+   */
+  status?: WettkampfStatus
 }
 
 /**

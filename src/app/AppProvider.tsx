@@ -42,6 +42,7 @@ import {
   type Schwimmart,
   type Training,
   type Wettkampf,
+  type WettkampfStatus,
 } from '../domain/types'
 import {
   bahnReihe,
@@ -53,6 +54,7 @@ import {
   isFinished,
   korrigiereAnschlag as korrigiereAnschlagImLauf,
   planeLauf,
+  setzeWettkampfStatus as setzeWettkampfStatusImLauf,
   setzeZielzeit,
   startAll,
   tapLane,
@@ -287,6 +289,12 @@ export interface AppContextValue {
   tippeWettkampf: (laufId: string, bahnId: string, now: number, wallNow: number) => void
   rueckgaengigWettkampf: (laufId: string, bahnId: string) => void
   setzeWettkampfZeit: (laufId: string, bahnId: string, splitMs: number) => void
+  /** Markiert eine offene Bahn als DNS/DNF oder hebt die Markierung auf. */
+  setzeWettkampfStatus: (
+    laufId: string,
+    bahnId: string,
+    status: WettkampfStatus | null,
+  ) => void
   setzeWettkampfNamen: (laufId: string, namen: string[]) => void
   /** Legt ein Training aus den aktuellen Einstellungen an und liefert seine ID. */
   anlegeTraining: () => string | null
@@ -2049,6 +2057,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
   )
 
   /**
+   * Markiert eine Bahn als DNS/DNF oder hebt die Markierung auf. Die Domäne
+   * lehnt gewertete Bahnen und Trainingsläufe ab; hier wird nur der richtige
+   * Lauf gewählt und geschrieben.
+   */
+  const setzeWettkampfStatus = useCallback(
+    (laufId: string, bahnId: string, status: WettkampfStatus | null) => {
+      if (!tabAktivRef.current) return
+      const lauf = laeufeRef.current.find((eintrag) => eintrag.id === laufId)
+      if (!lauf) return
+      aendereLauf(lauf, setzeWettkampfStatusImLauf(lauf, bahnId, status))
+    },
+    [aendereLauf],
+  )
+
+  /**
    * Setzt die Namen aller Bahnen eines Heats in einem Schritt.
    *
    * Wird genutzt, wenn eine Startliste erst am Beckenrand eingetragen wird.
@@ -2343,6 +2366,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       tippeWettkampf,
       rueckgaengigWettkampf,
       setzeWettkampfZeit,
+      setzeWettkampfStatus,
       setzeWettkampfNamen,
       anlegeTraining,
       speichereTraining,
@@ -2403,6 +2427,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       tippeWettkampf,
       rueckgaengigWettkampf,
       setzeWettkampfZeit,
+      setzeWettkampfStatus,
       setzeWettkampfNamen,
       anlegeTraining,
       speichereTraining,

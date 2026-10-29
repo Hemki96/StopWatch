@@ -130,6 +130,30 @@ describe('pruefeBackup', () => {
     expect(ergebnis.backup).toEqual(backup)
   })
 
+  // DNS/DNF ist ein optionales Bahnfeld; ein Backup mit Markierung bleibt
+  // vollständig einlesbar und unverändert.
+  it('erhält DNS und DNF am Lauf', () => {
+    const roh = kopie()
+    const laeufe = roh.laeufe as Array<{ bahnen: Array<{ status?: string }> }>
+    ;laeufe[0]!.bahnen[0]!.status = 'dnf'
+    const ergebnis = pruefeBackup(roh)
+    expect(ergebnis.ok).toBe(true)
+    if (!ergebnis.ok) return
+    expect(ergebnis.backup.laeufe[0]?.bahnen[0]?.status).toBe('dnf')
+  })
+
+  // Ein unbekannter Status wäre weder DNS noch DNF und würde in der Wertung
+  // stillschweigend als offene Bahn erscheinen; die Prüfung lehnt ihn ab.
+  it('lehnt einen unbekannten Bahnstatus ab', () => {
+    const roh = kopie()
+    const laeufe = roh.laeufe as Array<{ bahnen: Array<{ status?: string }> }>
+    ;laeufe[0]!.bahnen[0]!.status = 'verletzt'
+    const ergebnis = pruefeBackup(roh)
+    expect(ergebnis.ok).toBe(false)
+    if (ergebnis.ok) return
+    expect(ergebnis.fehler).toContain('status')
+  })
+
   // Ohne Formatkennung könnte jede beliebige JSON-Datei als Backup gelten; die
   // Meldung nennt deshalb die erwartete Kennung.
   it('lehnt eine Datei ohne Formatkennung ab', () => {

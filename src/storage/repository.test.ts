@@ -65,6 +65,25 @@ describe('normalizeOnLoad', () => {
     expect(normalizeOnLoad(lauf).modus).toBe('wettkampf')
   })
 
+  // DNS/DNF ist endgültig: Der Status bleibt erhalten, die Startzeit ist nach
+  // dem Reload wertlos und wird entfernt. Ein unbekannter Wert fällt weg.
+  it('behält DNS/DNF und entfernt die Startzeit', () => {
+    const basis = createLauf(K100, [{ nummer: 1 }], null, { modus: 'wettkampf' })
+    const mitStatus = {
+      ...basis,
+      bahnen: [{ ...basis.bahnen[0]!, startMs: 1000, status: 'dns' as const }],
+    }
+    const normalisiert = normalizeOnLoad(mitStatus)
+    expect(normalisiert.bahnen[0]?.status).toBe('dns')
+    expect(normalisiert.bahnen[0]?.startMs).toBeNull()
+
+    const unbekannt = {
+      ...basis,
+      bahnen: [{ ...basis.bahnen[0]!, status: 'verletzt' as unknown as 'dns' }],
+    }
+    expect(normalizeOnLoad(unbekannt).bahnen[0]?.status).toBeUndefined()
+  })
+
   // Eine beendete Bahn ist ein abgeschlossener Messwert und behält Start (0)
   // und beide Anschläge, damit der Verlauf vollständig bleibt.
   it('lässt beendete Bahnen unangetastet', () => {
