@@ -89,6 +89,12 @@ sie bei zehn Bahnen auf dem Handy und bei einer Bahn auf dem Tablet gleichermaß
 Die Kopfzeile des Laufs ist gleichzeitig ein Knopf zum Öffnen des Konfigurations-Sheets. Rechts
 steht entweder **X** (alle im Ziel) oder der **Papierkorb** (verwerfen).
 
+Während der Messung steht in der Fußzeile ein sekundärer **Zurück**-Knopf. Er nennt in der
+Beschriftung die zuletzt bediente Bahn (bei Serien samt Runde), ist nur aktiv, solange es etwas
+zurückzunehmen gibt, und erklärt daneben die Geste. Langes Drücken auf der Kachel bleibt der
+schnelle Weg; Backspace/Delete auf der fokussierten Messfläche bleibt die Tastaturabkürzung. Nach
+dem letzten Ziel übernimmt `LaufErgebnis` die Rücknahme.
+
 ### Training
 
 Der Screen hat zwei Zustände:
@@ -272,6 +278,9 @@ doppelt verarbeitet.
   und per Tab erreichbar; er liegt nicht in der Messfläche und löst deshalb nie zusätzlich einen
   Anschlag aus. Der Stift in `WettkampfLane` liegt noch in der Kachel und stoppt dort die
   Propagation.
+- **Zurück** in der Fußzeile ist der sichtbare, per Tab erreichbare Ersatz für den langen Druck.
+  Er liegt außerhalb aller Messflächen und kann deshalb nicht durch einen Fehltipp auf einer
+  Bahn ausgelöst werden. Langes Drücken und Backspace/Delete bleiben unverändert.
 
 ### Touch-Verhalten
 

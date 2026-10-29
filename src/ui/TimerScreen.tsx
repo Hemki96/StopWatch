@@ -25,12 +25,19 @@ import {
   lengthCount,
   reihenVon,
 } from '../domain/lauf'
-import { istSerie, aktuelleRunde, runden as rundenVon, serieFortschritt } from '../domain/serie'
+import {
+  istSerie,
+  aktuelleRunde,
+  letzterAnschlag,
+  runden as rundenVon,
+  serieFortschritt,
+} from '../domain/serie'
 import { SCHWIMMARTEN, type Bahn, type Lauf, type Satz, type SatzPlan } from '../domain/types'
 import { Bestaetigung } from './Bestaetigung'
 import { KonfigurationSheet } from './KonfigurationSheet'
 import { LaneTile } from './LaneTile'
 import { LaufErgebnis } from './LaufErgebnis'
+import { Ruecknahme, type RuecknahmeZiel } from './Ruecknahme'
 import { SerieAnsicht } from './SerieAnsicht'
 import { Startuebersicht, StartuebersichtLauf } from './Startuebersicht'
 import { TrashIcon, XIcon } from './icons'
@@ -115,6 +122,76 @@ function eintragStatus(eintrag: AktiverEintrag, laeufe: Lauf[]): 'bereit' | 'lae
   if (isComplete(eintrag.lauf)) return 'fertig'
   if (hasStarted(eintrag.lauf)) return 'laeuft'
   return 'bereit'
+}
+
+/**
+ * Etwas ist an einer Bahn zurückzunehmen, wenn ein Status, ein Anschlag oder
+ * ein Start gesetzt ist. `undoLane` nimmt in genau dieser Reihenfolge zurück.
+ */
+function kannBahnZuruecknehmen(bahn: Bahn): boolean {
+  return bahn.status !== undefined || bahn.anschlaege.length > 0 || bahn.startMs !== null
+}
+
+/**
+ * Bahn mit der jüngsten Änderung: Der letzte Anschlag gewinnt, sonst die erste
+ * gestartete Bahn. Ohne Start und Anschlag gibt es nichts zurückzunehmen.
+ */
+function letzteGeaenderteBahn(bahnen: Bahn[]): Bahn | null {
+  let treffer: Bahn | null = null
+  let juengster = Number.NEGATIVE_INFINITY
+  for (const bahn of bahnen) {
+    if (!kannBahnZuruecknehmen(bahn)) continue
+    const anschlag = bahn.anschlaege.at(-1)
+    const zeit = anschlag ? anschlag.erfasstAt : Number.NEGATIVE_INFINITY
+    // `treffer === null` lässt die erste Bahn gewinnen, auch wenn zwei Bahnen
+    // ohne Anschlag denselben Rang teilen; sonst entscheidet der Zeitstempel.
+    if (treffer === null || zeit > juengster) {
+      juengster = zeit
+      treffer = bahn
+    }
+  }
+  return treffer
+}
+
+/**
+ * Bahn-Index mit dem jüngsten Anschlag über alle Runden einer Serie. Nur
+ * Anschläge zählt `rueckgaengigSerie`; ein reiner Start bleibt außen vor.
+ */
+function letzteSerieBahn(runden: Lauf[]): number | null {
+  let treffer: number | null = null
+  let juengster = Number.NEGATIVE_INFINITY
+  for (const [index] of (runden[0]?.bahnen ?? []).entries()) {
+    const anschlag = letzterAnschlag(runden, index)?.bahn.anschlaege.at(-1)
+    if (!anschlag) continue
+    if (anschlag.erfasstAt >= juengster) {
+      juengster = anschlag.erfasstAt
+      treffer = index
+    }
+  }
+  return treffer
+}
+
+/** Sichtbare Bezeichnung einer Bahn; bei mehreren Reihen gehört die Reihe dazu. */
+function bahnBezeichnung(bahn: Bahn, mehrereReihen: boolean): string {
+  return mehrereReihen ? `Reihe ${bahn.reihe}, Bahn ${bahn.nummer}` : `Bahn ${bahn.nummer}`
+}
+
+/**
+ * Zieltext der sichtbaren Rücknahme. `runde` ist nur bei Serien gesetzt und
+ * macht klar, welche Wiederholung der Knopf zurücknimmt.
+ */
+function ruecknahmeZielFuer(
+  bahn: Bahn | null,
+  mehrereReihen: boolean,
+  name: string | null,
+  runde: number | null,
+): RuecknahmeZiel | null {
+  if (!bahn) return null
+  const kurz = bahnBezeichnung(bahn, mehrereReihen)
+  return {
+    kurz: runde !== null ? `${kurz} · R${runde}` : kurz,
+    lang: `${kurz}${name ? `, ${name}` : ''}${runde !== null ? `, Runde ${runde}` : ''}`,
+  }
 }
 
 /**
@@ -247,6 +324,11 @@ export function TimerScreen() {
   // Startübersicht: `'neu'` prüft die Vorgaben für einen neuen Lauf, `'aktiv'`
   // den bereits angelegten Lauf, dessen Uhr noch nicht läuft. `null` = zu.
   const [startPruefen, setStartPruefen] = useState<'neu' | 'aktiv' | null>(null)
+  // Zuletzt bediente Bahn beziehungsweise Serienzeile im aktiven Lauf. Sie ist
+  // das Ziel der sichtbaren Rücknahme in der Fußzeile; die Lauf-ID verhindert,
+  // dass ein Wechsel des aktiven Laufs ein altes Ziel weiterführt.
+  const [zuletztBahn, setZuletztBahn] = useState<{ laufId: string; bahnId: string } | null>(null)
+  const [zuletztSerie, setZuletztSerie] = useState<{ laufId: string; index: number } | null>(null)
 
   // Die Zeit läuft nur, solange irgendwo etwas plant oder läuft; sonst bliebe
   // ein Render-Loop ohne sichtbaren Nutzen. Der Wake-Lock hält den Bildschirm
@@ -486,6 +568,79 @@ export function TimerScreen() {
                 : 'grid-cols-2 min-[560px]:grid-cols-3 lg:grid-cols-5'
 
   /**
+   * Die sichtbare Rücknahme merkt sich die zuletzt bediente Bahn, bevor sie
+   * dieselbe Aktion ausführt wie die Kachel. Nach einem Wechsel des aktiven
+   * Laufs oder wenn dort nichts mehr offen ist, greift der Fallback unten.
+   */
+  const tippeBahn = (bahnId: string, tapNow: number, wallNow: number) => {
+    setZuletztBahn({ laufId: lauf.id, bahnId })
+    app.tippe(bahnId, tapNow, wallNow)
+  }
+  const beendeBahn = (bahnId: string, tapNow: number, wallNow: number) => {
+    setZuletztBahn({ laufId: lauf.id, bahnId })
+    app.beende(bahnId, tapNow, wallNow)
+  }
+  const undoBahn = (bahnId: string) => {
+    setZuletztBahn({ laufId: lauf.id, bahnId })
+    app.rueckgaengig(bahnId)
+  }
+  const tippeSerie = (index: number, tapNow: number, wallNow: number) => {
+    setZuletztSerie({ laufId: lauf.id, index })
+    app.tippeSerie(index, tapNow, wallNow)
+  }
+  const beendeSerie = (index: number, tapNow: number, wallNow: number) => {
+    setZuletztSerie({ laufId: lauf.id, index })
+    app.beendeSerie(index, tapNow, wallNow)
+  }
+  const undoSerie = (index: number) => {
+    setZuletztSerie({ laufId: lauf.id, index })
+    app.rueckgaengigSerie(index)
+  }
+
+  // Ziel der sichtbaren Rücknahme: die zuletzt bediente Bahn, solange dort
+  // noch etwas offen ist; sonst die Bahn mit dem jüngsten Anschlag. Serien
+  // nehmen nur Anschläge zurück, deshalb bleibt der Knopf ohne Anschlag inaktiv.
+  const gemerkteBahn =
+    zuletztBahn && zuletztBahn.laufId === lauf.id
+      ? (lauf.bahnen.find((bahn) => bahn.id === zuletztBahn.bahnId) ?? null)
+      : null
+  const ruecknahmeBahn =
+    gemerkteBahn && kannBahnZuruecknehmen(gemerkteBahn)
+      ? gemerkteBahn
+      : letzteGeaenderteBahn(lauf.bahnen)
+  const gemerkterIndex =
+    zuletztSerie && zuletztSerie.laufId === lauf.id ? zuletztSerie.index : null
+  const ruecknahmeIndex =
+    gemerkterIndex !== null && letzterAnschlag(runden, gemerkterIndex) !== null
+      ? gemerkterIndex
+      : letzteSerieBahn(runden)
+  const ruecknahmeZiel = serie
+    ? ruecknahmeZielFuer(
+        ruecknahmeIndex !== null ? (runden[0]?.bahnen[ruecknahmeIndex] ?? null) : null,
+        mehrereReihen,
+        ruecknahmeIndex !== null
+          ? schwimmerName(runden[0]?.bahnen[ruecknahmeIndex]?.schwimmerId ?? null)
+          : null,
+        ruecknahmeIndex !== null
+          ? (letzterAnschlag(runden, ruecknahmeIndex)?.lauf.wiederholung ?? null)
+          : null,
+      )
+    : ruecknahmeZielFuer(
+        ruecknahmeBahn,
+        mehrereReihen,
+        ruecknahmeBahn ? schwimmerName(ruecknahmeBahn.schwimmerId) : null,
+        null,
+      )
+  /** Fußzeilenknopf: nimmt genau das angezeigte Ziel zurück. */
+  const ruecknahme = () => {
+    if (serie) {
+      if (ruecknahmeIndex !== null) undoSerie(ruecknahmeIndex)
+      return
+    }
+    if (ruecknahmeBahn) undoBahn(ruecknahmeBahn.id)
+  }
+
+  /**
    * „Alle beenden“ für offene Strecken: beendet bei einer Serie je Bahn-Index
    * über alle Runden, sonst jede noch laufende Bahn. Geplante und bereits
    * beendete Bahnen bleiben unberührt.
@@ -605,9 +760,9 @@ export function TimerScreen() {
           plan={plan}
           now={now}
           schwimmerName={schwimmerName}
-          onTap={app.tippeSerie}
-          onUndo={app.rueckgaengigSerie}
-          onFinish={app.beendeSerie}
+          onTap={tippeSerie}
+          onUndo={undoSerie}
+          onFinish={beendeSerie}
         />
       ) : !serie && alleBeendet && gestartet ? (
         // Ein einzelner, vollständig beendeter Lauf zeigt die Ergebnisübersicht
@@ -646,9 +801,9 @@ export function TimerScreen() {
                     konfiguration={lauf.konfiguration}
                     now={now}
                     schwimmerName={schwimmerName(bahn.schwimmerId)}
-                    onTap={app.tippe}
-                    onUndo={app.rueckgaengig}
-                    onFinish={app.beende}
+                    onTap={tippeBahn}
+                    onUndo={undoBahn}
+                    onFinish={beendeBahn}
                   />
                 ))}
               </div>
@@ -661,6 +816,12 @@ export function TimerScreen() {
           abschließen oder den Fortschritt bestätigen. */}
       <div className="border-t border-line p-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] rail:px-4">
         <div className="mx-auto w-full max-w-3xl">
+        {/* Während der Messung steht die Rücknahme sichtbar in der Fußzeile,
+            außerhalb der Messflächen. Nach dem letzten Ziel übernimmt
+            `LaufErgebnis` die Rücknahme. */}
+        {gestartet && !alleBeendet ? (
+          <Ruecknahme ziel={ruecknahmeZiel} onUndo={ruecknahme} />
+        ) : null}
         {!gestartet ? (
           // Erst die Übersicht, dann `startAlle` im Bestätigen-Knopf: Auch ein
           // per Plus angelegter Lauf startet nicht ohne letzte Prüfung.
