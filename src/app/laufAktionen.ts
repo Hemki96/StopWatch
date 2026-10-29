@@ -143,13 +143,12 @@ export function createLaufAktionen(deps: LaufAktionenDeps): LaufAktionen {
   } = deps
 
   /**
-   * Zeitpunkt der letzten angenommenen Bedienhandlung je Serie, Bahnindex und
-   * Art (Tap oder Ziel). Der Anker-Lauf identifiziert die Serie; eine andere
-   * Serie beginnt damit ein eigenes Fenster, eine andere Bahn derselben Serie
-   * ebenfalls. Tap und Ziel bleiben getrennt, damit „Alle beenden“ direkt nach
-   * einem Tap nicht blockiert.
+   * Letzter abgeschlossener Rundenwechsel je Serie, Bahn und Art. Nur ein
+   * Abschluss öffnet das Doppeltipp-Fenster: Zwei Anschläge derselben Runde
+   * (etwa 100 m in zwei Längen) bleiben erlaubt; erst der Tap, der eine Runde
+   * beendet, blockiert für 300 ms die nächste Runde derselben Zeile.
    */
-  const letzteSerienBedienung = new Map<string, number>()
+  let letzterAbschluss: { schluessel: string; rundeId: string; at: number } | null = null
 
   /** Schlüssel einer Serienzeile: Serie (Anker-Lauf), Bahnindex und Art. */
   function zeilenSchluessel(
@@ -160,29 +159,31 @@ export function createLaufAktionen(deps: LaufAktionenDeps): LaufAktionen {
     return `${laufId}:${bahnIndex}:${art}`
   }
 
-  /**
-   * Nimmt eine Bedienhandlung an, wenn seit der letzten gleichen Art auf
-   * derselben Zeile mindestens das Doppeltipp-Fenster vergangen ist, und merkt
-   * sie. Der zweite Tap einer schnellen Geste wird damit verworfen, bevor er
-   * die nächste, bereits laufende Runde schließen kann.
-   */
-  function serienBedienungErlaubt(
-    laufId: string,
-    bahnIndex: number,
-    art: SerienBedienung,
+  /** Wahr, wenn derselbe Doppeltipp gerade eine andere Runde treffen würde. */
+  function istDoppelterAbschluss(
+    schluessel: string,
+    rundeId: string,
     now: number,
   ): boolean {
-    const schluessel = zeilenSchluessel(laufId, bahnIndex, art)
-    const letzte = letzteSerienBedienung.get(schluessel)
-    if (letzte !== undefined && now - letzte < SERIEN_TIPP_SPERRE_MS) return false
-    letzteSerienBedienung.set(schluessel, now)
-    return true
+    const abschluss = letzterAbschluss
+    if (!abschluss || abschluss.schluessel !== schluessel) return false
+    return (
+      abschluss.rundeId !== rundeId && now - abschluss.at < SERIEN_TIPP_SPERRE_MS
+    )
   }
 
-  /** Beendet das Zeitfenster einer Zeile, etwa nach einer bewussten Rücknahme. */
-  function vergissSerienBedienung(laufId: string, bahnIndex: number): void {
-    letzteSerienBedienung.delete(zeilenSchluessel(laufId, bahnIndex, 'tippe'))
-    letzteSerienBedienung.delete(zeilenSchluessel(laufId, bahnIndex, 'beende'))
+  /** Merkt einen Rundenabschluss; ein normaler Anschlag löscht das Fenster. */
+  function merkeAbschluss(
+    schluessel: string,
+    rundeId: string,
+    abgeschlossen: boolean,
+    now: number,
+  ): void {
+    if (abgeschlossen) {
+      letzterAbschluss = { schluessel, rundeId, at: now }
+    } else if (letzterAbschluss?.schluessel === schluessel) {
+      letzterAbschluss = null
+    }
   }
 
   /**
@@ -205,12 +206,10 @@ export function createLaufAktionen(deps: LaufAktionenDeps): LaufAktionen {
   }
 
   /**
-   * Schreibpfad für einen beliebigen Lauf, nicht nur den sichtbaren.
-   *
-   * Wird für Serienrunden, Wettkampf-Heats und Korrekturen im Lauf-Detail
-   * gebraucht. Das Tor wird hier erneut geprüft, damit kein Aufrufer die
-   * Sicherheitsprüfung vergessen kann. Wie überall gilt: kein Schreiben, wenn
-   * die Domäne denselben Lauf zurückgibt.
+   * Schreibpfad für einen beliebigen Lauf, nicht nur den sichtbaren. Wird für
+   * Serienrunden, Wettkampf-Heats und Korrekturen im Lauf-Detail gebraucht.
+   * Das Tor wird hier erneut geprüft, damit kein Aufrufer die Sicherheitsprüfung
+   * vergessen kann.
    */
   function aendereLauf(lauf: Lauf, naechster: Lauf): void {
     if (!istAktiv()) return
@@ -361,24 +360,34 @@ export function createLaufAktionen(deps: LaufAktionenDeps): LaufAktionen {
 
   /** Tap in der Serien-Ansicht: schließt die älteste offene Runde der Bahn. */
   function tippeSerie(bahnIndex: number, now: number, wallNow: number): void {
+    if (!istAktiv()) return
     const serie = holeAktiveSerie()
     if (!serie) return
     const ziel = offeneRunde(serie.runden, bahnIndex, now)
     if (!ziel) return
-    if (!serienBedienungErlaubt(serie.lauf.id, bahnIndex, 'tippe', now)) return
-    aendereLauf(ziel.lauf, tapLane(ziel.lauf, ziel.bahn.id, now, wallNow))
+    const schluessel = zeilenSchluessel(serie.lauf.id, bahnIndex, 'tippe')
+    if (istDoppelterAbschluss(schluessel, ziel.lauf.id, now)) return
+    const naechster = tapLane(ziel.lauf, ziel.bahn.id, now, wallNow)
+    if (naechster === ziel.lauf) return
+    aendereLauf(ziel.lauf, naechster)
+    merkeAbschluss(schluessel, ziel.lauf.id, isComplete(naechster), now)
   }
 
   /** Setzt das Ziel in der Serien-Ansicht, mit derselben Auswahlregel wie `tippeSerie`. */
   function beendeSerie(bahnIndex: number, now: number, wallNow: number): void {
+    if (!istAktiv()) return
     const serie = holeAktiveSerie()
     if (!serie) return
     const ziel = offeneRunde(serie.runden, bahnIndex, now)
     if (!ziel) return
     // Auch der Zielknopf liegt auf der Zeile; ein Doppelklick darf nicht die
     // nächste Runde mitbeenden.
-    if (!serienBedienungErlaubt(serie.lauf.id, bahnIndex, 'beende', now)) return
-    aendereLauf(ziel.lauf, finishLane(ziel.lauf, ziel.bahn.id, now, wallNow))
+    const schluessel = zeilenSchluessel(serie.lauf.id, bahnIndex, 'beende')
+    if (istDoppelterAbschluss(schluessel, ziel.lauf.id, now)) return
+    const naechster = finishLane(ziel.lauf, ziel.bahn.id, now, wallNow)
+    if (naechster === ziel.lauf) return
+    aendereLauf(ziel.lauf, naechster)
+    merkeAbschluss(schluessel, ziel.lauf.id, isComplete(naechster), now)
   }
 
   /**
@@ -393,7 +402,7 @@ export function createLaufAktionen(deps: LaufAktionenDeps): LaufAktionen {
     if (!treffer) return
     // Eine bewusste Rücknahme beendet die Geste: Der nächste Tap darf sofort
     // wieder einen Anschlag setzen, auch wenn er im alten Zeitfenster liegt.
-    vergissSerienBedienung(serie.lauf.id, bahnIndex)
+    letzterAbschluss = null
     aendereLauf(treffer.lauf, undoLane(treffer.lauf, treffer.bahn.id))
   }
 
