@@ -14,6 +14,8 @@
  *   zurückgesetzt, weil `performance.now()` einen Reload nicht überlebt.
  * - Kaskadierende Löschungen erfassen abhängige Datensätze in derselben
  *   Transaktion, damit keine verwaisten Läufe oder Sätze zurückbleiben.
+ * - `loadAll` liest alle fünf Stores in einer gemeinsamen Read-Transaktion,
+ *   damit Start, Tab-Übergabe und Import-Vorschau denselben Snapshot sehen.
  * - Schreiben ist ein Upsert über die jeweilige `id`.
  */
 import { getDb } from './db'
@@ -167,8 +169,11 @@ export function normalizeTrainingOnLoad(training: Training): Training {
 /**
  * Liest alle fünf Bestände und liefert sie normalisiert und sortiert.
  *
- * Die Stores werden parallel gelesen; die Sortierung passiert anschließend im
- * Speicher, nicht über die Indizes. Sortierreihenfolge:
+ * Alle Stores werden in genau einer `readonly`-Transaktion gelesen. IndexedDB
+ * legt deren Snapshot beim Öffnen fest; ein Commit während des Lesens ist damit
+ * entweder vollständig sichtbar oder gar nicht. Die Rückgabe entsteht erst
+ * nach `tx.done`, also nach dem Ende der Transaktion. Die Sortierung passiert
+ * anschließend im Speicher, nicht über die Indizes. Sortierreihenfolge:
  * - Schwimmer nach Name (deutsche Kollation),
  * - Sätze nach Datum absteigend (neueste zuerst),
  * - Wettkämpfe und Trainings nach Datum absteigend, bei gleichem Tag nach
@@ -186,23 +191,54 @@ export async function loadAll(optionen: { behalteLaufende?: boolean } = {}): Pro
   trainings: Training[]
 }> {
   const db = await getDb()
-  const [schwimmer, satze, laeufe, wettkampfe, trainings] = await Promise.all([
-    db.getAll('schwimmer'),
-    db.getAll('satz'),
-    db.getAll('lauf'),
-    db.getAll('wettkampf'),
-    db.getAll('training'),
-  ])
-  return {
-    schwimmer: schwimmer.sort((a, b) => a.name.localeCompare(b.name, 'de')),
-    satze: satze.map(normalizeSatzOnLoad).sort((a, b) => b.datum.localeCompare(a.datum)),
-    laeufe: laeufe.map((lauf) => normalizeOnLoad(lauf, optionen)),
-    wettkampfe: wettkampfe
-      .map(normalizeWettkampfOnLoad)
-      .sort((a, b) => b.datum.localeCompare(a.datum) || b.erstelltAm - a.erstelltAm),
-    trainings: trainings
-      .map(normalizeTrainingOnLoad)
-      .sort((a, b) => b.datum.localeCompare(a.datum) || b.erstelltAm - a.erstelltAm),
+  const tx = db.transaction(['schwimmer', 'satz', 'lauf', 'wettkampf', 'training'], 'readonly')
+  // Sammelt die bereits gestarteten Reads, damit ein späterer Fehler ihre
+  // Ablehnungen einsammeln kann, statt sie unbehandelt zu lassen.
+  const anfragen: Promise<unknown>[] = []
+  const lese = <T>(anfrage: () => Promise<T>): Promise<T> => {
+    const ergebnis = anfrage()
+    anfragen.push(ergebnis)
+    return ergebnis
+  }
+  try {
+    // Die Reads laufen parallel innerhalb derselben Transaktion. Ein Store
+    // kann nicht aus einem neueren Stand stammen als die übrigen.
+    const [schwimmer, satze, laeufe, wettkampfe, trainings] = await Promise.all([
+      lese(() => tx.objectStore('schwimmer').getAll()),
+      lese(() => tx.objectStore('satz').getAll()),
+      lese(() => tx.objectStore('lauf').getAll()),
+      lese(() => tx.objectStore('wettkampf').getAll()),
+      lese(() => tx.objectStore('training').getAll()),
+    ])
+    // Erst nach dem Abschluss ist der Snapshot vollständig gelesen. Vorher
+    // könnten noch Requests offen sein, etwa wenn ein Fehler die Transaktion
+    // abbricht.
+    await tx.done
+    return {
+      schwimmer: schwimmer.sort((a, b) => a.name.localeCompare(b.name, 'de')),
+      satze: satze.map(normalizeSatzOnLoad).sort((a, b) => b.datum.localeCompare(a.datum)),
+      laeufe: laeufe.map((lauf) => normalizeOnLoad(lauf, optionen)),
+      wettkampfe: wettkampfe
+        .map(normalizeWettkampfOnLoad)
+        .sort((a, b) => b.datum.localeCompare(a.datum) || b.erstelltAm - a.erstelltAm),
+      trainings: trainings
+        .map(normalizeTrainingOnLoad)
+        .sort((a, b) => b.datum.localeCompare(a.datum) || b.erstelltAm - a.erstelltAm),
+    }
+  } catch (fehler) {
+    // Ein abgebrochener Read hinterlässt eine beendete Transaktion; ein
+    // späteres `abort` ist dann ein No-op. Das Abwarten von `tx.done` verhindert
+    // eine unbehandelte Ablehnung, der ursprüngliche Fehler bleibt erhalten.
+    try {
+      tx.abort()
+    } catch {
+      // Bereits abgeschlossen oder abgebrochen.
+    }
+    await tx.done.catch(() => undefined)
+    // Abgebrochene Reads melden sich mit `AbortError`; das ist Folge des
+    // ursprünglichen Fehlers und darf nicht als unbehandelte Ablehnung enden.
+    await Promise.allSettled(anfragen)
+    throw fehler
   }
 }
 

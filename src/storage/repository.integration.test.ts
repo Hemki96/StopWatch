@@ -15,7 +15,7 @@
  * Läufe nicht davon abhängt.
  */
 import 'fake-indexeddb/auto'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Lauf, Satz, Schwimmer, Training, Wettkampf } from '../domain/types'
 import { getDb } from './db'
 import {
@@ -122,6 +122,12 @@ beforeEach(async () => {
   await clearAll()
 })
 
+// Spies auf IndexedDB-Prototypen gelten nur im jeweiligen Test; ein Fehlschlag
+// darf die folgenden Fälle nicht mit einem veränderten Prototyp belasten.
+afterEach(() => {
+  vi.restoreAllMocks()
+})
+
 // Schema und Verbindung: Version 3 mit fünf Stores und den Indizes für
 // Abfragen.
 describe('getDb', () => {
@@ -220,6 +226,104 @@ describe('loadAll', () => {
 
     const [nachUebergabe] = (await loadAll({ behalteLaufende: true })).laeufe
     expect(nachUebergabe?.bahnen[0]?.startMs).toBe(100)
+  })
+
+  // Akzeptanzkriterium: Alle fünf Stores stammen aus genau einer gemeinsamen
+  // Read-Transaktion. Geprüft wird auf der rohen Verbindung, damit der Test
+  // nicht von der idb-Hülle abhängt.
+  it('liest alle fünf Stores in genau einer Read-Transaktion', async () => {
+    const transaktion = vi.spyOn(IDBDatabase.prototype, 'transaction')
+
+    await loadAll()
+
+    expect(transaktion).toHaveBeenCalledTimes(1)
+    const aufruf = transaktion.mock.calls[0]
+    expect(aufruf?.[0]).toEqual(['schwimmer', 'satz', 'lauf', 'wettkampf', 'training'])
+    expect(aufruf?.[1]).toBe('readonly')
+  })
+
+  // Ein Schreibvorgang, der während des Lesens angestoßen wird, darf nicht
+  // zwischen zwei Stores sichtbar werden. Die gemeinsame Transaktion blockiert
+  // ihn, bis alle fünf Bestände gelesen sind; danach ist er vollständig da.
+  it('sieht keinen halben Stand, wenn während des Lesens geschrieben wird', async () => {
+    await saveMehrere({ satze: [satz('s1')], laeufe: [lauf('l1', 's1')] })
+
+    const original = IDBObjectStore.prototype.getAll
+    let schreibvorgang: Promise<void> | undefined
+    vi.spyOn(IDBObjectStore.prototype, 'getAll').mockImplementation(function (
+      this: IDBObjectStore,
+      query?: IDBValidKey | IDBKeyRange | null,
+      count?: number,
+    ) {
+      // Beim ersten Read den Schreibvorgang anstoßen, sodass er mitten in die
+      // laufende Read-Transaktion fällt. Beide Datensätze entstehen gemeinsam,
+      // damit ein halber Stand eindeutig erkennbar wäre.
+      schreibvorgang ??= saveMehrere({ satze: [satz('s2')], laeufe: [lauf('l2', 's2')] })
+      return original.call(this, query, count)
+    })
+
+    const daten = await loadAll()
+
+    // Der Snapshot vor dem Commit enthält nur den alten, vollständigen Stand.
+    expect(daten.satze.map((eintrag) => eintrag.id)).toEqual(['s1'])
+    expect(daten.laeufe.map((eintrag) => eintrag.id)).toEqual(['l1'])
+    const satzIds = new Set(daten.satze.map((eintrag) => eintrag.id))
+    const alleLaeufeHabenSatz = daten.laeufe.every(
+      (eintrag) => eintrag.satzId === null || satzIds.has(eintrag.satzId),
+    )
+    expect(alleLaeufeHabenSatz).toBe(true)
+
+    await schreibvorgang
+    const danach = await loadAll()
+    expect(danach.satze.map((eintrag) => eintrag.id).sort()).toEqual(['s1', 's2'])
+    expect(danach.laeufe.map((eintrag) => eintrag.id).sort()).toEqual(['l1', 'l2'])
+  })
+
+  // Ein Fehler beim Lesen bricht die gemeinsame Transaktion ab und wird
+  // unverändert weitergereicht; die Verbindung bleibt danach benutzbar.
+  it('meldet einen Lesefehler und lässt die Datenbank benutzbar', async () => {
+    await saveSatz(satz('s1'))
+
+    const original = IDBObjectStore.prototype.getAll
+    let fehlerGeworfen = false
+    vi.spyOn(IDBObjectStore.prototype, 'getAll').mockImplementation(function (
+      this: IDBObjectStore,
+      query?: IDBValidKey | IDBKeyRange | null,
+      count?: number,
+    ) {
+      // Nur der erste Leseversuch scheitert; danach muss die Datenbank wieder
+      // normal nutzbar sein.
+      if (this.name === 'satz' && !fehlerGeworfen) {
+        fehlerGeworfen = true
+        throw new DOMException('Lesen fehlgeschlagen', 'UnknownError')
+      }
+      return original.call(this, query, count)
+    })
+
+    await expect(loadAll()).rejects.toThrow('Lesen fehlgeschlagen')
+
+    const daten = await loadAll()
+    expect(daten.satze.map((eintrag) => eintrag.id)).toEqual(['s1'])
+  })
+
+  // Schon das Öffnen der Transaktion kann scheitern (etwa weil die Verbindung
+  // geschlossen wurde); der Fehler wird nicht verschluckt.
+  it('reicht einen Fehler beim Öffnen der Read-Transaktion weiter', async () => {
+    const db = await getDb()
+    vi.spyOn(db, 'transaction').mockImplementationOnce(() => {
+      throw new DOMException('Datenbank nicht verfügbar', 'InvalidStateError')
+    })
+
+    await expect(loadAll()).rejects.toThrow('Datenbank nicht verfügbar')
+
+    // Der nächste Aufruf nutzt wieder die echte Transaktion.
+    await expect(loadAll()).resolves.toEqual({
+      schwimmer: [],
+      satze: [],
+      laeufe: [],
+      wettkampfe: [],
+      trainings: [],
+    })
   })
 })
 

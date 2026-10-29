@@ -310,7 +310,13 @@ Das Upgrade läuft in `upgrade(db, alteVersion, …)` schrittweise. Ein alter Ta
 kann ein Upgrade blockieren; dann wartet `openDB`, bis der Tab geschlossen ist. `blocked`,
 `blocking` und `terminated` sind mit Konsolenhinweisen belegt.
 
-### Sortierung von `loadAll`
+### Snapshot und Sortierung von `loadAll`
+
+`loadAll` liest alle fünf Stores in genau einer `readonly`-Transaktion und wartet
+`tx.done` ab. IndexedDB legt den Snapshot beim Öffnen der Transaktion fest: Ein
+Import oder eine Tab-Übergabe ist damit entweder vollständig sichtbar oder gar
+nicht, nie als halber Stand zwischen zwei Stores. Sortiert wird anschließend im
+Speicher:
 
 - Schwimmer: nach Name, deutsch.
 - Sätze: nach Datum absteigend.
