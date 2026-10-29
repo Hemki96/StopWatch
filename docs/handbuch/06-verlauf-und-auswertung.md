@@ -143,7 +143,13 @@ Messung belastbar ist.
 
 ### Schwimmer-Tab
 
-Der Tab **Schwimmer** listet alle Personen. Ein Tipp klappt die Bestzeiten auf:
+Der Tab **Schwimmer** listet **alle** Personen, auch solche ohne Bahnzuordnung. Die Liste filtert
+bewusst nicht auf gemessene Schwimmer:innen — sonst ließe sich ein Name, der noch keiner Bahn
+zugeordnet ist, nicht mehr bearbeiten oder später zuordnen. Diese Regel ist eine bewusste Abweichung
+von der ursprünglichen Anforderung in [#19](https://github.com/Hemki96/StopWatch/issues/19); ein
+Regressionstest in `e2e/schwimmer.spec.ts` hält sie fest.
+
+Ein Tipp klappt die Bestzeiten auf:
 
 - Gruppen nach Strecke, Schwimmart und Beckenlänge, z. B. `100 m · Freistil · 50 m`.
 - Die schnellste Zeit ist grün markiert.
