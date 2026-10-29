@@ -2,11 +2,12 @@
  * Kachel einer einzelnen Bahn im Timer.
  *
  * Zeigt Status, Zeit und Längenfortschritt genau einer Bahn. Ein kurzer Tap
- * setzt den Anschlag, langes Drücken nimmt die letzte Aktion zurück, der
- * eingebettete „Ziel“-Knopf beendet eine Bahn auf offener Strecke. Die Kachel
- * rechnet nicht selbst: Status und Zeiten kommen aus domain/lauf, die Aktionen
- * reicht TimerScreen aus app/AppProvider herein. Die Reihe steht im Vorlesetext;
- * sichtbar wird sie durch den Abschnitt im Timer.
+ * setzt den Anschlag, langes Drücken nimmt die letzte Aktion zurück. Auf
+ * offener Strecke beendet der „Ziel“-Knopf die Bahn; er ist eine eigene Fläche
+ * unter der Messfläche, damit ein Fehltipp auf der Kachel nicht das Ziel
+ * auslöst (#60). Die Kachel rechnet nicht selbst: Status und Zeiten kommen aus
+ * domain/lauf, die Aktionen reicht TimerScreen aus app/AppProvider herein. Die
+ * Reihe steht im Vorlesetext; sichtbar wird sie durch den Abschnitt im Timer.
  */
 import { useEffect, useRef, useState } from 'react'
 import { haptic } from '../app/haptics'
@@ -206,180 +207,187 @@ export function LaneTile({
     (zwischenzeit.gesamt === null || zwischenzeit.gesamt > 0)
   const zwischenzeitId = `zwischenzeiten-${bahn.id}`
 
-  // Die Kachel ist ein Knopf, weil Tap, Enter und Leertaste dieselbe Aktion
-  // auslösen. Das `aria-label` nennt Bahn, Namen und Status, weil Farbe und
-  // Zahl allein den Zustand nicht vermitteln.
+  // Die Messfläche ist ein Knopf, weil Tap, Enter und Leertaste dieselbe
+  // Aktion auslösen. Sie liegt in einer nicht-interaktiven Hülle, die den
+  // Rahmen trägt; der Zielknopf steht als Geschwister daneben (#60), damit kein
+  // Knopf in einem `role="button"` verschachtelt ist und ein Tap auf der
+  // Messfläche nie das Ziel auslöst. Das `aria-label` nennt Bahn, Namen und
+  // Status, weil Farbe und Zahl allein den Zustand nicht vermitteln.
   return (
     <div
-      role="button"
-      tabIndex={0}
-      data-anschlaege={bahn.anschlaege.length}
-      data-status={status}
-      data-unterbrochen={unterbrochen ? 'true' : undefined}
-      aria-keyshortcuts={kannRueckgaengig ? 'Backspace Delete' : undefined}
-      aria-label={`Reihe ${bahn.reihe}, Bahn ${bahn.nummer}${schwimmerName ? `, ${schwimmerName}` : ''}, ${unterbrochen ? 'unterbrochen' : STATUS_LABEL[status]}`}
-      // Der Vorlesetext nennt den Status; die Zahl der Zwischenzeiten ergänzt
-      // ihn als Beschreibung, ohne den Namen für Tests und Sprachbefehle zu
-      // verändern.
-      aria-describedby={zeigtZwischenzeiten ? zwischenzeitId : undefined}
-      onPointerDown={startPress}
-      onPointerUp={endPress}
-      onPointerCancel={cancelPress}
-      onContextMenu={(e) => e.preventDefault()}
-      onClick={(e) => {
-        // Ein Klick auf den eingebetteten "Ziel"-Knopf gehört nicht der Kachel.
-        if (e.target !== e.currentTarget) return
-        if (klickRef.current) return
-        if (status === 'geplant' || unterbrochen) return
-        haptic(8)
-        onTap(bahn.id, performance.now(), Date.now())
-      }}
-      onKeyDown={(e) => {
-        // Der "Ziel"-Knopf liegt in dieser Kachel. Ohne die Prüfung würde
-        // Enter dort zusätzlich einen Anschlag auslösen.
-        if (e.target !== e.currentTarget) return
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          if (status === 'geplant' || unterbrochen) return
-          merkeKlick()
-          haptic(8)
-          onTap(bahn.id, performance.now(), Date.now())
-        }
-        // Tastatur-Äquivalent zum langen Drücken. Ohne ihn könnte eine
-        // Tastatur- oder Screenreader-Nutzung einen Anschlag erfassen, aber
-        // nicht zurücknehmen.
-        if ((e.key === 'Backspace' || e.key === 'Delete') && kannRueckgaengig) {
-          e.preventDefault()
-          onUndo(bahn.id)
-        }
-      }}
-      className={`relative flex min-h-[7.5rem] select-none flex-col justify-between overflow-hidden rounded-2xl border-2 p-3 transition-[background-color,border-color,opacity] duration-75 rail:rounded-3xl rail:p-4 ${
+      data-reihe={bahn.reihe}
+      data-bahn={bahn.nummer}
+      className={`flex flex-col overflow-hidden rounded-2xl border-2 transition-[background-color,border-color,opacity] duration-75 rail:rounded-3xl ${
         gedrueckt ? 'brightness-105 opacity-80' : ''
       } ${rand}`}
-      // `pan-y` lässt die Seite scrollen, verhindert aber Doppeltipp-Zoom.
-      // `none` würde auf kleinen Displays auch das Scrollen blockieren.
-      // Die Container-Abfrage lässt die Zeit mit der Kachel statt mit dem
-      // Viewport wachsen; so bleibt sie bei zehn Bahnen auf dem Tablet lesbar.
-      style={{
-        WebkitTouchCallout: 'none',
-        WebkitUserSelect: 'none',
-        touchAction: 'pan-y',
-        containerType: 'inline-size',
-      }}
     >
-      <div className="flex items-center justify-between gap-2">
-        <span className="rounded-md bg-surface2 px-1.5 py-0.5 text-[11px] font-bold tracking-wide text-muted">
-          {bahn.nummer}
-        </span>
-        <span className="truncate text-[11px] font-medium text-muted">{schwimmerName ?? ''}</span>
-      </div>
-
-      {/* `clamp` hält die Zeit groß genug für den Blick aus einigen Metern,
-          ohne die Kachel auf schmalen Displays zu sprengen. */}
       <div
-        className={`tabular whitespace-nowrap text-center font-semibold leading-none ${zeitFarbe}`}
-        style={{ fontSize: 'clamp(1.35rem, 15cqw, 3.25rem)' }}
+        role="button"
+        tabIndex={0}
+        data-anschlaege={bahn.anschlaege.length}
+        data-status={status}
+        data-unterbrochen={unterbrochen ? 'true' : undefined}
+        aria-keyshortcuts={kannRueckgaengig ? 'Backspace Delete' : undefined}
+        aria-label={`Reihe ${bahn.reihe}, Bahn ${bahn.nummer}${schwimmerName ? `, ${schwimmerName}` : ''}, ${unterbrochen ? 'unterbrochen' : STATUS_LABEL[status]}`}
+        // Der Vorlesetext nennt den Status; die Zahl der Zwischenzeiten ergänzt
+        // ihn als Beschreibung, ohne den Namen für Tests und Sprachbefehle zu
+        // verändern.
+        aria-describedby={zeigtZwischenzeiten ? zwischenzeitId : undefined}
+        onPointerDown={startPress}
+        onPointerUp={endPress}
+        onPointerCancel={cancelPress}
+        onContextMenu={(e) => e.preventDefault()}
+        onClick={(e) => {
+          // Nur ein Klick direkt auf der Messfläche zählt; eingebettete
+          // Elemente gibt es nicht mehr, die Prüfung bleibt als Schutz.
+          if (e.target !== e.currentTarget) return
+          if (klickRef.current) return
+          if (status === 'geplant' || unterbrochen) return
+          haptic(8)
+          onTap(bahn.id, performance.now(), Date.now())
+        }}
+        onKeyDown={(e) => {
+          if (e.target !== e.currentTarget) return
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            if (status === 'geplant' || unterbrochen) return
+            merkeKlick()
+            haptic(8)
+            onTap(bahn.id, performance.now(), Date.now())
+          }
+          // Tastatur-Äquivalent zum langen Drücken. Ohne ihn könnte eine
+          // Tastatur- oder Screenreader-Nutzung einen Anschlag erfassen, aber
+          // nicht zurücknehmen.
+          if ((e.key === 'Backspace' || e.key === 'Delete') && kannRueckgaengig) {
+            e.preventDefault()
+            onUndo(bahn.id)
+          }
+        }}
+        className="relative flex min-h-[7.5rem] flex-1 select-none flex-col justify-between p-3 rail:p-4"
+        // `pan-y` lässt die Seite scrollen, verhindert aber Doppeltipp-Zoom.
+        // `none` würde auf kleinen Displays auch das Scrollen blockieren.
+        // Die Container-Abfrage lässt die Zeit mit der Kachel statt mit dem
+        // Viewport wachsen; so bleibt sie bei zehn Bahnen auf dem Tablet lesbar.
+        style={{
+          WebkitTouchCallout: 'none',
+          WebkitUserSelect: 'none',
+          touchAction: 'pan-y',
+          containerType: 'inline-size',
+        }}
       >
-        {status === 'geplant' ? formatCountdown(zeit) : formatTime(zeit)}
-      </div>
-
-      {/* Unterer Block: links der Fortschritt, rechts entweder der Zielknopf
-          (nur offene Strecke) oder die letzte Zwischenzeit. Darunter steht der
-          Stand der Zwischenzeiten über die volle Breite, damit er auf schmalen
-          Kacheln nicht mit der Zeit kollidiert. */}
-      <div className="flex flex-col gap-0.5 text-[11px] text-muted">
-        <div className="flex items-end justify-between gap-2">
-          <span className="tabular">
-            {unterbrochen
-              ? 'Unterbrochen'
-              : status === 'beendet'
-                ? 'Ziel'
-                : status === 'geplant'
-                  ? 'Start in'
-                  : status === 'laeuft'
-                    ? gesamt
-                      ? `Länge ${Math.min(bahn.anschlaege.length + 1, gesamt)}/${gesamt}`
-                      : `Länge ${bahn.anschlaege.length + 1}`
-                    : 'Bereit'}
+        <div className="flex items-center justify-between gap-2">
+          <span className="rounded-md bg-surface2 px-1.5 py-0.5 text-[11px] font-bold tracking-wide text-muted">
+            {bahn.nummer}
           </span>
+          <span className="truncate text-[11px] font-medium text-muted">{schwimmerName ?? ''}</span>
+        </div>
 
-          {/* Nur bei offener Strecke braucht es einen eigenen Zielknopf; bei
-              fester Strecke ist der letzte Anschlag automatisch das Ziel. Der
-              Knopf stoppt Pointer- und Klickweitergabe, sonst würde das Ziel
-              zusätzlich als Anschlag auf der Kachel landen. */}
-          {status === 'laeuft' && gesamt === null ? (
-            <button
-              type="button"
-              onPointerDown={(e) => e.stopPropagation()}
-              onPointerUp={(e) => e.stopPropagation()}
-              onClick={() => {
-                haptic(8)
-                onFinish(bahn.id, performance.now(), Date.now())
-              }}
-              className="-mb-1 inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg bg-ok px-2.5 py-1 text-[10px] font-bold text-black"
-            >
-              Ziel
-            </button>
-          ) : (
+        {/* `clamp` hält die Zeit groß genug für den Blick aus einigen Metern,
+            ohne die Kachel auf schmalen Displays zu sprengen. */}
+        <div
+          className={`tabular whitespace-nowrap text-center font-semibold leading-none ${zeitFarbe}`}
+          style={{ fontSize: 'clamp(1.35rem, 15cqw, 3.25rem)' }}
+        >
+          {status === 'geplant' ? formatCountdown(zeit) : formatTime(zeit)}
+        </div>
+
+        {/* Unterer Block: links der Längenschritt, rechts die letzte
+            Zwischenzeit. Der Zielknopf sitzt nicht mehr hier, sondern als eigene
+            Fläche unter der Messfläche (#60). Darunter steht der Stand der
+            Zwischenzeiten über die volle Breite, damit er auf schmalen Kacheln
+            nicht mit der Zeit kollidiert. */}
+        <div className="flex flex-col gap-0.5 text-[11px] text-muted">
+          <div className="flex items-end justify-between gap-2">
+            <span className="tabular">
+              {unterbrochen
+                ? 'Unterbrochen'
+                : status === 'beendet'
+                  ? 'Ziel'
+                  : status === 'geplant'
+                    ? 'Start in'
+                    : status === 'laeuft'
+                      ? gesamt
+                        ? `Länge ${Math.min(bahn.anschlaege.length + 1, gesamt)}/${gesamt}`
+                        : `Länge ${bahn.anschlaege.length + 1}`
+                      : 'Bereit'}
+            </span>
+
             <span className="tabular">
               {status === 'geplant' ? 'wartet' : letzter ? formatTime(letzter.splitMs) : ''}
             </span>
-          )}
+          </div>
+
+          {/* Die Zahl zeigt, wie viele Zwischenzeiten der Lauf bereits hat; das
+              Ziel ist keine Zwischenzeit und zählt nicht mit. */}
+          {zeigtZwischenzeiten ? (
+            <span id={zwischenzeitId} className="tabular text-[10px] leading-none">
+              {formatZwischenzeiten(zwischenzeit.erfasst, zwischenzeit.gesamt)}
+            </span>
+          ) : null}
         </div>
 
-        {/* Die Zahl zeigt, wie viele Zwischenzeiten der Lauf bereits hat; das
-            Ziel ist keine Zwischenzeit und zählt nicht mit. */}
-        {zeigtZwischenzeiten ? (
-          <span id={zwischenzeitId} className="tabular text-[10px] leading-none">
-            {formatZwischenzeiten(zwischenzeit.erfasst, zwischenzeit.gesamt)}
+        {/*
+          Die Unterkante trägt genau eine Semantik: den Fortschritt über die
+          Längen. Die Haltedauer liegt als eigener Statustext in der Fläche.
+          Siehe #23 und #16.
+        */}
+        {gesamt !== null ? (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 bottom-0 flex h-1.5 gap-px px-1 pb-0.5"
+          >
+            {Array.from({ length: gesamt }, (_, index) => {
+              const gefuellt = index < abgeschlosseneLaengen
+              return (
+                <span
+                  key={index}
+                  data-gefuellt={gefuellt ? 'true' : undefined}
+                  className={`flex-1 rounded-sm ${
+                    gefuellt ? 'h-full bg-fg/70' : 'h-[2px] self-end bg-line'
+                  }`}
+                />
+              )
+            })}
+          </span>
+        ) : null}
+
+        {/* Das Overlay erscheint erst ab dem Drücken und nennt die Wirkung,
+            damit langes Drücken nicht als einfacher Anschlag missverstanden wird. */}
+        {kannRueckgaengig && gedrueckt ? (
+          <span
+            data-haltend="true"
+            className="pointer-events-none absolute inset-x-2 top-1/2 flex -translate-y-1/2 flex-col items-center gap-1 rounded-lg bg-warn px-2 py-1.5 text-center text-[10px] font-bold text-black"
+          >
+            {status === 'geplant' ? 'Halten: Start abbrechen' : 'Halten: Anschlag zurücknehmen'}
+            {reduzierteBewegung ? null : (
+              <span aria-hidden="true" className="h-[3px] w-full overflow-hidden rounded-full bg-black/25">
+                <span
+                  className="block h-full w-full origin-left bg-black"
+                  style={{
+                    animation: `langdruck ${LANGDRUCK_MS}ms linear forwards`,
+                  }}
+                />
+              </span>
+            )}
           </span>
         ) : null}
       </div>
 
-      {/*
-        Die Unterkante trägt genau eine Semantik: den Fortschritt über die
-        Längen. Die Haltedauer liegt als eigener Statustext in der Fläche.
-        Siehe #23 und #16.
-      */}
-      {gesamt !== null ? (
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 bottom-0 flex h-1.5 gap-px px-1 pb-0.5"
+      {/* Ziel als eigene Fläche unter der Messung: nur bei offener Strecke
+          nötig, weil bei fester Strecke der letzte Anschlag das Ziel ist. Der
+          Knopf ist ein Geschwister der Messfläche, kein eingebettetes Element;
+          ein Tap auf der Kachel kann ihn deshalb nicht auslösen. */}
+      {status === 'laeuft' && gesamt === null ? (
+        <button
+          type="button"
+          onClick={() => {
+            haptic(8)
+            onFinish(bahn.id, performance.now(), Date.now())
+          }}
+          className="min-h-11 shrink-0 border-t border-ok/40 bg-ok/15 px-3 text-[11px] font-bold text-ok"
         >
-          {Array.from({ length: gesamt }, (_, index) => {
-            const gefuellt = index < abgeschlosseneLaengen
-            return (
-              <span
-                key={index}
-                data-gefuellt={gefuellt ? 'true' : undefined}
-                className={`flex-1 rounded-sm ${
-                  gefuellt ? 'h-full bg-fg/70' : 'h-[2px] self-end bg-line'
-                }`}
-              />
-            )
-          })}
-        </span>
-      ) : null}
-
-      {/* Das Overlay erscheint erst ab dem Drücken und nennt die Wirkung,
-          damit langes Drücken nicht als einfacher Anschlag missverstanden wird. */}
-      {kannRueckgaengig && gedrueckt ? (
-        <span
-          data-haltend="true"
-          className="pointer-events-none absolute inset-x-2 top-1/2 flex -translate-y-1/2 flex-col items-center gap-1 rounded-lg bg-warn px-2 py-1.5 text-center text-[10px] font-bold text-black"
-        >
-          {status === 'geplant' ? 'Halten: Start abbrechen' : 'Halten: Anschlag zurücknehmen'}
-          {reduzierteBewegung ? null : (
-            <span aria-hidden="true" className="h-[3px] w-full overflow-hidden rounded-full bg-black/25">
-              <span
-                className="block h-full w-full origin-left bg-black"
-                style={{
-                  animation: `langdruck ${LANGDRUCK_MS}ms linear forwards`,
-                }}
-              />
-            </span>
-          )}
-        </span>
+          Ziel
+        </button>
       ) : null}
     </div>
   )

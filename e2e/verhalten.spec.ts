@@ -100,8 +100,8 @@ test('Offene Strecke: Ziel beendet die Bahn, weitere Taps ändern nichts', async
   await dialog.getByRole('button', { name: 'Schließen', exact: true }).click()
 
   // Bei offener Strecke gibt es keinen automatischen Finish: Der Zielknopf
-  // sitzt in der Kachel und stoppt Pointer- und Klickweitergabe, damit das
-  // Ziel nicht zusätzlich als Anschlag zählt.
+  // ist seit #60 eine eigene Fläche unter der Messung. Er liegt nicht mehr in
+  // der Kachel, sondern in ihrer Hülle, und teilt sich mit ihr keinen Klick.
   await starteLauf(page)
   const bahn = page.getByRole('button', { name: BAHN1 })
   await bahn.tap()
@@ -110,7 +110,10 @@ test('Offene Strecke: Ziel beendet die Bahn, weitere Taps ändern nichts', async
   // nicht als Zwischenzeit.
   await expect(bahn).toContainText('1 Zwischenzeit')
 
-  await bahn.getByRole('button', { name: 'Ziel', exact: true }).click()
+  await page
+    .locator('[data-reihe="1"][data-bahn="1"]')
+    .getByRole('button', { name: 'Ziel', exact: true })
+    .click()
   // Der Locator richtet sich nach dem `aria-label`; nach dem Ziel heißt die
   // Kachel anders, deshalb ein eigener Locator statt Wiederverwendung.
   const beendet = page.getByRole('button', { name: /Bahn 1, im Ziel$/ })

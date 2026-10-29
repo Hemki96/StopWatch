@@ -196,10 +196,15 @@ Die Kachel eines einzelnen Laufs:
 - großes Zeitfeld mit `clamp(1.5rem, 7.6vw, 3.25rem)`,
 - Bahnnummer, Name, Status, letzter Split,
 - Fortschrittslinie unten (ein Segment pro Länge),
-- **Ziel**-Knopf nur bei offener Strecke,
+- **Ziel**-Knopf nur bei offener Strecke, als eigene Fläche unter der Messfläche,
 - Long-Press-Overlay mit Fortschrittsbalken,
 - Status **unterbrochen**, wenn nach einem Reload Anschläge ohne Startzeit übrig sind; ein Tap
   startet die Bahn dann nicht neu, langes Drücken nimmt die Anschläge schrittweise zurück.
+
+Die Kachelhülle ist nicht interaktiv; sie trägt nur Rahmen, Statusfarbe und die Zielaktion. Die
+Messfläche ist ein eigener `role="button"`-Knopf darin, der Zielknopf ein Geschwister darunter.
+Dadurch liegt kein `button` in einem `role="button"` (`nested-interactive`), und ein Fehltipp auf
+der Messfläche beendet keine Bahn (#60).
 
 ### `SerieAnsicht`
 
@@ -209,8 +214,11 @@ Eine scrollbare Liste von Zeilen:
 - große Zeit, Statustext,
 - „zuletzt …“, ggf. „R3 läuft schon“,
 - Fortschrittssegmente pro Runde,
-- **Ziel**-Knopf bei offener Strecke,
+- **Ziel**-Knopf bei offener Strecke, rechts neben der Messfläche,
 - Long-Press-Overlay.
+
+Wie bei `LaneTile` sind Messfläche und Zielknopf Geschwister in einer nicht-interaktiven Hülle;
+ein Tap auf der Zeile schließt die Runde, ein Tap auf „Ziel“ beendet sie.
 
 ### `WettkampfLane`
 
@@ -260,8 +268,10 @@ doppelt verarbeitet.
 - **Enter** und **Leertaste** auf einer Bahn lösen den Tap aus.
 - **Escape** schließt den obersten Dialog.
 - **Tab** bleibt im Dialog.
-- Eingebettete Knöpfe (**Ziel**, **Stift**) stoppen die Propagation, damit sie nicht zusätzlich
-  einen Anschlag auslösen.
+- **Ziel** ist bei offener Strecke ein eigener Knopf neben beziehungsweise unter der Messfläche
+  und per Tab erreichbar; er liegt nicht in der Messfläche und löst deshalb nie zusätzlich einen
+  Anschlag aus. Der Stift in `WettkampfLane` liegt noch in der Kachel und stoppt dort die
+  Propagation.
 
 ### Touch-Verhalten
 
