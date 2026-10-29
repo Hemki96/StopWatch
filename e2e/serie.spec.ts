@@ -190,6 +190,9 @@ test('Serie zeigt Runden pro Schwimmer, zählt sie und nimmt den letzten Anschla
   const bahn1 = page.getByRole('button', { name: /Bahn 1, Runde 1 von 3, läuft$/ })
   await expect(bahn1).toBeVisible()
   await bahn1.tap()
+  // 100 m im 50-m-Becken: Der erste Tap ist die Zwischenzeit, der zweite das
+  // Ziel der Runde.
+  await expect(bahn1).toContainText('1/1 Zwischenzeiten')
   await bahn1.tap()
 
   const bahn2 = page.getByRole('button', { name: /Bahn 2, Runde 1 von 3, läuft$/ })

@@ -133,6 +133,7 @@ Ein Tipp auf die Karte öffnet das Konfigurations-Sheet. Der große **Start**-Kn
 | **Bereit** | Die Bahn wurde noch nicht gestartet. |
 | **Start in 7,4** | Die Bahn ist geplant und startet nach dem Countdown (nur mit Startversatz). |
 | **Länge 2/4** | Die nächste Berührung wäre die zweite von vier Längen. |
+| **1/3 Zwischenzeiten** | Eine von drei Zwischenzeiten ist erfasst; das Ziel ist keine Zwischenzeit. |
 | **läuft** | Die Bahn misst gerade. |
 | **im Ziel** / **Ziel** | Die Bahn hat ihren letzten Anschlag. |
 | Fortschrittslinie unten | Gefüllte Segmente stehen für abgeschlossene Längen. |

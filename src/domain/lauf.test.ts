@@ -45,6 +45,7 @@ import {
   undoLane,
   updateStrecke,
   validateKonfiguration,
+  zwischenzeiten,
 } from './lauf'
 import type { Lauf, LaufKonfiguration } from './types'
 
@@ -75,6 +76,40 @@ describe('lengthCount', () => {
     expect(lengthCount(K100)).toBe(2)
     expect(lengthCount({ ...K100, beckenlaengeM: 25 })).toBe(4)
     expect(lengthCount(OFFEN)).toBeNull()
+  })
+})
+
+// Zwischenzeiten zählen alle Anschläge außer dem Ziel. Bei einer offenen
+// Strecke bleibt die Gesamtzahl unbekannt, bei einer einzelnen Länge gibt es
+// gar keine Zwischenzeit.
+describe('zwischenzeiten', () => {
+  it('zählt auf fester Strecke alle Anschläge außer dem Ziel', () => {
+    let lauf = startAll(laufMit({ ...K100, beckenlaengeM: 25 }, 1), 0, 1000)
+    // 100 m im 25-m-Becken: drei Zwischenzeiten und ein Ziel.
+    for (const [index, zeit] of [30_000, 60_000, 90_000].entries()) {
+      lauf = tapLane(lauf, bahn(lauf).id, zeit, 1000 + zeit)
+      expect(zwischenzeiten(bahn(lauf), lauf.konfiguration)).toEqual({
+        erfasst: index + 1,
+        gesamt: 3,
+      })
+    }
+    lauf = tapLane(lauf, bahn(lauf).id, 120_000, 121_000)
+    expect(isFinished(bahn(lauf))).toBe(true)
+    expect(zwischenzeiten(bahn(lauf), lauf.konfiguration)).toEqual({ erfasst: 3, gesamt: 3 })
+  })
+
+  it('zählt bei offener Strecke ohne feste Gesamtzahl', () => {
+    let lauf = startAll(laufMit(OFFEN, 1), 0, 1000)
+    lauf = tapLane(lauf, bahn(lauf).id, 30_000, 31_000)
+    expect(zwischenzeiten(bahn(lauf), lauf.konfiguration)).toEqual({ erfasst: 1, gesamt: null })
+    // Das ausdrückliche Ziel ist keine Zwischenzeit.
+    lauf = finishLane(lauf, bahn(lauf).id, 60_000, 61_000)
+    expect(zwischenzeiten(bahn(lauf), lauf.konfiguration)).toEqual({ erfasst: 1, gesamt: null })
+  })
+
+  it('meldet für eine einzelne Länge keine Zwischenzeit', () => {
+    const lauf = startAll(laufMit({ ...K100, streckeM: 50 }, 1), 0, 1000)
+    expect(zwischenzeiten(bahn(lauf), lauf.konfiguration)).toEqual({ erfasst: 0, gesamt: 0 })
   })
 })
 

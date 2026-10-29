@@ -81,6 +81,18 @@ export function formatTakt(sekunden: number): string {
 }
 
 /**
+ * Stand der Zwischenzeiten als kurzer Text für die Bahnanzeige: `2/3
+ * Zwischenzeiten` bei fester Strecke, `2 Zwischenzeiten` bei offener Strecke.
+ * `gesamt` zählt nur die Zwischenzeiten, nicht das Ziel; `null` heißt offen.
+ */
+export function formatZwischenzeiten(erfasst: number, gesamt: number | null): string {
+  if (gesamt === null) {
+    return `${erfasst} ${erfasst === 1 ? 'Zwischenzeit' : 'Zwischenzeiten'}`
+  }
+  return `${erfasst}/${gesamt} Zwischenzeiten`
+}
+
+/**
  * Liest eine Eingabe wie `01:23,45` (oder `1:23,45`, `83,45`, `1:02:03,45`) als
  * Millisekunden. Gibt null zurück, wenn die Eingabe keine gültige Zeit ist.
  *

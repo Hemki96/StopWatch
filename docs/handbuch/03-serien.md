@@ -72,8 +72,9 @@ Bahn und Runde. Das hält die Ansicht auch bei 5 Runden und 6 Bahnen bedienbar.
 ┌──────────────────────────────────────────┐
 │ 3   Anna Muster                 R2/5     │
 │     02:14,08   läuft                     │
-│     +01,32 zur Vorrunde                   │
-│     zuletzt 02:11,44   R3 läuft schon    │
+│     +01,32 zur Vorrunde                  │
+│     zuletzt 02:11,44 2/3 Zwischenzeiten  │
+│     R3 läuft schon                       │
 │ ████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  │
 └──────────────────────────────────────────┘
 ```
@@ -83,6 +84,7 @@ Bahn und Runde. Das hält die Ansicht auch bei 5 Runden und 6 Bahnen bedienbar.
 | **R2/5** | Die Runde, die die Zeile gerade beschreibt: älteste offene, sonst nächste geplante, sonst letzte beendete. |
 | **Große Zeit** | Laufende Zeit, Countdown oder Zielzeit — je nach Zustand. |
 | **zuletzt …** | Zielzeit der letzten abgeschlossenen Runde, solange die Zeile nicht fertig ist. |
+| **2/3 Zwischenzeiten** | Bereits erfasste Zwischenzeiten der ältesten offenen Runde — genau der Runde, die der nächste Tipp abschließt. Das Ziel zählt nicht mit. |
 | **… zur Vorrunde** | Nach dem letzten Ziel: Abweichung zur selben Bahn in der vorigen Runde. Grün = schneller, rot = langsamer. In Runde 1 gibt es keinen Bezug. |
 | **R3 läuft schon** | Eine neuere Runde hat begonnen, während diese Runde noch offen ist. |
 | **Fortschrittslinie** | Ein Segment pro Runde; die Linie reicht bis zur höchsten beendeten Runde. |

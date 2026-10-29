@@ -11,9 +11,15 @@
 import { useRef, useState } from 'react'
 import { haptic } from '../app/haptics'
 import { useReducedMotion } from '../app/useReducedMotion'
-import { finishMs, lengthCount, bahnenNachReihen } from '../domain/lauf'
+import { finishMs, lengthCount, bahnenNachReihen, zwischenzeiten } from '../domain/lauf'
 import { abweichungZurVorrunde } from '../domain/analyse'
-import { formatCountdown, formatDelta, formatTakt, formatTime } from '../domain/format'
+import {
+  formatCountdown,
+  formatDelta,
+  formatTakt,
+  formatTime,
+  formatZwischenzeiten,
+} from '../domain/format'
 import { bahnZeile, zeilenZeit, type BahnZeile, type ZeilenStatus } from '../domain/serie'
 import type { Bahn, Lauf, SatzPlan } from '../domain/types'
 
@@ -191,6 +197,15 @@ function Zeile({
 
   // Zielzeit der zuletzt beendeten Runde, solange die aktuelle Runde offen ist.
   const letzteZeit = zeile.letzte ? finishMs(zeile.letzte.bahn) : null
+  // Zwischenzeiten der ältesten offenen Runde — genau die Runde, die der
+  // nächste Tap abschließt. Bei einer Strecke über eine Länge bleibt die Zeile
+  // weg, weil es keine Zwischenzeit gibt.
+  const zwischenzeit = zeile.offen
+    ? zwischenzeiten(zeile.offen.bahn, zeile.offen.lauf.konfiguration)
+    : null
+  const zeigtZwischenzeiten =
+    zwischenzeit !== null && (zwischenzeit.gesamt === null || zwischenzeit.gesamt > 0)
+  const zwischenzeitId = `zwischenzeiten-${basis.id}`
   // Abweichung zur Vorrunde desselben Schwimmers, sobald die Serie fertig ist
   // und die vorige Runde im Ziel liegt. In Runde 1 bleibt sie aus.
   const abweichung =
@@ -211,6 +226,9 @@ function Zeile({
       tabIndex={0}
       data-status={zeile.status}
       aria-label={`Reihe ${basis.reihe}, Bahn ${basis.nummer}${name ? `, ${name}` : ''}, Runde ${angezeigteRunde} von ${gesamt}, ${STATUS_LABEL[zeile.status]}`}
+      // Die Zahl der Zwischenzeiten ergänzt den Vorlesetext als Beschreibung,
+      // ohne den Namen der Zeile zu verändern.
+      aria-describedby={zeigtZwischenzeiten ? zwischenzeitId : undefined}
       onPointerDown={startPress}
       onPointerUp={endPress}
       onPointerCancel={cancelPress}
@@ -282,6 +300,11 @@ function Zeile({
         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-muted">
           {letzteZeit !== null && zeile.status !== 'fertig' ? (
             <span className="tabular">zuletzt {formatTime(letzteZeit)}</span>
+          ) : null}
+          {zeigtZwischenzeiten && zwischenzeit ? (
+            <span id={zwischenzeitId} className="tabular">
+              {formatZwischenzeiten(zwischenzeit.erfasst, zwischenzeit.gesamt)}
+            </span>
           ) : null}
           {hatUeberholung && neuesteOffene?.lauf.wiederholung ? (
             <span className="rounded bg-warn/15 px-1.5 py-0.5 font-bold text-warn">

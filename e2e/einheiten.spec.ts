@@ -23,8 +23,9 @@ async function pruefeVierLaengen(page: import('@playwright/test').Page): Promise
     await expect(bahn).toHaveAttribute('data-anschlaege', String(i + 1))
   }
   // 100 yd im 25-Yard-Becken sind vier Längen; nach drei Anschlägen steht die
-  // vierte an.
+  // vierte an. Drei davon sind Zwischenzeiten, die vierte ist das Ziel.
   await expect(bahn).toContainText('Länge 4/4')
+  await expect(bahn).toContainText('3/3 Zwischenzeiten')
 }
 
 test('richtet im Onboarding ein Yard-Becken ein', async ({ page }) => {

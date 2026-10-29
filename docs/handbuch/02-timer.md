@@ -116,7 +116,11 @@ Bei fester Strecke ist der letzte Anschlag automatisch das Ziel:
 | 400 m | 25 m | 16 | 16 |
 
 Die Unterkante jeder Kachel zeigt den Fortschritt: ein Segment pro Länge, gefüllt nach jedem
-Anschlag.
+Anschlag. Darüber steht, wie viele **Zwischenzeiten** bereits erfasst sind, z. B. `2/3
+Zwischenzeiten`. Das Ziel zählt dabei nicht mit: Bei 100 m im 25-m-Becken gibt es drei
+Zwischenzeiten und den Zielanschlag. Bei offener Strecke entfällt die Gesamtzahl (`2
+Zwischenzeiten`); bei einer Strecke über genau eine Länge fehlt die Zeile, weil es keine
+Zwischenzeit gibt.
 
 ### Offene Strecke
 
@@ -141,6 +145,7 @@ Bahn startet nur diese. Das ist die Ausnahme; der übliche Weg ist **Start alle*
 │          01:23,45                │  laufende Zeit oder Zielzeit
 │                                  │
 │ Länge 2/4            01:05,12    │  nächste Länge, letzter Split
+│ 1/3 Zwischenzeiten               │  bereits erfasste Zwischenzeiten
 │ ████████░░░░░░░░░░░░░░░░░░░░░░░  │  Fortschritt
 └──────────────────────────────────┘
 ```
@@ -149,8 +154,8 @@ Bahn startet nur diese. Das ist die Ausnahme; der übliche Weg ist **Start alle*
 | --- | --- | --- |
 | **bereit** | `00:00,00` | `Bereit` |
 | **geplant** | Countdown | `Start in`, `wartet` |
-| **läuft** | laufende Zeit | `Länge 2/4`, letzter Split |
-| **beendet** | Zielzeit | `Ziel` |
+| **läuft** | laufende Zeit | `Länge 2/4`, `1/3 Zwischenzeiten`, letzter Split |
+| **beendet** | Zielzeit | `Ziel`, `3/3 Zwischenzeiten` |
 
 ### Statuszeile und Laufzeit
 

@@ -261,6 +261,31 @@ export function lastSplit(bahn: Bahn): Anschlag | null {
   return bahn.anschlaege.at(-1) ?? null
 }
 
+/** Stand der Zwischenzeiten einer Bahn: bereits erfasst und bis zum Ziel. */
+export interface ZwischenzeitStand {
+  /** Erfasste Zwischenzeiten; ein Ziel-Anschlag zählt nicht mit. */
+  erfasst: number
+  /** Zwischenzeiten bis zum Ziel, `null` bei offener Strecke. */
+  gesamt: number | null
+}
+
+/**
+ * Zählt die Zwischenzeiten einer Bahn. Die letzte Länge einer festen Strecke
+ * ist das Ziel und damit keine Zwischenzeit; bei offener Strecke bleibt die
+ * Gesamtzahl offen. Ein Lauf über genau eine Beckenlänge hat deshalb
+ * `gesamt: 0` — dort gibt es keine Zwischenzeit.
+ */
+export function zwischenzeiten(
+  bahn: Bahn,
+  konfiguration: LaufKonfiguration,
+): ZwischenzeitStand {
+  const laengen = lengthCount(konfiguration)
+  return {
+    erfasst: bahn.anschlaege.filter((anschlag) => !anschlag.istFinish).length,
+    gesamt: laengen === null ? null : Math.max(0, laengen - 1),
+  }
+}
+
 /** Sucht eine Bahn per ID; `undefined`, wenn sie nicht (mehr) existiert. */
 export function findBahn(lauf: Lauf, bahnId: string): Bahn | undefined {
   return lauf.bahnen.find((b) => b.id === bahnId)

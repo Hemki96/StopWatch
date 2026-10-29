@@ -19,6 +19,7 @@ import {
   formatStrecke,
   formatTakt,
   formatTime,
+  formatZwischenzeiten,
   parseTime,
   truncateToHundredths,
 } from './format'
@@ -62,6 +63,17 @@ describe('formatDelta', () => {
     expect(formatDelta(-1_230)).toBe('-01,23')
     expect(formatDelta(450)).toBe('+00,45')
     expect(formatDelta(-61_000)).toBe('-01:01,00')
+  })
+})
+
+// Zwischenzeiten: mit fester Strecke als Bruchteil der möglichen Splits, ohne
+// Gesamtzahl bei offener Strecke. Die Einzahl gilt nur ohne Bruch.
+describe('formatZwischenzeiten', () => {
+  it('formatiert feste und offene Strecken', () => {
+    expect(formatZwischenzeiten(2, 3)).toBe('2/3 Zwischenzeiten')
+    expect(formatZwischenzeiten(0, 0)).toBe('0/0 Zwischenzeiten')
+    expect(formatZwischenzeiten(1, null)).toBe('1 Zwischenzeit')
+    expect(formatZwischenzeiten(2, null)).toBe('2 Zwischenzeiten')
   })
 })
 

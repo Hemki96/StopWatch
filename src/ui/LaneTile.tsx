@@ -11,8 +11,15 @@
 import { useRef, useState } from 'react'
 import { haptic } from '../app/haptics'
 import { useReducedMotion } from '../app/useReducedMotion'
-import { elapsedMs, finishMs, laneStatusAt, lastSplit, lengthCount } from '../domain/lauf'
-import { formatCountdown, formatTime } from '../domain/format'
+import {
+  elapsedMs,
+  finishMs,
+  laneStatusAt,
+  lastSplit,
+  lengthCount,
+  zwischenzeiten,
+} from '../domain/lauf'
+import { formatCountdown, formatTime, formatZwischenzeiten } from '../domain/format'
 import type { Bahn, LaufKonfiguration } from '../domain/types'
 
 /** Haltedauer in Millisekunden, ab der ein Druck als „zurücknehmen“ gilt. */
@@ -170,6 +177,14 @@ export function LaneTile({
 
   // Gefüllte Segmente der Fortschrittsleiste: eines pro erfasstem Anschlag.
   const abgeschlosseneLaengen = bahn.anschlaege.length
+  // Bereits erfasste Zwischenzeiten; das Ziel zählt dabei nicht mit. Bei einer
+  // Strecke über genau eine Länge gibt es keine Zwischenzeit, dann bleibt die
+  // Zeile weg.
+  const zwischenzeit = zwischenzeiten(bahn, konfiguration)
+  const zeigtZwischenzeiten =
+    (status === 'laeuft' || status === 'beendet') &&
+    (zwischenzeit.gesamt === null || zwischenzeit.gesamt > 0)
+  const zwischenzeitId = `zwischenzeiten-${bahn.id}`
 
   // Die Kachel ist ein Knopf, weil Tap, Enter und Leertaste dieselbe Aktion
   // auslösen. Das `aria-label` nennt Bahn, Namen und Status, weil Farbe und
@@ -181,6 +196,10 @@ export function LaneTile({
       data-anschlaege={bahn.anschlaege.length}
       data-status={status}
       aria-label={`Reihe ${bahn.reihe}, Bahn ${bahn.nummer}${schwimmerName ? `, ${schwimmerName}` : ''}, ${STATUS_LABEL[status]}`}
+      // Der Vorlesetext nennt den Status; die Zahl der Zwischenzeiten ergänzt
+      // ihn als Beschreibung, ohne den Namen für Tests und Sprachbefehle zu
+      // verändern.
+      aria-describedby={zeigtZwischenzeiten ? zwischenzeitId : undefined}
       onPointerDown={startPress}
       onPointerUp={endPress}
       onPointerCancel={cancelPress}
@@ -235,43 +254,55 @@ export function LaneTile({
         {status === 'geplant' ? formatCountdown(zeit) : formatTime(zeit)}
       </div>
 
-      {/* Untere Zeile: links der Fortschritt, rechts entweder der Zielknopf
-          (nur offene Strecke) oder die letzte Zwischenzeit. */}
-      <div className="flex items-end justify-between gap-2 text-[11px] text-muted">
-        <span className="tabular">
-          {status === 'beendet'
-            ? 'Ziel'
-            : status === 'geplant'
-              ? 'Start in'
-              : status === 'laeuft'
-                ? gesamt
-                  ? `Länge ${Math.min(bahn.anschlaege.length + 1, gesamt)}/${gesamt}`
-                  : `Länge ${bahn.anschlaege.length + 1}`
-                : 'Bereit'}
-        </span>
-
-        {/* Nur bei offener Strecke braucht es einen eigenen Zielknopf; bei
-            fester Strecke ist der letzte Anschlag automatisch das Ziel. Der
-            Knopf stoppt Pointer- und Klickweitergabe, sonst würde das Ziel
-            zusätzlich als Anschlag auf der Kachel landen. */}
-        {status === 'laeuft' && gesamt === null ? (
-          <button
-            type="button"
-            onPointerDown={(e) => e.stopPropagation()}
-            onPointerUp={(e) => e.stopPropagation()}
-            onClick={() => {
-              haptic(8)
-              onFinish(bahn.id, performance.now(), Date.now())
-            }}
-            className="-mb-1 rounded-lg bg-ok px-2.5 py-1 text-[10px] font-bold text-black"
-          >
-            Ziel
-          </button>
-        ) : (
+      {/* Unterer Block: links der Fortschritt, rechts entweder der Zielknopf
+          (nur offene Strecke) oder die letzte Zwischenzeit. Darunter steht der
+          Stand der Zwischenzeiten über die volle Breite, damit er auf schmalen
+          Kacheln nicht mit der Zeit kollidiert. */}
+      <div className="flex flex-col gap-0.5 text-[11px] text-muted">
+        <div className="flex items-end justify-between gap-2">
           <span className="tabular">
-            {status === 'geplant' ? 'wartet' : letzter ? formatTime(letzter.splitMs) : ''}
+            {status === 'beendet'
+              ? 'Ziel'
+              : status === 'geplant'
+                ? 'Start in'
+                : status === 'laeuft'
+                  ? gesamt
+                    ? `Länge ${Math.min(bahn.anschlaege.length + 1, gesamt)}/${gesamt}`
+                    : `Länge ${bahn.anschlaege.length + 1}`
+                  : 'Bereit'}
           </span>
-        )}
+
+          {/* Nur bei offener Strecke braucht es einen eigenen Zielknopf; bei
+              fester Strecke ist der letzte Anschlag automatisch das Ziel. Der
+              Knopf stoppt Pointer- und Klickweitergabe, sonst würde das Ziel
+              zusätzlich als Anschlag auf der Kachel landen. */}
+          {status === 'laeuft' && gesamt === null ? (
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onPointerUp={(e) => e.stopPropagation()}
+              onClick={() => {
+                haptic(8)
+                onFinish(bahn.id, performance.now(), Date.now())
+              }}
+              className="-mb-1 rounded-lg bg-ok px-2.5 py-1 text-[10px] font-bold text-black"
+            >
+              Ziel
+            </button>
+          ) : (
+            <span className="tabular">
+              {status === 'geplant' ? 'wartet' : letzter ? formatTime(letzter.splitMs) : ''}
+            </span>
+          )}
+        </div>
+
+        {/* Die Zahl zeigt, wie viele Zwischenzeiten der Lauf bereits hat; das
+            Ziel ist keine Zwischenzeit und zählt nicht mit. */}
+        {zeigtZwischenzeiten ? (
+          <span id={zwischenzeitId} className="tabular text-[10px] leading-none">
+            {formatZwischenzeiten(zwischenzeit.erfasst, zwischenzeit.gesamt)}
+          </span>
+        ) : null}
       </div>
 
       {/*

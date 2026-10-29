@@ -57,6 +57,8 @@ test('Long-Press nimmt den letzten Anschlag zurück', async ({ page }) => {
   await bahn.tap()
   await expect(bahn).toHaveAttribute('data-anschlaege', '1')
   await expect(bahn).toContainText('Länge 2/2')
+  // 100 m im 50-m-Becken sind eine Zwischenzeit und das Ziel.
+  await expect(bahn).toContainText('1/1 Zwischenzeiten')
 
   await langdruck(page, bahn)
 
@@ -64,6 +66,7 @@ test('Long-Press nimmt den letzten Anschlag zurück', async ({ page }) => {
   // weiter, deshalb bleibt der Locator über den Status „läuft“ gültig.
   await expect(bahn).toHaveAttribute('data-anschlaege', '0')
   await expect(bahn).toContainText('Länge 1/2')
+  await expect(bahn).toContainText('0/1 Zwischenzeiten')
 })
 
 // Nutzerreise: VoiceOver/TalkBack lösen einen Klick ohne Pointer-Ereignisse
@@ -103,12 +106,16 @@ test('Offene Strecke: Ziel beendet die Bahn, weitere Taps ändern nichts', async
   const bahn = page.getByRole('button', { name: BAHN1 })
   await bahn.tap()
   await expect(bahn).toHaveAttribute('data-anschlaege', '1')
+  // Bei offener Strecke gibt es keine feste Gesamtzahl; das Ziel zählt später
+  // nicht als Zwischenzeit.
+  await expect(bahn).toContainText('1 Zwischenzeit')
 
   await bahn.getByRole('button', { name: 'Ziel', exact: true }).click()
   // Der Locator richtet sich nach dem `aria-label`; nach dem Ziel heißt die
   // Kachel anders, deshalb ein eigener Locator statt Wiederverwendung.
   const beendet = page.getByRole('button', { name: /Bahn 1, im Ziel$/ })
   await expect(beendet).toHaveAttribute('data-anschlaege', '2')
+  await expect(beendet).toContainText('1 Zwischenzeit')
 
   // Ein weiterer Tap auf die beendete Bahn ist wirkungslos: Anschlagzahl und
   // Status bleiben unverändert.
