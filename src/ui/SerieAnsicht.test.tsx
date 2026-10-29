@@ -122,3 +122,50 @@ describe('SerieAnsicht: Ziel getrennt von der Messfläche', () => {
     ergebnis.unmount()
   })
 })
+
+describe('SerieAnsicht: Eingabewege erreichen dieselbe Aktion', () => {
+  // Die Doppeltipp-Sperre sitzt in `tippeSerie`/`beendeSerie`; die Ansicht muss
+  // jeden Eingabeweg genau einmal dorthin leiten, sonst greift sie nicht.
+  it('wertet einen reinen Klick ohne Pointer als einen Tap', () => {
+    const onTap = vi.fn()
+    const ergebnis = ansicht({ onTap })
+    const flaeche = ergebnis.container.querySelector<HTMLElement>('[role="button"]')!
+
+    // VoiceOver/TalkBack lösen nur `click` aus.
+    act(() => flaeche.click())
+
+    expect(onTap).toHaveBeenCalledOnce()
+    expect(onTap.mock.calls[0]![0]).toBe(0)
+    ergebnis.unmount()
+  })
+
+  it('zählt Pointer-Up plus den folgenden Klick nicht doppelt', () => {
+    const onTap = vi.fn()
+    const ergebnis = ansicht({ onTap })
+    const flaeche = ergebnis.container.querySelector<HTMLElement>('[role="button"]')!
+
+    act(() => {
+      zeiger(flaeche, 'pointerdown')
+      zeiger(flaeche, 'pointerup')
+    })
+    // Der Browser schickt den Klick direkt nach dem Pointer-Up.
+    act(() => flaeche.click())
+
+    expect(onTap).toHaveBeenCalledOnce()
+    ergebnis.unmount()
+  })
+
+  it('wertet Enter als einen Tap und ignoriert den folgenden Klick', () => {
+    const onTap = vi.fn()
+    const ergebnis = ansicht({ onTap })
+    const flaeche = ergebnis.container.querySelector<HTMLElement>('[role="button"]')!
+
+    act(() => {
+      flaeche.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      flaeche.click()
+    })
+
+    expect(onTap).toHaveBeenCalledOnce()
+    ergebnis.unmount()
+  })
+})

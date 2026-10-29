@@ -6,7 +6,9 @@
  * älteste offene Runde, langes Drücken nimmt den letzten Anschlag zurück; liegt
  * bereits die nächste Runde im Becken, markiert die Zeile das als überfällig.
  * Die Verdichtung liefert `bahnZeile` aus domain/serie, die Aktionen kommen aus
- * app/AppProvider über TimerScreen.
+ * app/AppProvider über TimerScreen. Ein schneller Doppeltipp verwirft
+ * `tippeSerie` selbst über ein kurzes Zeitfenster je Zeile (#54); die Ansicht
+ * reicht Pointer, Klick und Tastatur unverändert dorthin.
  */
 import { useEffect, useRef, useState } from 'react'
 import { haptic } from '../app/haptics'
