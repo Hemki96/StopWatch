@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { oeffneApp } from './helfer'
+import { oeffneApp, warteAufSchwimmerzuordnung } from './helfer'
 
 const BAHN1 = /^Bahn 1, läuft$/
 
@@ -68,6 +68,7 @@ test('Schwimmer anlegen, Bahn zuordnen und Reload überstehen', async ({ page })
 
   await page.getByRole('button', { name: 'Start', exact: true }).tap()
   await expect(page.getByRole('button', { name: /^Bahn 1, Mia, läuft$/ })).toBeVisible()
+  await warteAufSchwimmerzuordnung(page)
 
   await page.reload()
   await expect(page.locator('[data-tab-status="aktiv"]')).toBeVisible()
