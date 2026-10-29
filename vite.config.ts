@@ -44,6 +44,10 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
         navigateFallback: 'index.html',
+        // Der erste Besuch soll den Service Worker sofort übernehmen, damit
+        // ein Neuladen ohne Server bereits aus dem Cache funktioniert. Ein
+        // Update wird weiterhin erst nach Zustimmung aktiviert.
+        clientsClaim: true,
       },
     }),
   ],
