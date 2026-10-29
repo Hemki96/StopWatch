@@ -12,7 +12,8 @@ import { useRef, useState } from 'react'
 import { haptic } from '../app/haptics'
 import { useReducedMotion } from '../app/useReducedMotion'
 import { finishMs, lengthCount, bahnenNachReihen } from '../domain/lauf'
-import { formatCountdown, formatTakt, formatTime } from '../domain/format'
+import { abweichungZurVorrunde } from '../domain/analyse'
+import { formatCountdown, formatDelta, formatTakt, formatTime } from '../domain/format'
 import { bahnZeile, zeilenZeit, type BahnZeile, type ZeilenStatus } from '../domain/serie'
 import type { Bahn, Lauf, SatzPlan } from '../domain/types'
 
@@ -51,6 +52,7 @@ interface SerieAnsichtProps {
  */
 function Zeile({
   zeile,
+  runden,
   basis,
   gesamt,
   name,
@@ -61,6 +63,8 @@ function Zeile({
   onFinish,
 }: {
   zeile: BahnZeile
+  /** Alle Runden der Serie; für die Abweichung zur Vorrunde. */
+  runden: Lauf[]
   /** Bahn aus der ersten Runde: liefert Nummer und Reihe für die Anzeige. */
   basis: Bahn
   gesamt: number
@@ -187,6 +191,12 @@ function Zeile({
 
   // Zielzeit der zuletzt beendeten Runde, solange die aktuelle Runde offen ist.
   const letzteZeit = zeile.letzte ? finishMs(zeile.letzte.bahn) : null
+  // Abweichung zur Vorrunde desselben Schwimmers, sobald die Serie fertig ist
+  // und die vorige Runde im Ziel liegt. In Runde 1 bleibt sie aus.
+  const abweichung =
+    zeile.status === 'fertig' && zeile.letzte && zeile.letzte.lauf.wiederholung !== null
+      ? abweichungZurVorrunde(runden, zeile.index, zeile.letzte.lauf.wiederholung)
+      : null
   // Mehr als eine offene Runde heißt: Die nächste ist gestartet, während der
   // Schwimmer noch in der vorigen ist. Die Zeile verschweigt das nicht.
   const hatUeberholung = zeile.offene.length > 1
@@ -258,6 +268,16 @@ function Zeile({
           </span>
           <span className="truncate text-[11px] text-muted">{zielText}</span>
         </div>
+        {abweichung !== null ? (
+          <span
+            className={`tabular mt-0.5 block text-[11px] ${
+              abweichung < 0 ? 'text-ok' : abweichung > 0 ? 'text-danger' : 'text-muted'
+            }`}
+            aria-label={`Abweichung ${formatDelta(abweichung)} zur Vorrunde`}
+          >
+            {formatDelta(abweichung)} zur Vorrunde
+          </span>
+        ) : null}
 
         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-muted">
           {letzteZeit !== null && zeile.status !== 'fertig' ? (
@@ -393,6 +413,7 @@ export function SerieAnsicht({
               <Zeile
                 key={bahn.id}
                 zeile={bahnZeile(runden, index, now)}
+                runden={runden}
                 basis={bahn}
                 gesamt={gesamt}
                 name={schwimmerName(bahn.schwimmerId)}

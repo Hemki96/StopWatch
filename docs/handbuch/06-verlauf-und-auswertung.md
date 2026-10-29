@@ -166,6 +166,47 @@ Ein Klick auf **Bearbeiten** öffnet Name, Jahrgang und Notiz. Beim Löschen ein
 gemessenen Zeiten erhalten, verlieren aber ihre Zuordnung. Die Person wird außerdem aus den
 Standardwerten und aus vorbereiteten Trainings entfernt.
 
+## Analyse
+
+Der Verlauf hat zwei Ansichten: **Verlauf** und **Analyse**. Der Umschalter sitzt in der
+Kopfzeile; die Wahl wird nicht gespeichert. Die Analyse zeigt nur Sätze mit **Zwischenzeiten** —
+Wettkampf-Läufe haben keine Splits und erscheinen dort nicht.
+
+### Satzliste
+
+Die Liste ist wie der Verlauf nach Tag gruppiert, neueste Sätze zuerst. Jede Zeile nennt
+Bezeichnung, Konfiguration und die durchschnittliche Abweichung je Runde (`R2 +01,20`).
+Unvollständige und manuell korrigierte Sätze tragen ein Kennzeichen.
+
+### Matrix Person × Runde
+
+Ein Tipp auf einen Satz öffnet die Matrix:
+
+- **Zeilen** sind Personen, nach Bahnnummer sortiert.
+- **Spalten** sind die Runden. Die aktuelle Runde ist markiert.
+- Die Zelle zeigt die **Zielzeit**; darunter steht die **Abweichung zur Vorrunde** desselben
+  Schwimmers. Grün heißt schneller, rot langsamer, grau gleich oder ohne Bezug. Die Zeit selbst
+  bleibt ungefärbt; die schnellste Zeit je Runde ist fett.
+- Fehlende Zeiten bleiben leer; unvollständige und manuell korrigierte Zellen sind markiert.
+- Die Spalte **zuletzt** zeigt die Zielzeiten derselben Personen aus dem letzten vergleichbaren
+  Satz. Darüber steht die Referenz mit Datum und Takt, z. B. `zuletzt: 22.10. · Takt 02:00`.
+
+Verglichen wird nur bei gleicher **Strecke, Schwimmart, Beckenlänge und Rundenzahl**. Der Takt
+zählt nicht zum Ausschluss, wird aber genannt. Offene Strecken erscheinen in der Matrix, aber nie
+als Referenz für einen anderen Satz. Fehlt eine Person in der Referenz, bleibt ihre Zelle leer.
+
+### Längenzeiten einer Person
+
+Ein Tipp auf eine Personenzeile öffnet die **Längenzeiten** über alle Runden:
+
+- Zeilen sind die Längen (`50 m`, `100 m`, …), Spalten die Runden.
+- Der Wert ist die **Längenzeit**, nicht die kumulierte Splitzeit; darunter steht die Abweichung
+  zur Vorrunde.
+- Läuft der Satz noch, bleiben spätere Längen leer.
+
+Es gibt keine Diagramme und keine manuelle Referenzwahl. Mehrere Runden lassen sich nur vergleichen,
+wenn sie zur selben Strecke und Beckenlänge gehören.
+
 ## CSV-Export
 
 Es gibt drei Wege:

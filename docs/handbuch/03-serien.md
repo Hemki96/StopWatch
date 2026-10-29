@@ -71,6 +71,7 @@ Bahn und Runde. Das hält die Ansicht auch bei 5 Runden und 6 Bahnen bedienbar.
 ┌──────────────────────────────────────────┐
 │ 3   Anna Muster                 R2/5     │
 │     02:14,08   läuft                     │
+│     +01,32 zur Vorrunde                   │
 │     zuletzt 02:11,44   R3 läuft schon    │
 │ ████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  │
 └──────────────────────────────────────────┘
@@ -81,10 +82,15 @@ Bahn und Runde. Das hält die Ansicht auch bei 5 Runden und 6 Bahnen bedienbar.
 | **R2/5** | Die Runde, die die Zeile gerade beschreibt: älteste offene, sonst nächste geplante, sonst letzte beendete. |
 | **Große Zeit** | Laufende Zeit, Countdown oder Zielzeit — je nach Zustand. |
 | **zuletzt …** | Zielzeit der letzten abgeschlossenen Runde, solange die Zeile nicht fertig ist. |
+| **… zur Vorrunde** | Nach dem letzten Ziel: Abweichung zur selben Bahn in der vorigen Runde. Grün = schneller, rot = langsamer. In Runde 1 gibt es keinen Bezug. |
 | **R3 läuft schon** | Eine neuere Runde hat begonnen, während diese Runde noch offen ist. |
 | **Fortschrittslinie** | Ein Segment pro Runde; die Linie reicht bis zur höchsten beendeten Runde. |
 
 Die Kopfzeile über der Liste zeigt `5× · Takt 02:00` und `gemeinsamer Start` bzw. den Startversatz.
+
+Ist die Serie vollständig, steht unter der Zielzeit die Abweichung zur Vorrunde desselben
+Schwimmers. Sie erscheint erst ab Runde 2 und nur, wenn die Vorrunde im Ziel liegt. Mehr zur
+Auswertung über mehrere Sätze: [Analyse](06-verlauf-und-auswertung.md#analyse).
 
 ### Zustände einer Zeile
 

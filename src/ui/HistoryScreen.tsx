@@ -10,9 +10,11 @@
 import { useMemo, useState } from 'react'
 import { useApp } from '../app/AppProvider'
 import { hatBegonnen, isComplete } from '../domain/lauf'
+import { istAnalyseSatz } from '../domain/analyse'
 import { schnellsteZeit } from '../domain/analyse'
 import { formatStrecke, formatTakt, formatTime } from '../domain/format'
 import { SCHWIMMARTEN, type Lauf, type SatzPlan } from '../domain/types'
+import { AnalyseScreen } from './AnalyseScreen'
 import { Bestaetigung } from './Bestaetigung'
 import { ChevronRightIcon, TrashIcon } from './icons'
 import { LaufDetail } from './LaufDetail'
@@ -60,6 +62,9 @@ interface Gruppe {
  */
 export function HistoryScreen() {
   const app = useApp()
+  // Umschalter zwischen Verlauf und Analyse. Bewusst nur lokal: Die Wahl ist
+  // keine Messdaten-Entscheidung und muss einen Neustart nicht überleben.
+  const [bereich, setBereich] = useState<'verlauf' | 'analyse'>('verlauf')
   // Öffnet das Vollbild-Detail eines Laufs; `null` heißt geschlossen.
   const [offenerLauf, setOffenerLauf] = useState<string | null>(null)
   // Inline-Umbenennen einer Satzbezeichnung, inklusive aktuellem Eingabewert.
@@ -128,16 +133,46 @@ export function HistoryScreen() {
 
   // Kopfzeile zählt nur begonnene Läufe, nicht die geplanten Runden.
   const begonneneLaeufe = app.laeufe.filter((lauf) => hatBegonnen(lauf)).length
+  const auswertbareSaetze = app.satze.filter((satz) => istAnalyseSatz(satz, app.laeufe)).length
 
   return (
     <div className="flex h-full flex-col">
       <header className="border-b border-line px-4 py-3 rail:px-6">
         <h1 className="text-lg font-semibold">Verlauf</h1>
         <p className="text-xs text-muted">
-          {begonneneLaeufe} {begonneneLaeufe === 1 ? 'Lauf' : 'Läufe'}
+          {bereich === 'verlauf'
+            ? `${begonneneLaeufe} ${begonneneLaeufe === 1 ? 'Lauf' : 'Läufe'}`
+            : `${auswertbareSaetze} ${auswertbareSaetze === 1 ? 'Satz' : 'Sätze'} mit Zwischenzeiten`}
         </p>
+        {/* Zwei Segmente statt eines siebten Tabs: Die untere Leiste ist voll,
+            und die Analyse gehört inhaltlich zum Verlauf. */}
+        <div
+          role="group"
+          aria-label="Ansicht"
+          className="mt-2 grid grid-cols-2 gap-1 rounded-xl bg-surface2 p-0.5"
+        >
+          {(
+            [
+              ['verlauf', 'Verlauf'],
+              ['analyse', 'Analyse'],
+            ] as const
+          ).map(([wert, label]) => (
+            <button
+              key={wert}
+              type="button"
+              onClick={() => setBereich(wert)}
+              aria-pressed={bereich === wert}
+              className={`h-9 rounded-lg text-xs font-semibold transition-colors ${
+                bereich === wert ? 'bg-accent text-accent-fg' : 'text-muted'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </header>
 
+      {bereich === 'analyse' ? <AnalyseScreen /> : (
       <div className="flex-1 overflow-y-auto px-4 pb-8 pt-3 rail:px-6">
         {gruppen.length === 0 ? (
           <p className="mt-16 text-center text-sm text-muted">
@@ -263,10 +298,11 @@ export function HistoryScreen() {
         ))}
         </div>
       </div>
+      )}
 
       {/* Das Detail liegt als Vollbild über dem Verlauf; Schließen setzt nur
           die Auswahl zurück, die Liste bleibt gemountet. */}
-      {offenerLauf ? (
+      {bereich === 'verlauf' && offenerLauf ? (
         <LaufDetail laufId={offenerLauf} onClose={() => setOffenerLauf(null)} />
       ) : null}
 

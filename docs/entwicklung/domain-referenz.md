@@ -616,6 +616,27 @@ Sonst `{ deltaMs: ms - pb.ms, istPb: pb.bahnId === bahn.id }`.
 
 Kleinste Finish-Zeit aller Bahnen oder `null`.
 
+### Analyse: abgeleitete Werte ohne Speicherung
+
+Alles in diesem Abschnitt entsteht aus `Lauf.bahnen[].anschlaege`; es gibt keine neuen Felder und
+keine Aggregate in der Datenbank.
+
+| Funktion | Ergebnis |
+| --- | --- |
+| `laengenZeiten(bahn)` | Längenzeiten aus kumulierten Splits (`splitMs` minus vorheriger Split) |
+| `analyseRunden(satz, laeufe)` | Runden nach Wiederholungsnummer, bei freien Sätzen nach Startzeit |
+| `istAnalyseSatz(satz, laeufe)` | true bei mindestens einem Split und keinem Wettkampf |
+| `rundenzahl(satz, laeufe)` | geplante Wiederholungen einer Serie, sonst Anzahl der Läufe |
+| `letzterGleicherSatz(aktuell, satze, laeufe)` | letzter früherer Satz mit gleicher Strecke, Schwimmart, Beckenlänge und Rundenzahl |
+| `analyseMatrix(runden, referenzRunden?)` | Zellen je Person und Runde mit Abweichung, Schnellster-Marke und Referenzzeit |
+| `laengenMatrix(runden, index)` | Längenzeiten einer Person über alle Runden mit Abweichung |
+| `abweichungZurVorrunde(runden, index, runde)` | Differenz zur Vorrunde oder `null` |
+| `mittlereAbweichungen(runden)` | durchschnittliche Abweichung je Runde für die Satzliste |
+
+`letzterGleicherSatz` schließt offene Strecken aus (keine definierte Strecke) und ignoriert den
+Takt als Vergleichskriterium. `analyseMatrix` markiert die schnellste Zeit je Runde nur fett; die
+Farbe trägt ausschließlich die Abweichung.
+
 ## `id.ts`
 
 ### `newId(): string`

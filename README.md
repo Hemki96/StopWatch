@@ -24,6 +24,8 @@ Der **Wettkampfmodus** ist ein eigener Tab: Ein **Wettkampf** bündelt **Diszipl
 - Wettkampfmodus mit Disziplinen, Heats, Platzierung und Zielzeit pro Tap
 - Meldelisten-Import als CSV (Vorlage in der App), Ergebnisse als CSV
 - Verlauf gruppiert nach **Satz**, CSV-Export (inkl. Runde, Takt, Versatz), JSON-Backup
+- **Analyse** im Verlauf: Matrix Person × Runde, Längenzeiten je Person, Abweichung zur Vorrunde
+  und Vergleich mit dem letzten gleichen Satz — ohne zusätzliche Speicherung
 - Handy und Tablet: untere Leiste bzw. seitliche Navigation, Raster, Sheets und Listen passen sich an
 - Installierbar, offline, lokal gespeichert (IndexedDB)
 

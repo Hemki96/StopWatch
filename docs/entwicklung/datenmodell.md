@@ -173,6 +173,10 @@ gestarteter Trainingssatz erzeugt ebenfalls immer einen eigenen Satz.
 Diese Regeln werden von den Erzeugern und Domain-Funktionen eingehalten. Die Datenbank erzwingt sie
 nicht; das Backup validiert einen Teil davon.
 
+**Nicht gespeichert:** Längenzeiten, Abweichungen, Rundenmittel und die Referenz „zuletzt“ werden
+bei jeder Anzeige aus den Splits abgeleitet (`domain/analyse.ts`). Die Analyse führt deshalb keine
+eigene Tabelle und keine Migrationsschritte.
+
 ### Bahn und Anschlag
 
 - `bahn.nummer` liegt zwischen 1 und 10 und ist innerhalb ihrer Reihe eindeutig.
