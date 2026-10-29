@@ -29,7 +29,7 @@ src/
   domain/      reine Fachlogik          keine Imports aus app/, ui/, storage/, export/
   export/      CSV und Dateiausgabe     nutzt domain/
   storage/     IndexedDB und Backup     nutzt domain/, kein React
-  app/         React-Kontext und Hooks  nutzt domain/, storage/, export/
+  app/         React-Kontext, Fachmodule  nutzt domain/, storage/, export/
   ui/          Screens und Dialoge      nutzt app/, domain/, export/
   App.tsx      Navigation               nutzt app/ und ui/
 ```
@@ -170,12 +170,32 @@ Zusätzlich:
 - `aktiverLaufId` (aktuell sichtbarer Lauf),
 - `toast`, `speicherFehler`, `tabRolle`.
 
+### Fachmodule
+
+Der Provider ist Kontext-Assembly, Tab-Rolle, Laden und Toast. Die Fachlogik liegt
+in kleinen Modulen unter `src/app/`:
+
+| Modul | Verantwortung |
+| --- | --- |
+| `einstellungen.ts` | Vorbelegung lesen, begrenzen, schreiben; Designwahl |
+| `aktiveLaeufe.ts` | Leiste, Migration der Einzel-ID, Bereinigung und abgeleitete Anzeige |
+| `schreibpfad.ts` | Tab-Tor, Warteschlange offener Schreibvorgänge, Fehlerbanner (`useSchreibpfad`) |
+| `laufAktionen.ts` | Messen, Anlegen, Auswählen und Löschen von Läufen und Serien |
+| `wettkampfAktionen.ts` | Meldeliste, Disziplinen, Heats und Löschen von Wettkämpfen |
+| `trainingsAktionen.ts` | Trainingspläne speichern und Sätze starten |
+| `schwimmer.ts` | Namensauflösung aus Meldelisten, stabile Sortierung |
+
+Die Aktionsmodule sind Fabriken: Sie bekommen die Ref-Spiegel und die
+`set...Safe`-Funktionen des Providers und geben stabile Aktionen zurück. So bleibt
+die Tab-Rolle an einer Stelle geprüft, und die Module importieren nichts aus `ui/`.
+
 ### Refs als aktuelle Sicht
 
 Callbacks wie `tippe`, `startAlle` oder `speichereTraining` lesen den neuesten Zustand aus Refs
 (`laeufeRef`, `satzeRef`, …), nicht aus dem Render-Closure. Das verhindert, dass ein schneller
 Doppeltipp auf einer veralteten Kopie arbeitet. Nach jeder Änderung werden Ref und React-State
-gemeinsam aktualisiert.
+gemeinsam aktualisiert. Die Aktionsmodule bekommen dieselben Refs und Setter von `AppProvider`
+übergeben; sie halten keinen eigenen Zustand.
 
 ### Optimistische Oberfläche
 
@@ -184,7 +204,7 @@ Der Ablauf einer Bedienung ist:
 1. Domain-Funktion berechnet den neuen Wert.
 2. React-State wird sofort aktualisiert.
 3. Die Persistenz läuft asynchron (`saveLauf`, `saveSatz`, …).
-4. Schreibvorgänge werden in `schreibvorgaengeRef` verfolgt.
+4. Schreibvorgänge werden im Schreibpfad (`useSchreibpfad`) verfolgt.
 5. Ein Fehler setzt `speicherFehler` und zeigt das dauerhafte Banner.
 
 Die Oberfläche wartet nicht auf IndexedDB. Das ist am Beckenrand wichtig: Ein Tap muss sofort

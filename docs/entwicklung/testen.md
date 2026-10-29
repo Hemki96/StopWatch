@@ -69,6 +69,8 @@ import 'fake-indexeddb/auto'
 | Datei | Prüft |
 | --- | --- |
 | `app/AppProvider.test.tsx` | Laden, Speichern, aktive Läufe, Training, Wettkampf, Fehlerfälle |
+| `app/AppProvider.test.ts` | Normalisierung gespeicherter Einstellungen |
+| `app/schreibpfad.test.tsx` | Tab-Tor, Warteschlange und Speicherfehler-Banner |
 | `app/tabKoordinator.test.ts` | Claim, Heartbeat, Takeover, Ausfall, kleinere Tab-ID |
 | `app/hooks.test.tsx` | `useNow`, `useWakeLock`, reduzierte Bewegung |
 | `app/pwa.test.tsx` | Update-Erkennung, Installationsprompt, iOS-Anleitung |

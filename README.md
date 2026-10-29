@@ -63,7 +63,7 @@ src/
     format.ts      Zeitformatierung, Countdown und Abschneiden auf Hundertstel
     analyse.ts     Bestzeiten, Deltas, Pace
   storage/       IndexedDB (idb), Schema, Repositories und Backup-Prüfung
-  app/           React-Kontext, Tab-Abstimmung, Hooks (useNow, useWakeLock)
+  app/           React-Kontext, Fachmodule (Lauf, Wettkampf, Training), Tab-Abstimmung, Hooks
   ui/            Screens und Komponenten (Dialoge, Onboarding, Lauf-Detail)
   export/        CSV und Datei-Ausgabe
 ```
