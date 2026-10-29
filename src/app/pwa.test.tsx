@@ -1,9 +1,28 @@
+/**
+ * PWA-Schicht: Service Worker, Online-Status und Installation.
+ *
+ * Die Tests sichern die Browser-Randfälle ab, nicht Fachlogik: Der Service
+ * Worker wird pro Seitenaufruf genau einmal registriert, Updates werden nur
+ * gemeldet und erst auf Wunsch eingespielt, beim Zurückkehren in den
+ * Vordergrund wird aktiv nach einer neuen Version gesucht, und ohne
+ * Unterstützung bleibt alles still statt zu werfen. Bei der Installation geht
+ * es um den einmalig verbrauchten Prompt, die Erkennung von standalone/iOS und
+ * das Aufräumen der Listener.
+ *
+ * Testhilfen: `virtual:pwa-register` ist über `vi.hoisted` gemockt, weil
+ * `vi.mock` über die Imports gehoben wird. `navigator.serviceWorker` und
+ * `matchMedia` werden pro Test als minimale Attrappen gesetzt; `vi.resetModules`
+ * ist nötig, weil `pwa.ts` den Registrierungszustand im Modul hält und sonst
+ * zwischen den Tests „schon registriert“ wäre.
+ */
 // @vitest-environment jsdom
 import { act } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderHook, warteAuf } from '../test/render'
 import { useInstallPrompt, useOnlineStatus } from './pwa'
 
+// `vi.mock` wird vor die Imports gehoben; die Mock-Funktion muss deshalb
+// ebenfalls hoisted sein, sonst ist sie im Mock noch nicht definiert.
 const mocks = vi.hoisted(() => ({
   registerSW: vi.fn(),
 }))
@@ -12,10 +31,15 @@ vi.mock('virtual:pwa-register', () => ({
   registerSW: mocks.registerSW,
 }))
 
+/** Minimale Form der Service-Worker-Registrierung, die der Hook nachlädt. */
 interface RegistrierungMock {
   update: ReturnType<typeof vi.fn>
 }
 
+/**
+ * Setzt `navigator.serviceWorker` mit einer Registrierung, deren `update`
+ * beobachtet werden kann. `configurable` erlaubt das Entfernen im `afterEach`.
+ */
 function setzeServiceWorker(update: () => Promise<void> = async () => undefined) {
   const registrierung: RegistrierungMock = { update: vi.fn(update) }
   const serviceWorker = {
@@ -28,10 +52,16 @@ function setzeServiceWorker(update: () => Promise<void> = async () => undefined)
   return { serviceWorker, registrierung }
 }
 
+/** Simuliert einen Browser ohne Service-Worker-Unterstützung. */
 function entferneServiceWorker() {
   Reflect.deleteProperty(navigator, 'serviceWorker')
 }
 
+/**
+ * Ersetzt `matchMedia` durch eine steuerbare Abfrage. Nur
+ * `(display-mode: standalone)` wird ausgewertet; die Zuhörer-Menge erlaubt es,
+ * einen Wechsel der Anzeigeart auszulösen und das Aufräumen zu prüfen.
+ */
 function stelleMatchMedia() {
   let stehtAllein = false
   const zuhoerer = new Set<() => void>()
@@ -50,6 +80,10 @@ function stelleMatchMedia() {
   }
 }
 
+/**
+ * Baut ein `beforeinstallprompt`-Ereignis nach, wie es Chromium liefert:
+ * `prompt()` öffnet den Dialog, `userChoice` löst mit der Entscheidung auf.
+ */
 function promptEreignis(outcome: 'accepted' | 'dismissed' = 'accepted') {
   const prompt = vi.fn(async () => undefined)
   const ereignis = Object.assign(new Event('beforeinstallprompt', { cancelable: true }), {
@@ -59,6 +93,9 @@ function promptEreignis(outcome: 'accepted' | 'dismissed' = 'accepted') {
   return { ereignis, prompt }
 }
 
+// Jeder Test startet ohne Service Worker, ohne Registrierungs-Mock und ohne
+// globale Stubs; `resetModules` im Test sorgt zusätzlich für frischen
+// Modulzustand von `pwa.ts`.
 afterEach(() => {
   entferneServiceWorker()
   mocks.registerSW.mockReset()
@@ -66,7 +103,10 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+// Registrierung, Update-Hinweis und die Vordergrundprüfung.
 describe('useServiceWorkerUpdate', () => {
+  // Genau eine Registrierung trotz mehrerer Hooks/Mounts; `immediate: true`
+  // startet die Prüfung sofort. `spaeter` blendet nur den Hinweis aus.
   it('registriert den Service Worker genau einmal und meldet ein Update', async () => {
     let optionen: { onNeedRefresh?: () => void } = {}
     mocks.registerSW.mockImplementation((werte) => {
@@ -90,6 +130,8 @@ describe('useServiceWorkerUpdate', () => {
     ergebnis.unmount()
   })
 
+  // `true` bedeutet „Seite neu laden, sobald der neue Worker übernimmt“.
+  // Updates werden nie von selbst eingespielt, damit keine Messung verloren geht.
   it('lädt über den registrierten Aktualisierer neu', async () => {
     const aktualisiere = vi.fn(async () => undefined)
     mocks.registerSW.mockReturnValue(aktualisiere)
@@ -104,6 +146,9 @@ describe('useServiceWorkerUpdate', () => {
     ergebnis.unmount()
   })
 
+  // Am Beckenrand bleibt die App lange offen; ohne diese Prüfung würde sie
+  // eine neue Version nie bemerken. `warteAuf` wartet auf die asynchrone
+  // `getRegistration`-Kette.
   it('sucht beim Zurückkehren in den Vordergrund nach einer neuen Version', async () => {
     mocks.registerSW.mockReturnValue(vi.fn(async () => undefined))
     const { registrierung } = setzeServiceWorker()
@@ -119,6 +164,8 @@ describe('useServiceWorkerUpdate', () => {
     ergebnis.unmount()
   })
 
+  // Ein Registrierungsfehler darf die App nicht unterbrechen, muss aber in der
+  // Konsole auffindbar sein — sonst wäre fehlende Offline-Fähigkeit unsichtbar.
   it('meldet einen Registrierungsfehler in der Konsole', async () => {
     const fehler = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     mocks.registerSW.mockImplementation((werte) => {
@@ -137,6 +184,8 @@ describe('useServiceWorkerUpdate', () => {
     ergebnis.unmount()
   })
 
+  // Ohne Service-Worker-Unterstützung wird weder registriert noch geprüft; ein
+  // direkter `navigator.serviceWorker`-Zugriff würde hier werfen.
   it('bleibt ohne Service-Worker-Unterstützung still', async () => {
     entferneServiceWorker()
     vi.resetModules()
@@ -151,6 +200,8 @@ describe('useServiceWorkerUpdate', () => {
   })
 })
 
+// Nur ein Hinweis für die Kopfzeile: Die App arbeitet lokal und braucht keine
+// Verbindung, der Status darf aber nicht hängen bleiben.
 describe('useOnlineStatus', () => {
   it('folgt den online- und offline-Ereignissen', () => {
     const ergebnis = renderHook(() => useOnlineStatus())
@@ -169,6 +220,8 @@ describe('useOnlineStatus', () => {
   })
 })
 
+// Installationsangebot: echter Prompt, Ablehnung, fehlender Prompt, bereits
+// installierte App und die Anleitung für Browser ohne Prompt (iOS).
 describe('useInstallPrompt', () => {
   it('bietet die Installation an und übernimmt die Zustimmung', async () => {
     stelleMatchMedia()
@@ -191,6 +244,8 @@ describe('useInstallPrompt', () => {
     ergebnis.unmount()
   })
 
+  // Der Prompt ist nach einem Aufruf verbraucht — auch bei Ablehnung. Er darf
+  // deshalb nicht erneut angeboten werden.
   it('verwirft den Prompt auch bei Ablehnung', async () => {
     stelleMatchMedia()
     const ergebnis = renderHook(() => useInstallPrompt())
@@ -206,6 +261,8 @@ describe('useInstallPrompt', () => {
     ergebnis.unmount()
   })
 
+  // Ohne vorheriges `beforeinstallprompt` ist `installiere` ein No-Op; ein
+  // Aufruf darf weder werfen noch den Zustand verändern.
   it('tut nichts ohne vorherigen Prompt', async () => {
     stelleMatchMedia()
     const ergebnis = renderHook(() => useInstallPrompt())
@@ -216,6 +273,8 @@ describe('useInstallPrompt', () => {
     ergebnis.unmount()
   })
 
+  // Läuft die App bereits im eigenen Fenster, ist keine Installation nötig;
+  // stattdessen erscheint die Anleitung für das Browsermenü.
   it('erkennt eine bereits installierte App', () => {
     const medien = stelleMatchMedia()
     medien.setzeStandalone(true)
@@ -225,6 +284,8 @@ describe('useInstallPrompt', () => {
     ergebnis.unmount()
   })
 
+  // iOS bietet keinen Installationsdialog; dort muss die Teilen-Anleitung
+  // erscheinen, sonst findet niemand den Weg zur installierten App.
   it('zeigt auf iPhone und iPad die Teilen-Anleitung', () => {
     stelleMatchMedia()
     vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(
@@ -235,6 +296,8 @@ describe('useInstallPrompt', () => {
     ergebnis.unmount()
   })
 
+  // iPadOS meldet sich als Mac. Die Erkennung läuft deshalb über die
+  // Touch-Punkte, nicht über den User-Agent allein.
   it('erkennt iPadOS an den Touch-Punkten', () => {
     stelleMatchMedia()
     vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(
@@ -246,6 +309,9 @@ describe('useInstallPrompt', () => {
     ergebnis.unmount()
   })
 
+  // Zwei Wege zur installierten App: das `appinstalled`-Ereignis und ein
+  // Wechsel der Anzeigeart. Nach dem Unmount müssen alle Zuhörer entfernt sein,
+  // sonst würden verwaiste Hooks weiter Zustand setzen.
   it('reagiert auf appinstalled und Änderungen der Anzeigeart', () => {
     const medien = stelleMatchMedia()
     const ergebnis = renderHook(() => useInstallPrompt())

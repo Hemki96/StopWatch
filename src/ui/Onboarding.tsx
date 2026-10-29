@@ -1,3 +1,13 @@
+/**
+ * Erststart-Onboarding in drei Schritten.
+ *
+ * Schritt 1 erklärt Lauf, Bahn und Anschlag, Schritt 2 legt Beckenlänge,
+ * Strecke und Schwimmart fest, Schritt 3 Bahnzahl und Namen. Der Abschluss
+ * schreibt Konfiguration, Bahnzahl und Schwimmerzuordnung über
+ * `app/AppProvider` in die Einstellungen; „Überspringen“ setzt die
+ * Standardwerte. Der Merker, dass das Onboarding erledigt ist, liegt in
+ * `App.tsx`; dieser Screen bekommt nur `onFertig`.
+ */
 import { useState } from 'react'
 import { useApp } from '../app/AppProvider'
 import { STANDARD_KONFIGURATION, lengthCount, validateKonfiguration } from '../domain/lauf'
@@ -7,6 +17,7 @@ const STRECKEN = [50, 100, 200, 400, 800, 1500] as const
 
 const SCHRITTE = ['So funktioniert es', 'Becken und Strecke', 'Bahnen und Namen'] as const
 
+/** Auswahlknopf der Onboarding-Formulare; `aria-pressed` meldet die Wahl. */
 function Auswahl({
   aktiv,
   onClick,
@@ -33,6 +44,10 @@ function Auswahl({
 /**
  * Erststart in drei Schritten. Der Abschluss wird lokal gemerkt; ein
  * zurückgesetztes Gerät zeigt das Onboarding erneut.
+ *
+ * Die Eingaben bleiben bis zum letzten Schritt lokal (`konfiguration`,
+ * `bahnen`, `namen`) und werden erst mit „Los geht’s“ gespeichert. Namen werden
+ * dabei zu Schwimmern und den Bahnen zugeordnet; leere Felder bleiben leer.
  */
 export function Onboarding({ onFertig }: { onFertig: () => void }) {
   const app = useApp()
@@ -41,6 +56,9 @@ export function Onboarding({ onFertig }: { onFertig: () => void }) {
     ...app.einstellungen.konfiguration,
   })
   const [bahnen, setBahnen] = useState(app.einstellungen.bahnen)
+  // Zehn Felder unabhängig von der Bahnzahl vorhalten: Wer die Bahnzahl erhöht,
+  // findet bereits getippte Namen wieder vor. Startwerte kommen aus den
+  // vorhandenen Zuordnungen, damit ein erneutes Onboarding nichts überschreibt.
   const [namen, setNamen] = useState<string[]>(() =>
     Array.from({ length: 10 }, (_, i) => {
       const id = app.einstellungen.schwimmerProBahn[i]
@@ -48,6 +66,10 @@ export function Onboarding({ onFertig }: { onFertig: () => void }) {
     }),
   )
 
+  /**
+   * Wechselt die Beckenlänge und korrigiert eine unpassende Strecke auf zwei
+   * Beckenlängen, statt eine ungültige Kombination stehen zu lassen.
+   */
   const setzeBeckenlaenge = (beckenlaengeM: Beckenlaenge) => {
     const strecke = konfiguration.streckeM
     setKonfiguration({
@@ -58,6 +80,11 @@ export function Onboarding({ onFertig }: { onFertig: () => void }) {
     })
   }
 
+  /**
+   * Legt fehlende Schwimmer an und liefert die IDs für die ersten `bahnen`
+   * Plätze. Verglichen wird ohne Groß-/Kleinschreibung, damit derselbe Name
+   * nicht doppelt entsteht.
+   */
   const speichereNamen = () => {
     // Innerhalb dieses Durchlaufs angelegte Namen sofort merken: `app.schwimmer`
     // ist erst nach dem nächsten Rendern aktuell und würde sonst Duplikate
@@ -80,12 +107,15 @@ export function Onboarding({ onFertig }: { onFertig: () => void }) {
     })
   }
 
+  /** Übernimmt alle Eingaben; eine ungültige Strecke blockiert den Abschluss. */
   const abschliessen = () => {
     if (validateKonfiguration(konfiguration) !== null) return
     app.setzeEinstellungen({
       konfiguration,
       bahnen,
       schwimmerProBahn: speichereNamen(),
+      // Serie und Startversatz sind bewusst zurückgesetzt: Das Onboarding
+      // erklärt den einfachen Einzellauf.
       startversatzMs: 0,
       wiederholungen: 1,
       taktSek: 120,
@@ -93,6 +123,7 @@ export function Onboarding({ onFertig }: { onFertig: () => void }) {
     onFertig()
   }
 
+  /** Setzt die Standardwerte, ohne Schwimmer anzulegen. */
   const ueberspringen = () => {
     app.setzeEinstellungen({
       konfiguration: { ...STANDARD_KONFIGURATION },
@@ -105,6 +136,7 @@ export function Onboarding({ onFertig }: { onFertig: () => void }) {
     onFertig()
   }
 
+  // Vorschau der Länge: `lengthCount` liefert `null` bei offener Strecke.
   const laengen = lengthCount(konfiguration)
   const gesamtLaengen = laengen ? `${laengen} Längen` : 'offene Strecke'
 
@@ -261,6 +293,8 @@ export function Onboarding({ onFertig }: { onFertig: () => void }) {
 
       <div className="border-t border-line p-4 pb-[max(env(safe-area-inset-bottom),1rem)]">
         <div className="flex gap-2">
+          {/* „Zurück“ fehlt im ersten Schritt; der Hauptknopf wechselt zwischen
+              „Weiter“ und dem Abschluss im letzten Schritt. */}
           {schritt > 0 ? (
             <button
               type="button"

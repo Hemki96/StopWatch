@@ -1,3 +1,18 @@
+/**
+ * Gemeinsame Dialog-Hülle: Fokusfalle, Fokus-Rückgabe, Escape und Scroll-Sperre.
+ *
+ * Die Datei sichert die Accessibility-Verträge ab, auf die sich `Sheet` und
+ * `Bestaetigung` verlassen: Tab und Shift+Tab laufen am Panel-Rand wieder auf
+ * die andere Seite, der Fokus kehrt zum Auslöser zurück, Escape schließt nur
+ * den obersten gestapelten Dialog, und die Seite scrollt nicht hinter dem
+ * Dialog. Diese Fälle sind leicht zu brechen, weil der Stapel und der
+ * Scroll-Zähler Modulzustand sind.
+ *
+ * Testhilfen: Eigener Root pro Test statt `render`, weil hier bewusst mehrere
+ * Dialoge in einem Container gestapelt werden. `taste` sendet ein
+ * `keydown`-Ereignis mit `bubbles`, damit der Capture-Listener auf `document`
+ * es sicher empfängt.
+ */
 // @vitest-environment jsdom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -8,6 +23,8 @@ import { Sheet } from './Sheet'
 let container: HTMLDivElement
 let root: Root
 
+// Frischer Root pro Test; der Dialogstapel wird über die Unmounts im
+// `afterEach` wieder geleert.
 beforeEach(() => {
   container = document.createElement('div')
   document.body.append(container)
@@ -21,13 +38,17 @@ afterEach(() => {
   document.documentElement.style.overflow = ''
 })
 
+/** Sendet eine Tastatureingabe an `document`; `shiftKey` steuert die Richtung. */
 function taste(key: string, shiftKey = false) {
   act(() => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key, shiftKey, bubbles: true }))
   })
 }
 
+// Verhalten der Dialog-Hülle selbst, unabhängig vom konkreten Inhalt.
 describe('Dialog', () => {
+  // Tab am letzten Element springt auf das erste, Shift+Tab am ersten auf das
+  // letzte. So kann der Fokus die Seite dahinter nicht erreichen.
   it('hält den Fokus mit Tab und Shift+Tab im Dialog', () => {
     act(() => {
       root.render(
@@ -52,6 +73,9 @@ describe('Dialog', () => {
     expect(document.activeElement).toBe(letzter)
   })
 
+  // Beim Öffnen wandert der Fokus ins Panel, beim Schließen zurück zum
+  // Auslöser. Ohne diese Rückgabe landet die Tastaturbedienung wieder am
+  // Seitenanfang.
   it('gibt beim Schließen den Fokus an den Auslöser zurück', () => {
     const ausloeser = document.createElement('button')
     ausloeser.textContent = 'Öffnen'
@@ -79,6 +103,8 @@ describe('Dialog', () => {
     ausloeser.remove()
   })
 
+  // Stapel: Liegt eine Bestätigung über einem Sheet, darf Escape nur die
+  // Bestätigung abbrechen. Sonst würden zwei Dialoge gleichzeitig verschwinden.
   it('schließt mit Escape nur den obersten Dialog', () => {
     const sheetSchliessen = vi.fn()
     const bestaetigungAbbrechen = vi.fn()
@@ -106,6 +132,8 @@ describe('Dialog', () => {
     expect(sheetSchliessen).not.toHaveBeenCalled()
   })
 
+  // Scroll-Sperre per Referenzzähler: Beide Elemente werden gesperrt, damit
+  // iOS-Safari nicht die Seite hinter dem Sheet mitscrollt.
   it('sperrt das Scrollen der Seite, solange ein Dialog offen ist', () => {
     act(() => {
       root.render(

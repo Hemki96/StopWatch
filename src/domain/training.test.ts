@@ -1,3 +1,17 @@
+/**
+ * Trainingsplan: Aktive je Bahn, Sätze in fester Reihenfolge und Fortschritt.
+ *
+ * Sichert ab, dass ein Training nur Vorbereitung bleibt: Aus einem Plan
+ * entstehen erst beim Start Satz und Läufe, und der Fortschritt wird vollständig
+ * aus den vorhandenen Läufen abgeleitet. Im Fokus stehen die Grenzen aus
+ * `training.ts` (1 bis 10 Bahnen, 1 bis 20 Sätze, 1 bis 20 Wiederholungen),
+ * das Verschieben ohne Nebenwirkung und die Regel, dass ein laufender Satz Vorrang
+ * vor einem späteren offenen hat.
+ *
+ * Fixtures sind bewusst klein und fest: `basisTraining` hat zwei Bahnen, eine
+ * belegte und eine freie, sowie einen Seriensatz und einen Einzellauf. Die
+ * Zeitstempel 30 s und 60 s ergeben im 100-m-Lauf Zwischenzeit und Ziel.
+ */
 import { describe, expect, it } from 'vitest'
 import { createLauf, planeLauf, tapLane } from './lauf'
 import {
@@ -17,8 +31,11 @@ import {
 } from './training'
 import type { Lauf, Satz, Training } from './types'
 
+// Feste Konfiguration für alle Fixtures: 100 m im 50-m-Becken, zwei Längen.
 const K100 = { beckenlaengeM: 50, streckeM: 100, schwimmart: 'freistil' } as const
 
+// Zwei Bahnen mit einer Zuordnung und zwei Sätzen: ein Seriensatz (3× im
+// 2:00-Takt) und ein einzelner Lauf. Das deckt beide Fortschrittsformen ab.
 function basisTraining(): Training {
   return neuesTraining({
     datum: '2026-10-29',
@@ -37,6 +54,8 @@ function basisTraining(): Training {
   })
 }
 
+// Minimaler Satz für die Fortschritts-Tests; die ID verbindet Training und
+// Messung.
 function satz(id = 'satz1'): Satz {
   return {
     id,
@@ -48,16 +67,21 @@ function satz(id = 'satz1'): Satz {
   }
 }
 
+// Ein Lauf mit einer Bahn und ohne Startversatz; `schwimmerId` ist gesetzt,
+// weil der Fortschritt nur die Läufe zählt, nicht die Namen.
 function lauf(satzId = 'satz1'): Lauf {
   return createLauf(K100, [{ nummer: 1, schwimmerId: 's1' }], satzId, {
     startversatzMs: 0,
   })
 }
 
+// `planeLauf` setzt den Start auf 0 (Versatz 0), damit „gestartet“ ohne echte
+// Uhr prüfbar ist.
 function gestartet(laufEintrag: Lauf): Lauf {
   return planeLauf(laufEintrag, 0, 0, 0)
 }
 
+// Setzt zwei Anschläge: 30 s als Zwischenzeit und 60 s als Finish im 100-m-Lauf.
 function beendet(laufEintrag: Lauf): Lauf {
   const bahn = laufEintrag.bahnen[0]!
   return tapLane(
@@ -68,7 +92,11 @@ function beendet(laufEintrag: Lauf): Lauf {
   )
 }
 
+// Anlegen eines Trainings: Die Aktivenliste hat genau einen Platz je Bahn, es
+// gibt immer mindestens einen Satz und eine feste Obergrenze.
 describe('neuesTraining', () => {
+  // Eine zu kurze Aktivenliste wird mit `null` aufgefüllt; `gestartet` beginnt
+  // leer, weil noch kein Satz angelegt wurde.
   it('füllt die Aktiven auf die Bahnenzahl auf', () => {
     const training = neuesTraining({
       datum: '2026-10-29',
@@ -80,13 +108,18 @@ describe('neuesTraining', () => {
     expect(training.gestartet).toEqual({})
   })
 
+  // Die Grenzen aus `MAX_BAHNEN` halten auch bei freien Formulareingaben.
   it('begrenzt die Bahnenzahl', () => {
     expect(neuesTraining({ datum: '2026-10-29', bahnen: 99 }).bahnen).toBe(10)
     expect(neuesTraining({ datum: '2026-10-29', bahnen: 0 }).bahnen).toBe(1)
   })
 })
 
+// Beschreibungstexte für die Satzliste: „n×Strecke · Schwimmart“ und die
+// Metazeile mit Takt und Versatz.
 describe('Satzbeschreibung', () => {
+  // Eine eigene Bezeichnung ersetzt den automatischen Titel, die Kurzbeschreibung
+  // bleibt unverändert.
   it('zeigt Wiederholungen und Schwimmart', () => {
     const satz = neuerTrainingsSatz({ konfiguration: K100, wiederholungen: 5 })
     expect(beschreibeTrainingsSatz(satz)).toBe('5×100 m · Freistil')
@@ -94,6 +127,8 @@ describe('Satzbeschreibung', () => {
     expect(trainingsSatzTitel({ ...satz, bezeichnung: 'Einschwimmen' })).toBe('Einschwimmen')
   })
 
+  // Takt nur bei mehreren Wiederholungen, Versatz nur wenn er größer als 0 ist;
+  // sonst bliebe die Zeile mit Nullen gefüllt.
   it('nennt Takt und Versatz nur, wenn sie gelten', () => {
     const einfach = neuerTrainingsSatz({ konfiguration: K100 })
     expect(trainingsSatzMeta(einfach)).toBe('50 m-Becken')
@@ -108,7 +143,11 @@ describe('Satzbeschreibung', () => {
   })
 })
 
+// Prüfung eines einzelnen Trainingssatzes: Ein Einzellauf ist erlaubt, eine
+// Serie ab zwei Wiederholungen ebenfalls.
 describe('pruefeTrainingsSatz', () => {
+  // 8× im 90-s-Takt ist gültig; die Grenzen greifen erst bei 0 Wiederholungen
+  // bzw. einem Takt von 0.
   it('akzeptiert einen einzelnen Lauf und eine Serie', () => {
     expect(pruefeTrainingsSatz(neuerTrainingsSatz({ konfiguration: K100 }))).toBeNull()
     expect(
@@ -124,6 +163,8 @@ describe('pruefeTrainingsSatz', () => {
     expect(pruefeTrainingsSatz({ ...satz, taktSek: 0 })).not.toBeNull()
   })
 
+  // 75 m im 50-m-Becken ist kein Vielfaches der Beckenlänge; die Meldung nennt
+  // den Grund, damit der Trainer die Strecke korrigieren kann.
   it('prüft die Strecke gegen die Beckenlänge', () => {
     const satz = neuerTrainingsSatz({
       konfiguration: { beckenlaengeM: 50, streckeM: 75, schwimmart: 'brust' },
@@ -132,7 +173,9 @@ describe('pruefeTrainingsSatz', () => {
   })
 })
 
+// Prüfung des ganzen Trainings: Kopfwerte und jeder einzelne Satz.
 describe('pruefeTraining', () => {
+  // Die Basisfixture ist vollständig und damit der Referenzfall.
   it('akzeptiert ein vollständiges Training', () => {
     expect(pruefeTraining(basisTraining())).toBeNull()
   })
@@ -147,7 +190,11 @@ describe('pruefeTraining', () => {
   })
 })
 
+// Bearbeiten der festen Reihenfolge: Ersetzen behält die Position, Entfernen
+// und Verschieben ändern nur die Liste der Sätze.
 describe('Sätze bearbeiten', () => {
+  // Das Ersetzen über die ID lässt die Position stehen; nach dem Verschieben
+  // von `ts2` nach vorn wandert die geänderte Bezeichnung mit ihrem Satz.
   it('ersetzt, entfernt und verschiebt Sätze ohne den Rest zu verändern', () => {
     const training = basisTraining()
     const ersetzt = ersetzeTrainingsSatz(training, {
@@ -163,6 +210,7 @@ describe('Sätze bearbeiten', () => {
     expect(verschoben.saetze[1]?.bezeichnung).toBe('Neu')
   })
 
+  // Am Rand ist die Zielposition ungültig; es kommt dasselbe Training zurück.
   it('lässt die Reihenfolge am Rand unverändert', () => {
     const training = basisTraining()
     expect(verschiebeTrainingsSatz(training, 'ts1', -1)).toBe(training)
@@ -170,13 +218,18 @@ describe('Sätze bearbeiten', () => {
   })
 })
 
+// Fortschritt wird aus `gestartet`, den Sätzen und den Läufen abgeleitet; es
+// gibt keinen separat gespeicherten Status.
 describe('trainingsFortschritt', () => {
+  // Ohne Zuordnung und ohne Läufe ist jeder Satz offen.
   it('meldet nicht angelegte Sätze als offen', () => {
     const fortschritt = trainingsFortschritt(basisTraining(), [], [])
     expect(fortschritt.map((eintrag) => eintrag.status)).toEqual(['offen', 'offen'])
     expect(trainingZusammenfassung(fortschritt)).toEqual({ fertig: 0, gesamt: 2 })
   })
 
+  // Drei Stufen: angelegt aber unberührt (`bereit`), gestartet (`laeuft`) und
+  // vollständig (`fertig`). `fertigeRunden` zählt die abgeschlossenen Läufe.
   it('unterscheidet angelegt, laufend und fertig', () => {
     const training = basisTraining()
     training.gestartet = { ts1: 'satz1', ts2: 'satz2' }
@@ -203,6 +256,8 @@ describe('trainingsFortschritt', () => {
     expect(trainingZusammenfassung(fertig)).toEqual({ fertig: 1, gesamt: 2 })
   })
 
+  // Eine Zuordnung auf einen gelöschten Satz bleibt folgenlos: Der Satz gilt
+  // wieder als offen (`satz: null`), damit das Training weiterbedienbar ist.
   it('behandelt eine verwaiste Zuordnung wieder als offen', () => {
     const training = basisTraining()
     training.gestartet = { ts1: 'gibt-es-nicht' }
@@ -212,7 +267,11 @@ describe('trainingsFortschritt', () => {
   })
 })
 
+// Auswahl des nächsten Satzes für die Kopfzeile: laufende oder angelegte Sätze
+// zuerst, sonst der erste offene.
 describe('naechsterSatz', () => {
+  // `ts1` ist noch offen, `ts2` läuft bereits; der Trainer macht dort weiter, wo
+  // gerade gemessen wird.
   it('bevorzugt den laufenden Satz vor einem späteren offenen', () => {
     const training = basisTraining()
     training.gestartet = { ts2: 'satz2' }
@@ -228,6 +287,7 @@ describe('naechsterSatz', () => {
     expect(naechsterSatz(fortschritt)?.eintrag.id).toBe('ts1')
   })
 
+  // Sind alle Sätze fertig, gibt es nichts mehr zu starten.
   it('liefert null, wenn alle Sätze fertig sind', () => {
     const training = basisTraining()
     training.gestartet = { ts1: 'satz1', ts2: 'satz2' }

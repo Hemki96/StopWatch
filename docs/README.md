@@ -28,6 +28,7 @@ Diese Dokumentation richtet sich an zwei Gruppen:
 | bauen und veröffentlichen | [Bauen und Veröffentlichen](entwicklung/bauen-und-veroeffentlichen.md) |
 | Begriffe der Domäne nachlesen | [GLOSSARY.md](../GLOSSARY.md) |
 | eine getroffene Entscheidung verstehen | [Architekturentscheidungen](adr/) |
+| den Funktionsumfang je Version nachlesen | [ROADMAP.md](../ROADMAP.md) |
 
 ## Handbuch
 
@@ -59,6 +60,7 @@ Die Entwicklerdokumentation setzt TypeScript, React und Grundkenntnisse im Brows
 
 ## Referenz und Entscheidungen
 
+- [`ROADMAP.md`](../ROADMAP.md) — Funktionsumfang je Major-Version, Release-Kriterien und Nicht-Ziele.
 - [`GLOSSARY.md`](../GLOSSARY.md) — die verbindlichen Begriffe: Lauf, Bahn, Satz, Serie, Training,
   Aktive, Wettkampf, Disziplin, Meldeliste und weitere.
 - [`docs/adr/`](adr/) — Architekturentscheidungen mit Kontext, Alternativen und Folgen.

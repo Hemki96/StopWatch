@@ -1,3 +1,17 @@
+/**
+ * Zeitkern eines Laufs: Start, Anschlag, Finish, Undo und Korrektur.
+ *
+ * Sichert die Invarianten aus `lauf.ts` ab: `startMs` wird pro Bahn höchstens
+ * einmal gesetzt, Splits sind kumulativ ab Start der Bahn, höchstens der letzte
+ * Anschlag trägt `istFinish`, und wirkungslose Aufrufe geben dasselbe Objekt
+ * zurück. Regressionsfälle sind der Startversatz (geplante Bahnen, die Taps
+ * ignorieren), die offene Strecke ohne automatisches Finish sowie Undo und
+ * Korrektur, die die Reihenfolge der Splits nicht brechen dürfen.
+ *
+ * Alle Zeiten sind reine Zahlen: `now` entspricht `performance.now()`,
+ * `wallNow` entspricht `Date.now()`. Die Tests übergeben feste Werte statt
+ * echter Uhren, damit Splits und Finish deterministisch sind.
+ */
 import { describe, expect, it } from 'vitest'
 import {
   createLauf,
@@ -25,9 +39,13 @@ import {
 } from './lauf'
 import type { Lauf, LaufKonfiguration } from './types'
 
+// Zwei Standardkonfigurationen: `K100` hat mit zwei Längen ein automatisches
+// Finish, `OFFEN` erzeugt nur Splits und braucht ein ausdrückliches Ziel.
 const K100 = { beckenlaengeM: 50, streckeM: 100, schwimmart: 'freistil' } as const
 const OFFEN = { beckenlaengeM: 50, streckeM: null, schwimmart: 'freistil' } as const
 
+// Baut einen Lauf mit fortlaufenden Bahnnummern. `bahn` greift auf eine Bahn
+// zu und macht einen fehlenden Index sofort als Testfehler sichtbar.
 function laufMit(konfiguration: LaufKonfiguration, bahnen = 3): Lauf {
   return createLauf(
     konfiguration,
@@ -41,6 +59,8 @@ function bahn(lauf: Lauf, index = 0) {
   return b
 }
 
+// Umrechnung Strecke → Längen: 100 m sind im 50-m-Becken zwei Längen, im
+// 25-m-Becken vier; eine offene Strecke hat keine Ziel-Länge.
 describe('lengthCount', () => {
   it('rechnet die Strecke in Längen um', () => {
     expect(lengthCount(K100)).toBe(2)
@@ -49,6 +69,8 @@ describe('lengthCount', () => {
   })
 })
 
+// Nur Vielfache der Beckenlänge sind gültig: 75 m im 50-m-Becken und eine
+// Strecke von 0 m sind Fehler, die offene Strecke (`null`) dagegen immer gültig.
 describe('validateKonfiguration', () => {
   it('lehnt Strecken ab, die kein Vielfaches der Beckenlänge sind', () => {
     expect(validateKonfiguration({ ...K100, streckeM: 75 })).not.toBeNull()
@@ -58,6 +80,8 @@ describe('validateKonfiguration', () => {
   })
 })
 
+// Ein neuer Lauf ist unberührt: Bahnen 1..n sind „bereit“, es gibt keinen
+// Wanduhr-Anker.
 describe('createLauf', () => {
   it('erzeugt bereite Bahnen mit Nummern', () => {
     const lauf = laufMit(K100, 6)
@@ -68,6 +92,8 @@ describe('createLauf', () => {
   })
 })
 
+// „Start alle“ setzt denselben Startzeitstempel auf alle Bahnen und den
+// Wanduhr-Anker genau einmal.
 describe('startAll', () => {
   it('gibt allen Bahnen denselben Startzeitstempel', () => {
     const lauf = startAll(laufMit(K100, 4), 1000, 1_700_000_000_000)
@@ -75,6 +101,8 @@ describe('startAll', () => {
     expect(lauf.startWallMs).toBe(1_700_000_000_000)
   })
 
+  // Eine bereits einzeln gestartete Bahn behält ihren Start; nur die übrigen
+  // bekommen den neuen Zeitstempel.
   it('startet keine bereits laufende Bahn neu', () => {
     const basis = laufMit(K100, 2)
     const einzel = startLane(basis, basis.bahnen[0]!.id, 500, 1)
@@ -84,6 +112,8 @@ describe('startAll', () => {
   })
 })
 
+// Der zentrale Bedienschritt: Der erste Tap startet, weitere Taps erfassen
+// Splits; bei fester Strecke ist der letzte Anschlag das Ziel.
 describe('tapLane', () => {
   it('startet eine bereite Bahn beim ersten Tap', () => {
     const lauf = laufMit(K100, 1)
@@ -94,6 +124,8 @@ describe('tapLane', () => {
     expect(laneStatus(bahn(getippt))).toBe('laeuft')
   })
 
+  // 31_250 ms und 64_000 ms sind kumulierte Splits; die zweite Länge schließt
+  // den Lauf ab.
   it('erfasst Splits und erkennt das Finish aus der Strecke', () => {
     const start = laufMit(K100, 1)
     const id = bahn(start).id
@@ -110,6 +142,8 @@ describe('tapLane', () => {
     expect(finishMs(bahn(lauf))).toBe(64_000)
   })
 
+  // Nach dem Finish ist die Bahn zu; der Tap liefert dasselbe Objekt zurück und
+  // erzeugt keinen dritten Anschlag.
   it('ignoriert Taps auf beendeten Bahnen', () => {
     const start = laufMit(K100, 1)
     const id = bahn(start).id
@@ -121,6 +155,8 @@ describe('tapLane', () => {
     expect(bahn(danach).anschlaege).toHaveLength(2)
   })
 
+  // Regression: Splits rechnen ab dem Start der jeweiligen Bahn. Ein Bezug auf
+  // den Laufstart würde hier 54 s statt 50 s liefern.
   it('misst Splits relativ zum Start der jeweiligen Bahn, nicht zum Lauf', () => {
     const start = laufMit(K100, 2)
     const [a, b] = start.bahnen
@@ -135,6 +171,8 @@ describe('tapLane', () => {
   })
 })
 
+// Ohne feste Strecke bleibt jeder Anschlag ein Split; das Ziel wird nur
+// ausdrücklich über `finishLane` gesetzt.
 describe('offene Strecke', () => {
   it('erfasst jeden Tap als Split und beendet nur explizit', () => {
     const start = laufMit(OFFEN, 1)
@@ -152,6 +190,8 @@ describe('offene Strecke', () => {
     expect(finishMs(bahn(lauf))).toBe(120_000)
   })
 
+  // Mit fester Strecke ist `finishLane` wirkungslos: Dort entsteht das Finish
+  // allein aus der erreichten Längenanzahl.
   it('beendet bei konfigurierter Strecke nichts explizit', () => {
     const start = laufMit(K100, 1)
     const id = bahn(start).id
@@ -160,7 +200,11 @@ describe('offene Strecke', () => {
   })
 })
 
+// Undo nimmt genau einen Schritt zurück: zuerst den letzten Anschlag, sonst den
+// Start; eine unberührte Bahn bleibt unverändert.
 describe('undoLane', () => {
+  // Das Zurücknehmen des Finish-Anschlags macht aus „beendet“ wieder „läuft“;
+  // die Zwischenzeit davor bleibt erhalten.
   it('entfernt den letzten Anschlag und macht ein Finish rückgängig', () => {
     const start = laufMit(K100, 1)
     const id = bahn(start).id
@@ -188,6 +232,7 @@ describe('undoLane', () => {
   })
 })
 
+// Verstrichene Zeit ist vor dem Start 0 und danach die Differenz zu `now`.
 describe('elapsedMs', () => {
   it('ist null vor dem Start und wächst danach monoton', () => {
     const lauf = laufMit(K100, 1)
@@ -197,6 +242,8 @@ describe('elapsedMs', () => {
   })
 })
 
+// Die Funktion entscheidet, ob ein Reload einen laufenden Lauf verlieren würde:
+// geplante und laufende Bahnen zählen, vollständig beendete nicht.
 describe('hatLaufendeBahn', () => {
   it('ist false für einen angelegten, nie gestarteten Lauf', () => {
     expect(hatLaufendeBahn(laufMit(K100, 2))).toBe(false)
@@ -218,6 +265,8 @@ describe('hatLaufendeBahn', () => {
   })
 })
 
+// Beckenlänge und Strecke sind ab dem ersten Anschlag gesperrt; vorher ist ein
+// Wechsel erlaubt, weil noch keine Länge gemessen wurde.
 describe('updateStrecke', () => {
   it('sperrt die Strecke, sobald ein Anschlag existiert', () => {
     const start = laufMit(K100, 1)
@@ -236,7 +285,10 @@ describe('updateStrecke', () => {
   })
 })
 
+// Korrekturen ändern genau einen Anschlag, markieren ihn als `manuell` und
+// dürfen die aufsteigende Reihenfolge der Splits nicht brechen.
 describe('korrigiereAnschlag', () => {
+  // Zwei Anschläge (30 s, 60 s) im 100-m-Lauf: Der zweite ist das Finish.
   function zweiLaengen() {
     const start = laufMit(K100, 1)
     const id = bahn(start).id
@@ -254,6 +306,7 @@ describe('korrigiereAnschlag', () => {
     expect(bahn(korrigiert).anschlaege[1]?.istFinish).toBe(true)
   })
 
+  // Die letzte Länge bleibt Ziel, auch wenn ihre Zeit korrigiert wird.
   it('erhält das Finish-Flag bei der letzten Länge', () => {
     const { lauf, bahnId } = zweiLaengen()
     const korrigiert = korrigiereAnschlag(lauf, bahnId, 2, 58_000)
@@ -261,6 +314,8 @@ describe('korrigiereAnschlag', () => {
     expect(bahn(korrigiert).anschlaege[1]?.manuell).toBe(true)
   })
 
+  // 150 m sind drei Längen; nach nur einem Anschlag bleibt die korrigierte
+  // Länge 1 ein Zwischenanschlag und wird nicht zum Finish.
   it('erzeugt aus einer Zwischenzeit kein Finish', () => {
     const start = laufMit({ ...K100, streckeM: 150 }, 1)
     const bahnId = bahn(start).id
@@ -270,6 +325,8 @@ describe('korrigiereAnschlag', () => {
     expect(bahn(korrigiert).anschlaege[0]?.istFinish).toBe(false)
   })
 
+  // 61 s läge hinter dem Finish (60 s), 10 s vor dem ersten Split. Beides wird
+  // gemeldet; die Korrektur selbst bleibt wirkungslos.
   it('lehnt Zeiten ab, die die Reihenfolge brechen', () => {
     const { lauf, bahnId } = zweiLaengen()
     expect(pruefeAnschlagKorrektur(lauf, bahnId, 1, 61_000)).not.toBeNull()
@@ -279,7 +336,11 @@ describe('korrigiereAnschlag', () => {
   })
 })
 
+// Startversatz: Alle Bahnen werden beim Start vorausgeplant; Taps vor dem
+// eigenen Startzeitpunkt werden ignoriert.
 describe('Startversatz', () => {
+  // 10 s Versatz wie im README: Bahn 1 startet sofort, Bahn 2 nach 10 s,
+  // Bahn 3 nach 20 s.
   function gestaffelt(anzahl = 3, versatzMs = 10_000): Lauf {
     return createLauf(
       K100,
@@ -289,6 +350,8 @@ describe('Startversatz', () => {
     )
   }
 
+  // Der Versatz wird pro Bahnindex addiert; `startWallMs` bleibt der gemeinsame
+  // Wanduhr-Anker des Laufs.
   it('startet die Bahnen im festen Abstand', () => {
     const lauf = startAll(gestaffelt(3), 1000, 5000)
     expect(lauf.bahnen.map((b) => b.startMs)).toEqual([1000, 11_000, 21_000])
@@ -296,6 +359,8 @@ describe('Startversatz', () => {
     expect(lauf.startversatzMs).toBe(10_000)
   })
 
+  // `laneStatusAt` unterscheidet „geplant“ von „läuft“ anhand von `now`;
+  // `laneStatus` ohne Zeitbezug kennt diesen Zustand bewusst nicht.
   it('meldet eine Bahn vor ihrem Start als geplant', () => {
     const lauf = startAll(gestaffelt(2), 1000, 5000)
     expect(laneStatusAt(lauf.bahnen[0]!, 500)).toBe('geplant')
@@ -304,6 +369,8 @@ describe('Startversatz', () => {
     expect(laneStatusAt(lauf.bahnen[1]!, 11_000)).toBe('laeuft')
   })
 
+  // Der Tap bei 5000 ms liegt vor dem Start der zweiten Bahn (11 s); erst ab
+  // deren Start entsteht ein Split von 1 s.
   it('ignoriert Taps, bevor die Bahn startet', () => {
     const lauf = startAll(gestaffelt(2), 1000, 5000)
     const unveraendert = tapLane(lauf, lauf.bahnen[1]!.id, 5000, 6000)
@@ -319,6 +386,8 @@ describe('Startversatz', () => {
     expect(hatLaufendeBahn(lauf)).toBe(true)
   })
 
+  // `planeLauf` überschreibt vorhandene Startzeiten; hier mit 5 s Versatz,
+  // damit die Staffelung im Ergebnis sichtbar wird.
   it('setzt mit planeLauf alle Starts neu', () => {
     const lauf = planeLauf(gestaffelt(3), 0, 1000, 5000)
     expect(lauf.bahnen.map((b) => b.startMs)).toEqual([0, 5000, 10_000])
@@ -326,6 +395,8 @@ describe('Startversatz', () => {
     expect(lauf.startversatzMs).toBe(5000)
   })
 
+  // Nach dem ersten Start darf der Versatz nicht mehr geändert werden, sonst
+  // würden bereits geplante Bahnen nachträglich verschoben.
   it('sperrt den Start nach dem ersten Start', () => {
     const lauf = gestaffelt(2)
     expect(isStartLocked(lauf)).toBe(false)
@@ -333,7 +404,11 @@ describe('Startversatz', () => {
   })
 })
 
+// `hatBegonnen` entscheidet über den Eintrag im Verlauf und richtet sich nach
+// der Wanduhr, nicht nach `performance.now()`.
 describe('hatBegonnen', () => {
+  // Der Wanduhr-Anker liegt bei 1000; erst ab diesem Wert gilt der Lauf als
+  // begonnen, obwohl der Startversatz einzelne Bahnen in die Zukunft legt.
   it('zählt eine noch in der Zukunft liegende Runde nicht', () => {
     const lauf = startAll(
       createLauf(K100, [{ nummer: 1 }, { nummer: 2 }], null, { startversatzMs: 10_000 }),
@@ -359,6 +434,9 @@ describe('hatBegonnen', () => {
     expect(hatBegonnen(lauf, 0)).toBe(true)
   })
 
+  // Spätere Wiederholungen einer Serie erscheinen erst mit dem ersten
+  // Anschlag; sonst würden nach einem Reload alle nur geplanten Runden als
+  // unvollständig im Verlauf stehen.
   it('zeigt spätere Wiederholungen erst mit dem ersten Anschlag', () => {
     const lauf = planeLauf(
       createLauf(K100, [{ nummer: 1 }], null, { wiederholung: 2 }),
@@ -375,6 +453,8 @@ describe('hatBegonnen', () => {
     expect(hatBegonnen(lauf, 5000)).toBe(true)
   })
 
+  // Im Wettkampf ist `wiederholung` die Laufnummer, keine Serienrunde; ein
+  // gestarteter Heat gehört deshalb sofort in den Verlauf.
   it('zeigt einen gestarteten Wettkampf-Heat auch ab Lauf 2 sofort', () => {
     const lauf = startAll(
       createLauf(K100, [{ nummer: 1 }], null, { modus: 'wettkampf', wiederholung: 2 }),

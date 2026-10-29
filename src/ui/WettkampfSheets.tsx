@@ -1,3 +1,12 @@
+/**
+ * Dialoge des Wettkampf-Tabs.
+ *
+ * Enthält das Anlegen eines Wettkampfs, das Anlegen einer Disziplin, das
+ * Nachtragen von Bahnnamen und die manuelle Zielzeit. Die Sheets halten nur
+ * Formularzustand und melden geprüfte Werte über ihre `onCreate`/`onSave`-
+ * Rückrufe an den Screen; geschrieben wird ausschließlich in
+ * app/AppProvider. Formate (Zeit, Datum) kommen aus domain/format.
+ */
 import { useEffect, useState, type ReactNode } from 'react'
 import { formatTime, lokalesDatum, parseTime } from '../domain/format'
 import { SCHWIMMARTEN, type Beckenlaenge, type Lauf, type Schwimmart } from '../domain/types'
@@ -5,6 +14,7 @@ import { Sheet } from './Sheet'
 
 const STRECKEN = [50, 100, 200, 400, 800, 1500] as const
 
+/** Feldblock für ein Sheet: Überschrift, Inhalt und optionaler Hinweis. */
 function Feld({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
     <section className="mb-5">
@@ -15,6 +25,7 @@ function Feld({ label, hint, children }: { label: string; hint?: string; childre
   )
 }
 
+/** Einzelauswahl als Chip; der aktive Zustand ist farblich und per Border markiert. */
 function Chip({
   aktiv,
   onClick,
@@ -37,6 +48,10 @@ function Chip({
   )
 }
 
+/**
+ * Minus/Plus-Zähler mit festen Grenzen. Die Knöpfe sind an den Grenzen
+ * deaktiviert; der Wert bleibt zusätzlich per `Math.min`/`Math.max` im Bereich.
+ */
 function Stepper({
   wert,
   min,
@@ -75,6 +90,13 @@ function Stepper({
   )
 }
 
+/**
+ * Legt einen Wettkampf mit Name, Datum und Beckenlänge an.
+ *
+ * Der Knopf bleibt gesperrt, bis Name und Datum gesetzt sind. Beim Öffnen wird
+ * das Formular auf die Vorgaben zurückgesetzt, damit keine alte Eingabe in
+ * einen neuen Wettkampf gerät.
+ */
 export function WettkampfAnlegenSheet({
   open,
   onClose,
@@ -88,6 +110,7 @@ export function WettkampfAnlegenSheet({
   const [datum, setDatum] = useState(() => lokalesDatum(Date.now()))
   const [beckenlaengeM, setBeckenlaengeM] = useState<Beckenlaenge>(50)
 
+  // Jedes Öffnen startet mit leerem Namen, heutigem Datum und 50-m-Becken.
   useEffect(() => {
     if (!open) return
     setName('')
@@ -140,6 +163,13 @@ export function WettkampfAnlegenSheet({
   )
 }
 
+/**
+ * Legt eine Disziplin mit Strecke, Schwimmart, Heats und Bahnen je Heat an.
+ *
+ * Die Strecke muss ein Vielfaches der Beckenlänge des Wettkampfs sein; sonst
+ * bleibt der Knopf gesperrt. Die Bezeichnung wird aus Strecke und Schwimmart
+ * gebildet und ist zugleich der Name im Verlauf.
+ */
 export function DisziplinSheet({
   open,
   onClose,
@@ -162,6 +192,7 @@ export function DisziplinSheet({
   const [laeufe, setLaeufe] = useState(1)
   const [bahnen, setBahnen] = useState(6)
 
+  // Vorgaben bei jedem Öffnen; die Beckenlänge kommt vom Wettkampf.
   useEffect(() => {
     if (!open) return
     setStreckeM(100)
@@ -171,6 +202,7 @@ export function DisziplinSheet({
   }, [open])
 
   const art = SCHWIMMARTEN.find((eintrag) => eintrag.wert === schwimmart)?.label ?? ''
+  // Ein Lauf ist ein Heat; die Strecke muss ganzzahlig in Becken passen.
   const ungueltig = streckeM % beckenlaengeM !== 0
 
   return (
@@ -227,6 +259,14 @@ export function DisziplinSheet({
   )
 }
 
+/**
+ * Trägt die Namen aller Bahnen eines Heats nach.
+ *
+ * Startwert ist `startNamen`; der Effekt setzt ihn nur beim Öffnen bzw. beim
+ * Wechsel des Laufs zurück, damit Tippen im Feld nicht durch einen Render
+ * überschrieben wird. Leere Felder bleiben ohne Zuordnung, bekannte Namen
+ * werden wiederverwendet.
+ */
 export function NamenSheet({
   open,
   onClose,
@@ -288,6 +328,13 @@ export function NamenSheet({
   )
 }
 
+/**
+ * Sheet für eine von Hand eingetragene oder korrigierte Zielzeit.
+ *
+ * Beim Öffnen wird die vorhandene Zeit als `mm:ss,hh` vorbefüllt. `parseTime`
+ * akzeptiert nur lesbare Zeitangaben; Fehler bleiben als Meldung stehen, ohne
+ * zu speichern. Die gespeicherte Zeit wird als `manuell` markiert.
+ */
 export function ZeitSheet({
   open,
   onClose,
@@ -304,12 +351,14 @@ export function ZeitSheet({
   const [eingabe, setEingabe] = useState('')
   const [fehler, setFehler] = useState<string | null>(null)
 
+  // Beim Öffnen (und wenn sich der Zielwert ändert) Eingabe und Fehler neu setzen.
   useEffect(() => {
     if (!open) return
     setEingabe(wert === null ? '' : formatTime(wert))
     setFehler(null)
   }, [open, wert])
 
+  /** Prüft das Format und übergibt die Zeit in Millisekunden. */
   const speichern = () => {
     const ms = parseTime(eingabe)
     if (ms === null) {
@@ -335,6 +384,7 @@ export function ZeitSheet({
           value={eingabe}
           onChange={(event) => {
             setEingabe(event.target.value)
+            // Eine alte Fehlermeldung verschwindet beim Weitertippen.
             setFehler(null)
           }}
           inputMode="decimal"

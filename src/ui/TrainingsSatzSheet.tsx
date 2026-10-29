@@ -1,3 +1,12 @@
+/**
+ * Sheet zum Anlegen und Bearbeiten eines Trainingssatzes.
+ *
+ * Ein Trainingssatz ist nur der Plan (Konfiguration, Wiederholungen, Takt,
+ * Startversatz); erst der Start im Training erzeugt daraus Satz und Läufe. Das
+ * Sheet arbeitet auf einer Kopie und meldet erst mit „Speichern“ an den
+ * Trainingsscreen zurück, der das ganze Training schreibt. Verschieben und
+ * Löschen sind angebunden, aber nur bei bestehenden Sätzen sichtbar.
+ */
 import { useState } from 'react'
 import { formatTakt } from '../domain/format'
 import { validateKonfiguration } from '../domain/lauf'
@@ -11,6 +20,8 @@ import {
 import { Chip, Feld } from './Felder'
 import { Sheet } from './Sheet'
 
+// Feste Chip-Werte wie im Konfigurationssheet; der jeweilige Ist-Wert wird
+// bei Bedarf ergänzt, damit importierte Pläne editierbar bleiben.
 const STRECKEN = [50, 100, 200, 400, 800, 1500] as const
 const VERSATZE = [0, 5_000, 10_000, 15_000, 20_000, 30_000] as const
 const TAKTE = [60, 75, 90, 105, 120, 135, 150, 180, 240] as const
@@ -18,8 +29,11 @@ const TAKTE = [60, 75, 90, 105, 120, 135, 150, 180, 240] as const
 interface TrainingsSatzSheetProps {
   /** Der aktuelle Stand; das Sheet arbeitet auf einer Kopie bis zum Speichern. */
   satz: TrainingsSatz
+  /** Bahnzahl des Trainings; nur für den Hinweistext der Bezeichnung. */
   bahnen: number
+  /** Position in der Satzliste, für Titel und Verschieben. */
   index: number
+  /** Neue Sätze lassen sich nicht verschieben oder löschen. */
   istNeu: boolean
   kannNachOben: boolean
   kannNachUnten: boolean
@@ -29,6 +43,14 @@ interface TrainingsSatzSheetProps {
   onVerschieben: (richtung: -1 | 1) => void
 }
 
+/**
+ * Formular für einen Trainingssatz.
+ *
+ * Änderungen wirken nur auf den lokalen Entwurf; `pruefeTrainingsSatz` sperrt
+ * das Speichern bei ungültiger Strecke, Wiederholungszahl, Takt oder Versatz.
+ * Bei einem neuen Satz fehlen Verschieben und Löschen, weil er noch nicht in
+ * der Liste steht.
+ */
 export function TrainingsSatzSheet({
   satz,
   bahnen,
@@ -41,12 +63,16 @@ export function TrainingsSatzSheet({
   onLoeschen,
   onVerschieben,
 }: TrainingsSatzSheetProps) {
+  // Flache Kopie inklusive Konfiguration: Änderungen dürfen den gespeicherten
+  // Satz erst beim Speichern berühren.
   const [entwurf, setEntwurf] = useState<TrainingsSatz>(() => ({
     ...satz,
     konfiguration: { ...satz.konfiguration },
   }))
 
+  // Fehler blockieren den Speichern-Knopf; die Meldung steht über den Aktionen.
   const fehler = pruefeTrainingsSatz(entwurf)
+  // Ist-Werte außerhalb der festen Liste werden einsortiert ergänzt.
   const taktOptionen = Array.from(new Set<number>([...TAKTE, entwurf.taktSek])).sort(
     (a, b) => a - b,
   )
@@ -58,12 +84,17 @@ export function TrainingsSatzSheet({
     setEntwurf((aktuell) => ({ ...aktuell, ...teil }))
   }
 
+  /** Übernimmt Konfigurationsänderungen nur, wenn die Kombination gültig ist. */
   const aendereKonfiguration = (teil: Partial<LaufKonfiguration>) => {
     const naechste = { ...entwurf.konfiguration, ...teil }
     if (validateKonfiguration(naechste) !== null) return
     aendere({ konfiguration: naechste })
   }
 
+  /**
+   * Beckenwechsel: Eine Strecke, die kein Vielfaches der neuen Beckenlänge ist,
+   * wird auf zwei Beckenlängen gesetzt, statt ungültig zu werden.
+   */
   const setzeBeckenlaenge = (beckenlaengeM: Beckenlaenge) => {
     const strecke = entwurf.konfiguration.streckeM
     const naechste =
@@ -142,6 +173,8 @@ export function TrainingsSatzSheet({
         hint="1 = einzelner Lauf. Bei mehreren startet die nächste Runde im festen Takt."
       >
         <div className="flex items-center gap-3">
+          {/* Grenzen 1 und 20 entsprechen `MAX_WIEDERHOLUNGEN`; der Takt ist
+              nur bei mehreren Wiederholungen relevant. */}
           <button
             type="button"
             aria-label="Weniger Wiederholungen"
@@ -167,6 +200,7 @@ export function TrainingsSatzSheet({
 
         {entwurf.wiederholungen > 1 ? (
           <div className="mt-3">
+            {/* Takt = Zeit von Start zu Start, nicht die Schwimmzeit. */}
             <p className="mb-2 text-xs text-muted">Takt (Start zu Start)</p>
             <div className="flex flex-wrap gap-2">
               {taktOptionen.map((wert) => (
@@ -206,6 +240,8 @@ export function TrainingsSatzSheet({
         type="button"
         disabled={fehler !== null}
         onClick={() =>
+          // Bezeichnung trimmen; der Trainingsscreen ersetzt den Satz anhand
+          // seiner ID und schließt das Sheet.
           onSpeichern({ ...entwurf, bezeichnung: entwurf.bezeichnung.trim() })
         }
         className="h-14 w-full rounded-xl bg-accent text-base font-bold text-accent-fg disabled:opacity-40"
@@ -213,6 +249,8 @@ export function TrainingsSatzSheet({
         {istNeu ? 'Satz hinzufügen' : 'Satz speichern'}
       </button>
 
+      {/* Verschieben und Löschen gibt es nur für bereits gespeicherte Sätze;
+          die Grenzen kommen als `kannNachOben`/`kannNachUnten` vom Screen. */}
       {istNeu ? null : (
         <div className="mt-4 space-y-2">
           <div className="flex gap-2">

@@ -112,6 +112,7 @@ registriert keinen Service Worker.
 | `einstellungen.spec.ts` | Onboarding, Theme, Standardwerte, Streckensperre |
 | `backup.spec.ts` | Backup exportieren, alles löschen, importieren; ungültiges Backup |
 | `tabs.spec.ts` | zweiter Tab lesend, Übernahme, Freigabe, Verlauf im lesenden Tab |
+| `responsive.spec.ts` | seitliche Navigation und zentriertes Sheet auf dem Tablet; flache Leiste im Querformat |
 | `offline.spec.ts` | Service-Worker-Cache, Offline-Reload, Lauf bleibt sichtbar |
 
 ### Helfer

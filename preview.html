@@ -2,36 +2,113 @@
 <html lang="de">
   <head>
     <meta charset="utf-8" />
-    <title>Mobile Vorschau</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Beckenrand – Gerätevorschau</title>
     <style>
+      :root {
+        color-scheme: dark;
+      }
       body {
         margin: 0;
-        height: 100vh;
-        display: grid;
-        place-items: center;
+        min-height: 100vh;
         background: #1b2430;
+        color: #c7d2e2;
         font-family: system-ui, sans-serif;
-        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2rem;
+        padding: 2rem;
+        box-sizing: border-box;
+      }
+      header {
+        text-align: center;
+      }
+      h1 {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+      }
+      p {
+        margin: 0.4rem 0 0;
+        font-size: 0.75rem;
+        color: #8fa0b8;
+      }
+      .buehne {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        gap: 2.5rem;
+      }
+      .geraet {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.7rem;
+        margin: 0;
+      }
+      .geraet > figcaption {
+        font-size: 0.7rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #8fa0b8;
       }
       .rahmen {
-        width: 390px;
-        height: 844px;
-        transform: scale(0.8);
-        transform-origin: center;
-      }
-      iframe {
-        width: 390px;
-        height: 844px;
-        border: 0;
-        border-radius: 28px;
+        width: calc(var(--w) * var(--s));
+        height: calc(var(--h) * var(--s));
+        overflow: hidden;
+        border-radius: 1.6rem;
         box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
         background: #070c15;
+      }
+      iframe {
+        width: var(--w);
+        height: var(--h);
+        border: 0;
+        transform: scale(var(--s));
+        transform-origin: top left;
+        background: #070c15;
+      }
+      .handy {
+        --w: 390px;
+        --h: 844px;
+        --s: 0.72;
+      }
+      .tablet {
+        --w: 820px;
+        --h: 1180px;
+        --s: 0.52;
+      }
+      @media (max-width: 760px) {
+        body {
+          padding: 1rem;
+        }
+        .handy {
+          --s: 0.85;
+        }
+        .tablet {
+          display: none;
+        }
       }
     </style>
   </head>
   <body>
-    <div class="rahmen">
-      <iframe id="phone" src="/" title="Beckenrand mobil"></iframe>
-    </div>
+    <header>
+      <h1>Beckenrand – Handy und Tablet</h1>
+      <p>Beide Rahmen laden dieselbe App; die Ansicht reagiert auf Breite und Höhe.</p>
+    </header>
+    <main class="buehne">
+      <figure class="geraet handy">
+        <div class="rahmen"><iframe src="./" title="Beckenrand auf dem Handy"></iframe></div>
+        <figcaption>Handy · 390 × 844</figcaption>
+      </figure>
+      <figure class="geraet tablet">
+        <div class="rahmen"><iframe src="./" title="Beckenrand auf dem Tablet"></iframe></div>
+        <figcaption>Tablet · 820 × 1180</figcaption>
+      </figure>
+    </main>
   </body>
 </html>

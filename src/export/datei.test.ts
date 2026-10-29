@@ -1,14 +1,33 @@
+/**
+ * Dateiausgabe und Dateiauswahl im Browser.
+ *
+ * Sichert die beiden Pfade aus `datei.ts` ab: Zuerst wird das Share-Sheet
+ * versucht, bei Abbruch bleibt es still, bei jedem anderen Fehler oder ohne
+ * Unterstützung wird heruntergeladen. Der Download muss den Anker kurz ins DOM
+ * hängen und die Objekt-URL nach kurzer Zeit freigeben. `waehleDatei` muss das
+ * temporäre Eingabefeld wieder entfernen und sowohl Abbruch als auch eine
+ * Auswahl ohne Datei als `null` melden.
+ *
+ * Die Tests laufen in jsdom, weil `Blob`, `File`, `URL` und das DOM gebraucht
+ * werden. `navigator.canShare`/`share` fehlen dort und werden pro Test über
+ * `Object.defineProperty` gesetzt; `afterEach` räumt Spies, Globals und DOM auf.
+ */
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { speichereDatei, waehleDatei } from './datei'
 
+// Jeder Test hinterlässt gepatchte APIs und DOM-Knoten; beides wird
+// zurückgesetzt, damit die Fälle unabhängig bleiben.
 afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
   document.body.innerHTML = ''
 })
 
+// Export: zuerst Teilen, sonst Download. Ein bewusster Abbruch ist kein Fehler.
 describe('speichereDatei', () => {
+  // `canShare` sagt ja, `share` nimmt die Datei an: kein Download-Anker, die
+  // Datei heißt wie gewünscht.
   it('teilt die Datei, wenn das Share-Sheet sie annimmt', async () => {
     const share = vi.fn(async (_daten: ShareData) => undefined)
     Object.defineProperty(navigator, 'canShare', { value: () => true, configurable: true })
@@ -24,6 +43,8 @@ describe('speichereDatei', () => {
     expect(klick).not.toHaveBeenCalled()
   })
 
+  // `AbortError` heißt, der Nutzer hat das Share-Sheet geschlossen; ein
+  // Download wäre hier übergriffig.
   it('bleibt still, wenn der Nutzer das Teilen abbricht', async () => {
     const share = vi.fn(async () => {
       throw new DOMException('abgebrochen', 'AbortError')
@@ -38,6 +59,8 @@ describe('speichereDatei', () => {
     expect(document.querySelector('a[download]')).toBeNull()
   })
 
+  // Jeder andere Fehler (hier `TypeError`) fällt auf den Download zurück, damit
+  // der Export nicht blockiert.
   it('lädt herunter, wenn das Teilen aus anderem Grund scheitert', async () => {
     const share = vi.fn(async () => {
       throw new TypeError('Share nicht möglich')
@@ -53,6 +76,10 @@ describe('speichereDatei', () => {
     expect(klick).toHaveBeenCalledOnce()
   })
 
+  // Ohne Web Share wird ein Anker mit `download` geklickt. Der Anker wird
+  // sofort wieder entfernt, deshalb sammelt der `append`-Spy ihn ein. Die
+  // Objekt-URL darf nicht sofort freigegeben werden; mit fake Timers wird die
+  // Freigabe nach 2000 ms geprüft.
   it('erzeugt ohne Share-Unterstützung einen Download und räumt die URL auf', async () => {
     const create = vi.fn(() => 'blob:beckenrand')
     const revoke = vi.fn()
@@ -82,7 +109,12 @@ describe('speichereDatei', () => {
   })
 })
 
+// Dateiauswahl: Ein unsichtbares Eingabefeld wird eingehängt, geklickt und nach
+// der Auswahl wieder entfernt.
 describe('waehleDatei', () => {
+  // `accept` wird übernommen, das Feld ist unsichtbar und hängt im DOM, weil
+  // Safari den Klick auf ein nicht eingehängtes Feld verweigert. Nach `change`
+  // löst die Promise mit der Datei auf und das Feld ist weg.
   it('liefert die ausgewählte Datei und entfernt das Eingabefeld', async () => {
     vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => undefined)
     const ergebnis = waehleDatei('.csv')
@@ -100,6 +132,8 @@ describe('waehleDatei', () => {
     expect(document.querySelector('input[type="file"]')).toBeNull()
   })
 
+  // `cancel` ist der Abbruch im Dialog; nicht jeder Browser feuert es, deshalb
+  // prüft der Test den unterstützten Pfad.
   it('liefert null, wenn die Auswahl abgebrochen wird', async () => {
     vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => undefined)
     const ergebnis = waehleDatei('.json')
@@ -111,6 +145,8 @@ describe('waehleDatei', () => {
     expect(document.querySelector('input[type="file"]')).toBeNull()
   })
 
+  // Schließt der Dialog über `change` ohne Datei, ist das ebenfalls kein
+  // Fehlerfall, sondern eine leere Auswahl.
   it('liefert null, wenn der Dialog ohne Datei schließt', async () => {
     vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => undefined)
     const ergebnis = waehleDatei('.json')

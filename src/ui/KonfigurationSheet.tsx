@@ -1,3 +1,12 @@
+/**
+ * Konfiguration von Lauf und nächstem Lauf.
+ *
+ * Dasselbe Sheet dient zwei Zwecken: Im Modus „lauf“ ändert es den sichtbaren
+ * Lauf (Beckenlänge, Strecke, Schwimmart und die Schwimmer je Bahn), im Modus
+ * „einstellungen“ die Vorgaben für den nächsten Lauf samt Bahnzahl, Serie und
+ * Schwimmerzuordnung. Die Werte werden direkt in `app/AppProvider` gespeichert;
+ * Sperren und Prüfungen kommen aus domain/lauf und domain/serie.
+ */
 import { useApp } from '../app/AppProvider'
 import { formatTakt } from '../domain/format'
 import { isStreckeLocked, validateKonfiguration } from '../domain/lauf'
@@ -6,6 +15,8 @@ import { SCHWIMMARTEN, type Beckenlaenge, type LaufKonfiguration, type Schwimmar
 import { Chip, Feld } from './Felder'
 import { Sheet } from './Sheet'
 
+// Feste Auswahlwerte der Chips. Ein bereits gesetzter, hier nicht enthaltener
+// Wert (z. B. aus einem Backup) wird später ergänzt, damit er sichtbar bleibt.
 const STRECKEN = [50, 100, 200, 400, 800, 1500] as const
 const VERSATZE = [0, 5_000, 10_000, 15_000, 20_000, 30_000] as const
 const TAKTE = [60, 75, 90, 105, 120, 135, 150, 180, 240] as const
@@ -13,30 +24,50 @@ const TAKTE = [60, 75, 90, 105, 120, 135, 150, 180, 240] as const
 interface KonfigurationSheetProps {
   open: boolean
   onClose: () => void
+  /** „lauf“ bearbeitet den sichtbaren Lauf, „einstellungen“ die Vorgaben. */
   modus: 'einstellungen' | 'lauf'
 }
 
+/**
+ * Sheet für Strecke, Beckenlänge, Schwimmart, Startversatz und Serie.
+ *
+ * Im Laufmodus sind Strecke, Beckenlänge und Schwimmart nach dem ersten
+ * Anschlag gesperrt und bei einer Serie immer, weil alle Runden vorausgeplant
+ * sind. Startversatz und Takt sind dort nur informativ; im Einstellungsmodus
+ * legen sie den nächsten Lauf fest. Die Schwimmerauswahl schreibt entweder in
+ * den Lauf oder in die Vorgaben für den nächsten Lauf.
+ */
 export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetProps) {
   const app = useApp()
   const lauf = app.aktiverLauf
   const satz = app.aktiverSatz
+  // Nur im Laufmodus zählt der Plan der aktiven Serie; sonst gelten die
+  // Einstellungen für den nächsten Lauf.
   const serie = modus === 'lauf' && istSerie(satz)
   const plan = serie ? (satz?.plan ?? null) : null
   const konfiguration: LaufKonfiguration =
     modus === 'lauf' && lauf ? lauf.konfiguration : app.einstellungen.konfiguration
+  // Eine Serie ist nach dem Anlegen fest; ein einzelner Lauf erst nach dem
+  // ersten Anschlag. Der Startversatz hat eine eigene Sperre im Laufmodus.
   const gesperrt = modus === 'lauf' && lauf ? isStreckeLocked(lauf) || serie : false
   const fehler = validateKonfiguration(konfiguration)
 
+  // Angezeigte Werte stammen im Laufmodus aus dem Plan bzw. Lauf, sonst aus
+  // den Einstellungen. Die Fallbacks halten das Sheet auch ohne Plan stabil.
   const startversatzMs =
     modus === 'lauf' && lauf ? (plan?.startversatzMs ?? lauf.startversatzMs) : app.einstellungen.startversatzMs
   const wiederholungen =
     modus === 'lauf' ? (serie ? (plan?.wiederholungen ?? 1) : 1) : app.einstellungen.wiederholungen
   const taktSek =
     modus === 'lauf' ? (serie ? (plan?.taktSek ?? 120) : 120) : app.einstellungen.taktSek
+  // Der aktuelle Wert kann außerhalb der festen Liste liegen; er wird ergänzt
+  // und einsortiert, statt stillschweigend auf einen anderen Wert zu springen.
   const taktOptionen = Array.from(new Set<number>([...TAKTE, taktSek])).sort((a, b) => a - b)
   const versatzOptionen = Array.from(new Set<number>([...VERSATZE, startversatzMs])).sort(
     (a, b) => a - b,
   )
+  // Warnung nur bei einer geplanten Serie: Der Takt ist kürzer als der
+  // Startversatz der letzten Bahn, die nächste Runde überlappt also.
   const warnung =
     modus === 'einstellungen' && wiederholungen > 1
       ? warnungSeriePlan(
@@ -45,6 +76,7 @@ export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetP
         )
       : null
 
+  /** Übernimmt eine Änderung nur, wenn die Kombination gültig bleibt. */
   const aendere = (teil: Partial<LaufKonfiguration>) => {
     const naechste = { ...konfiguration, ...teil }
     if (validateKonfiguration(naechste) !== null) return
@@ -52,11 +84,16 @@ export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetP
     else app.setzeEinstellungen({ ...app.einstellungen, konfiguration: naechste })
   }
 
+  /** Schreibt nur im Einstellungsmodus; im Laufmodus sind diese Felder fest. */
   const setzeEinstellung = (teil: Partial<typeof app.einstellungen>) => {
     if (modus === 'lauf') return
     app.setzeEinstellungen({ ...app.einstellungen, ...teil })
   }
 
+  /**
+   * Wechselt die Beckenlänge. Passt die bisherige Strecke nicht mehr als
+   * Vielfaches, wird sie auf zwei Beckenlängen gesetzt statt ungültig zu werden.
+   */
   const setzeBeckenlaenge = (beckenlaengeM: Beckenlaenge) => {
     const strecke = konfiguration.streckeM
     const naechste =
@@ -137,6 +174,7 @@ export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetP
             : 'Bahn 1 startet sofort, jede weitere um diesen Abstand später.'
         }
       >
+        {/* Im Laufmodus nur lesend: Der Versatz ist beim Anlegen festgelegt. */}
         <div className="flex flex-wrap gap-2">
           {versatzOptionen.map((wert) => (
             <Chip
@@ -155,6 +193,8 @@ export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetP
         label="Serie"
         hint="1 = einzelner Lauf. Bei mehreren startet die nächste Runde im festen Takt."
       >
+        {/* Der Wert ist im Laufmodus fest; die Grenzen 1 und 20 entsprechen
+            den von der Domäne akzeptierten Wiederholungen. */}
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -236,6 +276,8 @@ export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetP
 
       {modus === 'lauf' && lauf ? (
         <Feld label="Schwimmer">
+          {/* Bei einer Serie gilt die Zuordnung zeilenweise für alle Runden;
+              darum schreibt die Auswahl über `setzeSchwimmerSerie`. */}
           <div className="space-y-2">
             {lauf.bahnen.map((bahn, index) => (
               <div key={bahn.id} className="flex items-center gap-3">
@@ -268,6 +310,8 @@ export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetP
         </Feld>
       ) : (
         <Feld label="Schwimmer für den nächsten Lauf">
+          {/* Die Vorgabenliste gehört zu den Einstellungen und wird nur in
+              der Länge der eingestellten Bahnzahl angezeigt. */}
           <div className="space-y-2">
             {Array.from({ length: app.einstellungen.bahnen }, (_, index) => (
               <div key={index} className="flex items-center gap-3">
@@ -300,6 +344,8 @@ export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetP
         </Feld>
       )}
 
+      {/* Die Domäne prüft erneut; hier steht nur, warum eine Kombination nicht
+          gespeichert wurde. */}
       {fehler ? <p className="text-sm text-danger">{fehler}</p> : null}
     </Sheet>
   )

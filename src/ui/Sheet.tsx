@@ -54,8 +54,10 @@ export function Sheet({ open, titel, onClose, children }: SheetProps) {
       role="dialog"
       labelledBy={titelId}
       backdropLabel="Schließen"
-      layerClassName="justify-end"
-      panelClassName="max-h-[88dvh] overflow-y-auto overscroll-contain rounded-t-3xl border-t border-line bg-surface pb-[max(env(safe-area-inset-bottom),1rem)] shadow-2xl"
+      // Handy: von unten. Tablet: zentriertes Fenster mit fester Lesebreite,
+      // damit Formulare nicht über die ganze Gerätebreite laufen.
+      layerClassName="justify-end rail:items-center rail:justify-center rail:p-6"
+      panelClassName="max-h-[88dvh] overflow-y-auto overscroll-contain rounded-t-3xl border-t border-line bg-surface pb-[max(env(safe-area-inset-bottom),1rem)] shadow-2xl rail:max-h-[85dvh] rail:w-full rail:max-w-xl rail:rounded-3xl rail:border"
       panelStyle={{
         // Nur während der Geste ohne Übergang, damit der Finger direkt führt;
         // beim Zurückfedern entsteht so eine kurze Animation.
@@ -67,7 +69,7 @@ export function Sheet({ open, titel, onClose, children }: SheetProps) {
           Ziehfläche; `touchAction: none` verhindert, dass das Scrollen des
           Inhalts die Geste abfängt. */}
       <div
-        className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-line bg-surface px-4 py-3"
+        className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-line bg-surface py-3 pl-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] rail:px-6"
         style={{ touchAction: 'none' }}
         onPointerDown={(e) => {
           // Ein Zug, der auf dem Schließen-Knopf beginnt, ist ein Klick.
@@ -94,7 +96,7 @@ export function Sheet({ open, titel, onClose, children }: SheetProps) {
         {/* Dekorativer Griff; die Ziehgeste funktioniert auf der ganzen Zeile. */}
         <span
           aria-hidden="true"
-          className="absolute inset-x-0 top-1.5 mx-auto h-1 w-10 rounded-full bg-line"
+          className="absolute inset-x-0 top-1.5 mx-auto h-1 w-10 rounded-full bg-line rail:hidden"
         />
         <h2 id={titelId} className="pt-1 text-base font-semibold">
           {titel}
@@ -108,7 +110,9 @@ export function Sheet({ open, titel, onClose, children }: SheetProps) {
           <XIcon className="h-5 w-5" />
         </button>
       </div>
-      <div className="px-4 py-4">{children}</div>
+      <div className="py-4 pl-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] rail:px-6 rail:py-5">
+        {children}
+      </div>
     </Dialog>
   )
 }

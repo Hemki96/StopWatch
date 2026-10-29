@@ -219,11 +219,17 @@ function Zeile({
           onTap(zeile.index, performance.now(), Date.now())
         }
       }}
-      className={`relative flex select-none items-center gap-3 overflow-hidden rounded-2xl border-2 p-3 transition-[background-color,border-color,opacity] duration-75 ${
+      className={`relative flex select-none items-center gap-3 overflow-hidden rounded-2xl border-2 p-3 transition-[background-color,border-color,opacity] duration-75 rail:rounded-3xl rail:p-4 ${
         gedrueckt ? 'brightness-105 opacity-80' : ''
       } ${rand}`}
       // Die Liste ist scrollbar; `pan-y` erlaubt Wischen, ohne den Tap zu verlieren.
-      style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', touchAction: 'pan-y' }}
+      // Die Zeit skaliert mit der Zeilenbreite, nicht mit dem Viewport.
+      style={{
+        WebkitTouchCallout: 'none',
+        WebkitUserSelect: 'none',
+        touchAction: 'pan-y',
+        containerType: 'inline-size',
+      }}
     >
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
@@ -237,7 +243,10 @@ function Zeile({
         </div>
 
         <div className="mt-1 flex items-baseline gap-2">
-          <span className={`tabular text-3xl font-semibold leading-none ${zeitFarbe}`}>
+          <span
+            className={`tabular whitespace-nowrap font-semibold leading-none ${zeitFarbe}`}
+            style={{ fontSize: 'clamp(1.75rem, 7cqw, 2.75rem)' }}
+          >
             {zeile.status === 'bereit'
               ? '—'
               : zeile.status === 'geplant'
@@ -337,8 +346,8 @@ export function SerieAnsicht({
   const gesamt = Math.max(runden.length, plan.wiederholungen)
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2">
-      <div className="flex shrink-0 items-center justify-between gap-2 px-1 text-[11px] text-muted">
+    <div className="grid min-h-0 flex-1 grid-cols-1 content-start gap-2 overflow-y-auto p-2 rail:grid-cols-2 rail:gap-3 rail:p-4">
+      <div className="col-span-full flex shrink-0 items-center justify-between gap-2 px-1 text-[11px] text-muted">
         <span>
           {plan.wiederholungen}× · Takt {formatTakt(plan.taktSek)}
         </span>

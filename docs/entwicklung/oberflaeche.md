@@ -9,28 +9,42 @@ sind.
 `App.tsx` rendert:
 
 ```
-┌──────────────────────────────────────────────┐
-│ Update-Banner (optional)                     │
-│ Speicher-Banner (optional)                   │
-│ Tab-Sperre (optional)                        │
-│ Offline-Hinweis (optional)                   │
-├──────────────────────────────────────────────┤
-│                                              │
-│  aktiver Screen (füllt den Rest)             │
-│                                              │
-├──────────────────────────────────────────────┤
-│ Timer  Training  Wettkampf  Verlauf  …       │  feste Navigation
-└──────────────────────────────────────────────┘
-          Toast (schwebend, optional)
+Handy                              Tablet
+┌──────────────────────────────┐    ┌──────┬───────────────────────────┐
+│ Banner (optional)            │    │      │ Banner (optional)         │
+├──────────────────────────────┤    │      ├───────────────────────────┤
+│                              │    │ Nav  │                           │
+│  aktiver Screen              │    │ Timer│  aktiver Screen           │
+│                              │    │ Train│  (max. 5xl, zentriert)    │
+├──────────────────────────────┤    │ …    │                           │
+│ Timer Training Wettkampf …   │    │      ├───────────────────────────┤
+└──────────────────────────────┘    └──────┴───────────────────────────┘
+        Toast (schwebend, optional)
 ```
 
-- Die Navigation hat sechs gleich breite Einträge.
+- Die Navigation hat sechs Einträge. Auf dem Handy liegt sie unten und verteilt sich auf sechs
+  gleich breite Spalten; auf dem Tablet wird daraus eine schmale Leiste links.
 - Jeder Screen füllt die Höhe (`h-full`), hat einen festen Kopf, einen scrollenden Inhalt und
   meistens eine feste Aktionsleiste am unteren Rand.
-- Die Aktionsleiste respektiert `env(safe-area-inset-bottom)`.
+- Die Aktionsleiste respektiert `env(safe-area-inset-bottom)`, im Querformat zusätzlich
+  `env(safe-area-inset-left/right)` über die Utility `safe-x`.
 - Banner sind statusgerollt (`role="status"` bzw. `role="alert"`) und verschieben den Inhalt nach
   unten, statt ihn zu überdecken.
-- Der Toast bleibt dauerhaft im DOM, damit Screenreader Änderungen ansagen.
+- Der Toast bleibt dauerhaft im DOM, damit Screenreader Änderungen ansagen; er sitzt oberhalb der
+  unteren Aktionsleiste.
+
+### Breakpoints
+
+Zwei eigene Varianten in `src/index.css` beschreiben die Geräteklassen, nicht nur die Breite:
+
+| Variante | Bedingung | Wirkung |
+| --- | --- | --- |
+| `rail` | `min-width: 768px` **und** `min-height: 560px` | seitliche Navigation, zentrierte Sheets, mehrspaltige Listen |
+| `short` | `max-height: 520px` | flachere Navigation mit Symbol und Text nebeneinander (Handy quer) |
+
+Die Höhenbedingung verhindert, dass ein Handy im Querformat (z. B. 844 × 390) die sechs
+Navigationseinträge untereinander quetscht. Umgekehrt bleibt ein Tablet im Querformat in der
+seitlichen Navigation. Das Manifest erlaubt deshalb beide Ausrichtungen (`orientation: "any"`).
 
 ### Globale Banner
 
@@ -63,8 +77,12 @@ Drei Zustände:
 2. **Lauf aktiv** — Lauf-Leiste, Konfigurationskopf, Bahnenraster, Statuszeile, Aktionsleiste.
 3. **Serie aktiv** — statt des Rasters die Serienansicht.
 
-Das Bahnenraster ist ein CSS-Grid mit `repeat(auto-fit, minmax(min(9rem, 100%), 1fr))`. Bei zehn
-Bahnen auf einem schmalen Gerät werden die Kacheln klein; die App optimiert nicht für Querformat.
+Das Bahnenraster ist ein CSS-Grid mit einer Spaltenzahl, die zur Bahnzahl passt: Eine Bahn nimmt
+die volle Breite, zwei Bahnen stehen nebeneinander, ab drei Bahnen wächst das Raster auf dem
+Tablet bis auf fünf Spalten. Gleich große Reihen bleiben erhalten; reicht die Höhe nicht, scrollt
+das Raster, statt die Kacheln unter die Mindesthöhe zu drücken. Die Zeit in `LaneTile` skaliert
+über eine Container-Abfrage (`cqw`) mit der Kachelbreite, nicht mit dem Viewport — so bleibt sie
+bei zehn Bahnen auf dem Handy und bei einer Bahn auf dem Tablet gleichermaßen lesbar.
 
 Die Kopfzeile des Laufs ist gleichzeitig ein Knopf zum Öffnen des Konfigurations-Sheets. Rechts
 steht entweder **X** (alle im Ziel) oder der **Papierkorb** (verwerfen).
@@ -133,6 +151,8 @@ Bottom Sheet auf Basis von `Dialog`:
 - maximal 88 % der Viewport-Höhe, intern scrollbar,
 - `overscroll-contain`, damit die Seite dahinter nicht mitscrollt,
 - Safe-Area unten.
+- Auf dem Tablet (`rail`) wird daraus ein zentriertes Fenster mit `max-w-xl`; der Griff entfällt,
+  die Ziehgeste bleibt als Maus- und Touch-Geste erhalten.
 
 Das Sheet wird für Konfiguration, Aktive, Sätze, Namen, Zeiten und Import verwendet.
 

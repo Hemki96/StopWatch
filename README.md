@@ -24,6 +24,7 @@ Der **Wettkampfmodus** ist ein eigener Tab: Ein **Wettkampf** bündelt **Diszipl
 - Wettkampfmodus mit Disziplinen, Heats, Platzierung und Zielzeit pro Tap
 - Meldelisten-Import als CSV (Vorlage in der App), Ergebnisse als CSV
 - Verlauf gruppiert nach **Satz**, CSV-Export (inkl. Runde, Takt, Versatz), JSON-Backup
+- Handy und Tablet: untere Leiste bzw. seitliche Navigation, Raster, Sheets und Listen passen sich an
 - Installierbar, offline, lokal gespeichert (IndexedDB)
 
 ## Starten
@@ -42,7 +43,7 @@ npm run build        # Typprüfung + Produktions-Build mit Service Worker
 
 Pull Requests durchlaufen dieselbe Prüfung in `.github/workflows/ci.yml`.
 
-Für die Handy-Ansicht am Rechner: `http://localhost:5173/preview.html` zeigt die App in einem 390 × 844-Rahmen.
+Für die Geräteansicht am Rechner: `http://localhost:5173/preview.html` zeigt die App gleichzeitig in einem Handy-Rahmen (390 × 844) und einem Tablet-Rahmen (820 × 1180). Beide laden dieselbe App; die Oberfläche wechselt ab 768 × 560 auf die seitliche Navigation.
 
 ## Architektur
 
@@ -94,5 +95,6 @@ Erkannt werden auch englische Spaltennamen (`lane`, `heat`, `distance`, `stroke`
 - [`docs/README.md`](docs/README.md) — Einstieg in die vollständige Dokumentation
 - [`docs/handbuch/`](docs/handbuch/README.md) — Bedienung für Trainer:innen: Timer, Serien, Training, Wettkampf, Verlauf, Backup und FAQ
 - [`docs/entwicklung/`](docs/entwicklung/README.md) — Architektur, Datenmodell, Domänenreferenz, Oberfläche, Tests und Deployment
+- [`ROADMAP.md`](ROADMAP.md) — Funktionsumfang je Major-Version und bewusste Nicht-Ziele
 - [`GLOSSARY.md`](GLOSSARY.md) — die Begriffe der Domäne (Lauf, Bahn, Länge, Split, Anschlag, Satz, Serie, Training, Aktive, Startversatz, Takt, PB, Wettkampf, Disziplin, Meldeliste)
 - [`docs/adr/`](docs/adr/) — getroffene Entscheidungen und ihre Alternativen

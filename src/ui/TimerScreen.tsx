@@ -107,7 +107,7 @@ function LaufLeiste({
   // Ohne offene Läufe gibt es nichts zu wechseln; die Leiste verschwindet.
   if (eintraege.length === 0) return null
   return (
-    <div className="flex items-center gap-1.5 border-b border-line px-2 py-2">
+    <div className="flex items-center gap-1.5 border-b border-line px-2 py-2 rail:px-4">
       <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto">
         {eintraege.map((eintrag) => {
           const status = eintragStatus(eintrag, laeufe)
@@ -286,7 +286,7 @@ export function TimerScreen() {
               <p>
                 Danach tippst du jede Bahn bei jedem Anschlag an. Der letzte Anschlag ist das Ziel.
               </p>
-              <p>Langes Drücken macht die letzte Aktion einer Bahn rückgängig.</p>
+              <p>Langes Drücken nimmt die letzte Aktion einer Bahn zurück.</p>
             </div>
           </div>
         </div>
@@ -325,6 +325,24 @@ export function TimerScreen() {
   const rundeJetzt = serie ? Math.max(1, aktuelleRunde(runden, now)) : 0
   // Bei Serien gilt der Versatz des Plans, sonst der des Laufs.
   const startversatzMs = serie && plan ? plan.startversatzMs : lauf.startversatzMs
+  // Spaltenzahl passend zur Bahnzahl: Eine einzelne Bahn bleibt groß, vier
+  // Bahnen bilden kein 3+1, sechs kein 4+2. So sind die Reihen auf dem Tablet
+  // ausgeglichen, ohne dass die Kacheln zu Streifen werden.
+  const bahnAnzahl = lauf.bahnen.length
+  const bahnSpalten =
+    bahnAnzahl === 1
+      ? 'grid-cols-1'
+      : bahnAnzahl === 2
+        ? 'grid-cols-2'
+        : bahnAnzahl === 3
+          ? 'grid-cols-2 min-[560px]:grid-cols-3'
+          : bahnAnzahl === 4
+            ? 'grid-cols-2 short:grid-cols-4 lg:grid-cols-4'
+            : bahnAnzahl <= 6
+              ? 'grid-cols-2 min-[560px]:grid-cols-3'
+              : bahnAnzahl <= 8
+                ? 'grid-cols-2 min-[560px]:grid-cols-3 lg:grid-cols-4'
+                : 'grid-cols-2 min-[560px]:grid-cols-3 lg:grid-cols-5'
 
   /**
    * „Alle beenden“ für offene Strecken: beendet bei einer Serie je Bahn-Index
@@ -375,7 +393,7 @@ export function TimerScreen() {
         onAnlegen={app.anlegenLauf}
       />
 
-      <div className="flex items-center gap-2 border-b border-line px-3 py-2">
+      <div className="flex items-center gap-2 border-b border-line px-3 py-2 rail:px-4">
         {/* Kopfzeile der Messung: Zustand (Serie/Lauf/Bereit) und
             Kurzbeschreibung öffnen das Konfigurations-Sheet. */}
         <button
@@ -431,11 +449,10 @@ export function TimerScreen() {
         />
       ) : (
         <div
-          className="grid min-h-0 flex-1 auto-rows-fr gap-2 p-2"
-          // Kacheln füllen die Breite; ab etwa 9 rem passt eine weitere Bahn in
-          // die Reihe. `min(9rem, 100%)` verhindert Überlauf auf sehr schmalen
-          // Displays.
-          style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(9rem, 100%), 1fr))' }}
+          // Ab drei Bahnen wächst die Spaltenzahl mit dem Gerät; die Kacheln
+          // behalten eine Mindesthöhe und scrollen, statt auf schmalen Displays
+          // zusammenzuschrumpfen.
+          className={`grid min-h-0 flex-1 auto-rows-[minmax(7.5rem,1fr)] gap-2 overflow-y-auto p-2 rail:gap-3 rail:p-4 ${bahnSpalten}`}
         >
           {lauf.bahnen.map((bahn) => (
             <LaneTile
@@ -454,7 +471,8 @@ export function TimerScreen() {
 
       {/* Fußzeile mit der jeweils nächsten sinnvollen Aktion: starten,
           abschließen oder den Fortschritt bestätigen. */}
-      <div className="border-t border-line p-3 pb-[max(env(safe-area-inset-bottom),0.75rem)]">
+      <div className="border-t border-line p-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] rail:px-4">
+        <div className="mx-auto w-full max-w-3xl">
         {!gestartet ? (
           // „Start alle“ und „Weiter“ teilen sich denselben Aufruf: startAll
           // ergänzt nur Bahnen, die noch keine Startzeit haben.
@@ -524,6 +542,7 @@ export function TimerScreen() {
             ) : null}
           </div>
         )}
+        </div>
       </div>
 
       {/* Im Lauf entscheidet das Sheet selbst, was noch änderbar ist: Strecke

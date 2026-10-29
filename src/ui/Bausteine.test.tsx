@@ -1,3 +1,18 @@
+/**
+ * Bausteine der Oberfläche: Banner, Formularfelder, Bestätigung, Sheet, Icons.
+ *
+ * Die Datei sichert das Verhalten, das mehrere Screens teilen: Der
+ * Speicherhinweis erscheint nur bei echten Fehlern und wird als `alert`
+ * vorgelesen, `Feld`/`Chip` liefern die erwartete Struktur und den aktiven
+ * Zustand, die Bestätigung setzt den Fokus schützend auf „Abbrechen“, und das
+ * Sheet schließt per Knopf oder weite Ziehgeste — aber nicht bei einem kurzen
+ * oder abgebrochenen Zug. Die Icons müssen dekorativ bleiben.
+ *
+ * Testhilfen: `render` aus `src/test/render` genügt, weil die Bausteine keinen
+ * Provider brauchen. Der `afterEach` setzt die Scroll-Sperre der Dialoge
+ * zurück, die global auf `body`/`html` liegt. Zeigergesten werden als
+ * `MouseEvent` gesendet, da jsdom keine `PointerEvent`-Konstruktion anbietet.
+ */
 // @vitest-environment jsdom
 import { act } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -26,12 +41,16 @@ import {
   XIcon,
 } from './icons'
 
+// Dialoge setzen `overflow: hidden` auf `body` und `html`; ohne Rücksetzen
+// würde der nächste Test die Sperre erben.
 afterEach(() => {
   document.body.style.overflow = ''
   document.documentElement.style.overflow = ''
   vi.restoreAllMocks()
 })
 
+// Dauerhafter Warnstreifen bei fehlendem Speicher: unsichtbar ohne Fehler,
+// sonst als `role="alert"` mit klarem Hinweis.
 describe('SpeicherBanner', () => {
   it('zeigt den dauerhaften Hinweis nur bei Speicherfehlern', () => {
     const aus = render(<SpeicherBanner sichtbar={false} />)
@@ -46,6 +65,9 @@ describe('SpeicherBanner', () => {
   })
 })
 
+// `Feld` ist die Abschnittsüberschrift im Sheet, `Chip` die große
+// Auswahlfläche. Beide sind rein darstellend; geprüft werden Struktur,
+// Zustandsklassen und die Weitergabe von Klicks.
 describe('Feld und Chip', () => {
   it('zeigt Label, Inhalt und optionalen Hinweis', () => {
     const ohneHinweis = render(
@@ -53,6 +75,7 @@ describe('Feld und Chip', () => {
         <p>Inhalt</p>
       </Feld>,
     )
+    // `h3` statt `h2`, weil der Sheet-Titel bereits die `h2` ist.
     expect(ohneHinweis.container.querySelector('h3')?.textContent).toBe('Strecke')
     expect(ohneHinweis.container.textContent).toContain('Inhalt')
     expect(ohneHinweis.container.querySelectorAll('p')).toHaveLength(1)
@@ -68,6 +91,9 @@ describe('Feld und Chip', () => {
     mitHinweis.unmount()
   })
 
+  // Der aktive Zustand ist nur über Farbklassen sichtbar; die Assertions
+  // sichern deshalb die Tailwind-Token, nicht bloß `aria-pressed` (das es
+  // bewusst nicht gibt, weil der Aufrufer die Auswahl führt).
   it('färbt den aktiven Chip und meldet Klicks', () => {
     const klick = vi.fn()
     const inaktiv = render(
@@ -90,6 +116,8 @@ describe('Feld und Chip', () => {
     aktiv.unmount()
   })
 
+  // Ein deaktivierter Chip bleibt im Layout, darf aber weder Klick noch
+  // Tastaturaktivierung auslösen.
   it('deaktiviert einen Chip', () => {
     const klick = vi.fn()
     const ergebnis = render(
@@ -105,7 +133,11 @@ describe('Feld und Chip', () => {
   })
 })
 
+// Bestätigungsdialog für eine einzelne, oft destruktive Entscheidung.
 describe('Bestaetigung', () => {
+  // Zwei Absicherungen: Der Dialog ist ein `alertdialog` mit verknüpftem
+  // Titel, und der Startfokus liegt auf „Abbrechen“. So löst ein
+  // versehentliches Enter nichts Löschendes aus.
   it('fragt nach und meldet beide Wege', () => {
     const bestaetigen = vi.fn()
     const abbrechen = vi.fn()
@@ -136,6 +168,8 @@ describe('Bestaetigung', () => {
   })
 })
 
+// Sheet: Kopfzeile mit Schließen-Knopf und die Ziehgeste. Der Grenzwert liegt
+// bei 90 px; darunter federt es zurück, ein `pointercancel` schließt nie.
 describe('Sheet', () => {
   it('schließt über den Knopf', () => {
     const schliessen = vi.fn()
@@ -145,6 +179,8 @@ describe('Sheet', () => {
       </Sheet>,
     )
 
+    // Der Knopf ist über sein zugängliches Label adressiert, nicht über die
+    // Position — Screenreader und Tests finden ihn so gleichermaßen.
     act(() =>
       ergebnis.container
         .querySelector<HTMLButtonElement>('button[aria-label="Schließen"]')!
@@ -162,6 +198,7 @@ describe('Sheet', () => {
       </Sheet>,
     )
 
+    // Die Ziehfläche ist die Kopfzeile; `clientY` bestimmt die Distanz.
     const kopf = ergebnis.container.querySelector<HTMLElement>('[role="dialog"] > div')!
     const zeiger = (typ: string, clientY: number) =>
       act(() => {
@@ -170,6 +207,7 @@ describe('Sheet', () => {
         )
       })
 
+    // 160 px liegen über dem Grenzwert von 90 px.
     zeiger('pointerdown', 100)
     zeiger('pointermove', 260)
     zeiger('pointerup', 260)
@@ -177,6 +215,7 @@ describe('Sheet', () => {
     ergebnis.unmount()
   })
 
+  // 30 px sind ein versehentliches Wischen; das Sheet muss offen bleiben.
   it('bleibt bei einem kurzen Zug offen', () => {
     const schliessen = vi.fn()
     const ergebnis = render(
@@ -198,6 +237,8 @@ describe('Sheet', () => {
     ergebnis.unmount()
   })
 
+  // Systemgeste oder eingehender Anruf bricht die Geste ab (`pointercancel`).
+  // Trotz weiter Distanz darf das nicht als Schließwunsch gelten.
   it('bricht einen Zug ab, ohne zu schließen', () => {
     const schliessen = vi.fn()
     const ergebnis = render(
@@ -217,6 +258,8 @@ describe('Sheet', () => {
   })
 })
 
+// Icons tragen nie Bedeutung allein: Alle sind `aria-hidden`, die Größe kommt
+// über `className`. Der Test hält beide Regeln für den ganzen Satz fest.
 describe('Icons', () => {
   it('rendert alle Symbole als dekorative SVGs', () => {
     const ergebnis = render(
@@ -246,6 +289,7 @@ describe('Icons', () => {
     for (const svg of svgs) {
       expect(svg.getAttribute('aria-hidden')).toBe('true')
     }
+    // Das letzte Icon prüft die Weitergabe der Größenklasse exemplarisch.
     expect(svgs[16]?.getAttribute('class')).toBe('h-4 w-4')
     ergebnis.unmount()
   })

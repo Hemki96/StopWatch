@@ -204,12 +204,19 @@ export function LaneTile({
           onTap(bahn.id, performance.now(), Date.now())
         }
       }}
-      className={`relative flex select-none flex-col justify-between overflow-hidden rounded-2xl border-2 p-3 transition-[background-color,border-color,opacity] duration-75 ${
+      className={`relative flex min-h-[7.5rem] select-none flex-col justify-between overflow-hidden rounded-2xl border-2 p-3 transition-[background-color,border-color,opacity] duration-75 rail:rounded-3xl rail:p-4 ${
         gedrueckt ? 'brightness-105 opacity-80' : ''
       } ${rand}`}
       // `pan-y` lässt die Seite scrollen, verhindert aber Doppeltipp-Zoom.
       // `none` würde auf kleinen Displays auch das Scrollen blockieren.
-      style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', touchAction: 'pan-y' }}
+      // Die Container-Abfrage lässt die Zeit mit der Kachel statt mit dem
+      // Viewport wachsen; so bleibt sie bei zehn Bahnen auf dem Tablet lesbar.
+      style={{
+        WebkitTouchCallout: 'none',
+        WebkitUserSelect: 'none',
+        touchAction: 'pan-y',
+        containerType: 'inline-size',
+      }}
     >
       <div className="flex items-center justify-between gap-2">
         <span className="rounded-md bg-surface2 px-1.5 py-0.5 text-[11px] font-bold tracking-wide text-muted">
@@ -221,8 +228,8 @@ export function LaneTile({
       {/* `clamp` hält die Zeit groß genug für den Blick aus einigen Metern,
           ohne die Kachel auf schmalen Displays zu sprengen. */}
       <div
-        className={`tabular text-center font-semibold leading-none ${zeitFarbe}`}
-        style={{ fontSize: 'clamp(1.5rem, 7.6vw, 3.25rem)' }}
+        className={`tabular whitespace-nowrap text-center font-semibold leading-none ${zeitFarbe}`}
+        style={{ fontSize: 'clamp(1.35rem, 15cqw, 3.25rem)' }}
       >
         {status === 'geplant' ? formatCountdown(zeit) : formatTime(zeit)}
       </div>

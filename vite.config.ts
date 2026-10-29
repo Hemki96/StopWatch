@@ -30,7 +30,9 @@ export default defineConfig({
         start_url: '.',
         scope: '.',
         display: 'standalone',
-        orientation: 'portrait',
+        // Handy und Tablet, Hoch- und Querformat: Die Oberfläche wechselt bei
+        // genug Platz auf eine seitliche Navigation.
+        orientation: 'any',
         categories: ['sports', 'utilities'],
         // Muss dem tatsächlichen Hintergrund entsprechen, sonst blitzt beim Start
         // ein andersfarbiger Splashscreen auf.

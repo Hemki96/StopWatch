@@ -1,3 +1,17 @@
+/**
+ * Normalisierung beim Laden aus IndexedDB (ohne echte Datenbank).
+ *
+ * Sichert die Regeln aus `repository.ts` ab, die ältere oder unterbrochene
+ * Datensätze auf den aktuellen Stand bringen: fehlende Felder werden ergänzt,
+ * unbrauchbare Werte auf sichere Vorgaben begrenzt, und laufende Bahnen ohne
+ * Ziel verlieren ihren Start, weil `performance.now()` einen Reload nicht
+ * überlebt. Beendete Bahnen müssen dagegen vollständig erhalten bleiben, damit
+ * der Verlauf stimmt.
+ *
+ * Die Tests arbeiten auf reinen Domänenobjekten; die IndexedDB-Anbindung prüft
+ * `repository.integration.test.ts`. `planeLauf` erzeugt die laufenden bzw.
+ * geplanten Bahnen mit festen Zeitstempeln (1000 ms, 10 s Versatz).
+ */
 import { describe, expect, it } from 'vitest'
 import { createLauf, planeLauf, tapLane } from '../domain/lauf'
 import {
@@ -7,9 +21,14 @@ import {
 } from './repository'
 import type { Lauf, Satz, Training } from '../domain/types'
 
+// 100 m im 50-m-Becken; die Konfiguration bleibt beim Laden unverändert.
 const K100 = { beckenlaengeM: 50, streckeM: 100, schwimmart: 'freistil' } as const
 
+// Lauf-Normalisierung: Felder älterer Stände, Modus und die Zeitstempel nach
+// einem Neustart.
 describe('normalizeOnLoad', () => {
+  // Ältere Läufe kennen weder Startversatz noch Wiederholungsnummer; beide
+  // werden auf 0 bzw. null gesetzt.
   it('ergänzt Startversatz und Wiederholung aus älteren Datensätzen', () => {
     const alt = { ...createLauf(K100, [{ nummer: 1 }]) } as Record<string, unknown>
     delete alt.startversatzMs
@@ -20,6 +39,8 @@ describe('normalizeOnLoad', () => {
     expect(normalisiert.wiederholung).toBeNull()
   })
 
+  // Nach einem Reload ist `startMs` (aus `performance.now()`) wertlos: Laufende
+  // und geplante Bahnen werden auf „nicht gestartet“ zurückgesetzt.
   it('setzt laufende und geplante Bahnen auf nicht gestartet zurück', () => {
     const lauf = planeLauf(
       createLauf(K100, [{ nummer: 1 }, { nummer: 2 }], null, { startversatzMs: 10_000 }),
@@ -31,6 +52,8 @@ describe('normalizeOnLoad', () => {
     expect(normalisiert.bahnen.map((bahn) => bahn.startMs)).toEqual([null, null])
   })
 
+  // Fehlt der Modus, gilt der Lauf als Trainingslauf; nur `wettkampf` wird
+  // ausdrücklich übernommen.
   it('ergänzt den Modus aus älteren Datensätzen als Training', () => {
     const alt = { ...createLauf(K100, [{ nummer: 1 }]) } as Record<string, unknown>
     delete alt.modus
@@ -42,6 +65,8 @@ describe('normalizeOnLoad', () => {
     expect(normalizeOnLoad(lauf).modus).toBe('wettkampf')
   })
 
+  // Eine beendete Bahn ist ein abgeschlossener Messwert und behält Start (0)
+  // und beide Anschläge, damit der Verlauf vollständig bleibt.
   it('lässt beendete Bahnen unangetastet', () => {
     const basis = createLauf(K100, [{ nummer: 1 }])
     const bahnId = basis.bahnen[0]!.id
@@ -54,7 +79,10 @@ describe('normalizeOnLoad', () => {
   })
 })
 
+// Satz-Normalisierung: Plan und Wettkampfzuordnung sind erst später dazugekommen.
 describe('normalizeSatzOnLoad', () => {
+  // Ein Satz ohne Plan bleibt ein frei gewachsener Satz; ohne Wettkampfbezug
+  // ist `wettkampfId` ausdrücklich null.
   it('ergänzt den fehlenden Plan als freien Satz', () => {
     const alt = {
       id: 's1',
@@ -81,7 +109,11 @@ describe('normalizeSatzOnLoad', () => {
   })
 })
 
+// Trainings-Normalisierung: fehlende Container und eine Aktivenliste mit genau
+// einem Platz je Bahn.
 describe('normalizeTrainingOnLoad', () => {
+  // Drei Bahnen, nur eine Zuordnung: Die Liste wird auf die Bahnenzahl
+  // gebracht; fehlende Sätze und `gestartet` werden zu leeren Containern.
   it('ergänzt fehlende Listen und kürzt oder verlängert die Aktiven', () => {
     const alt = {
       id: 'tr1',
@@ -100,6 +132,8 @@ describe('normalizeTrainingOnLoad', () => {
     expect(normalisiert.bezeichnung).toBe('')
   })
 
+  // 42 Bahnen werden auf `MAX_BAHNEN` (10) begrenzt; die Aktivenliste folgt der
+  // begrenzten Zahl, sonst passten Liste und Bahnen nicht zusammen.
   it('begrenzt eine fehlerhafte Bahnenzahl auf einen gültigen Wert', () => {
     const normalisiert = normalizeTrainingOnLoad({
       id: 'tr1',

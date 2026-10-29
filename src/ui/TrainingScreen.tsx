@@ -1,3 +1,13 @@
+/**
+ * Training-Tab: Plan vorbereiten und Satz für Satz abarbeiten.
+ *
+ * Ohne gewähltes Training zeigt der Screen die Liste aller vorbereiteten
+ * Trainings mit Fortschritt und ein „Neues Training“. Mit gewähltem Training
+ * erscheinen Aktive, Fortschrittsbalken und die Sätze in fester Reihenfolge;
+ * unten startet oder öffnet der nächste Satz. Die Zustände und Reihenfolge
+ * kommen aus domain/training, die Schreibpfade aus app/AppProvider. Nur noch
+ * nicht gestartete Sätze lassen sich ändern; gemessene Läufe bleiben erhalten.
+ */
 import { useState } from 'react'
 import { useApp } from '../app/AppProvider'
 import {
@@ -20,8 +30,12 @@ import { Sheet } from './Sheet'
 import { TrainingsSatzSheet } from './TrainingsSatzSheet'
 import { ChevronLeftIcon, PlusIcon, TrashIcon } from './icons'
 
+// Gemerkt wird nur die Auswahl (Training), nicht der Bearbeitungszustand:
+// Nach einem Neustart landet man wieder im zuletzt geöffneten Training.
 const AUSWAHL_KEY = 'beckenrand.training'
 
+// Anzeigetexte und Farben je Satzstatus; die Statuswerte selbst kommen aus
+// domain/training.
 const STATUS_LABEL: Record<TrainingsSatzStatus, string> = {
   offen: 'offen',
   bereit: 'bereit',
@@ -36,12 +50,14 @@ const STATUS_KLASSE: Record<TrainingsSatzStatus, string> = {
   fertig: 'bg-ok/15 text-ok',
 }
 
+// Wochentag und Tagesdatum reichen für die Liste; das Training ist an einem Tag.
 const datumFormat = new Intl.DateTimeFormat('de-DE', {
   weekday: 'short',
   day: '2-digit',
   month: '2-digit',
 })
 
+/** Liest die zuletzt gewählte Trainings-ID; ohne Speicher beginnt der Tab in der Liste. */
 function leseAuswahl(): string | null {
   try {
     return localStorage.getItem(AUSWAHL_KEY)
@@ -50,6 +66,7 @@ function leseAuswahl(): string | null {
   }
 }
 
+/** Merkt die Auswahl; `null` löscht den Eintrag und zeigt wieder die Liste. */
 function merkeAuswahl(id: string | null): void {
   try {
     if (id) localStorage.setItem(AUSWAHL_KEY, id)
@@ -59,20 +76,34 @@ function merkeAuswahl(id: string | null): void {
   }
 }
 
+/**
+ * Formatiert ein `YYYY-MM-DD`-Datum. Mittagszeit vermeidet Zeitzonen-Sprünge;
+ * ein unlesbares Datum wird unverändert angezeigt.
+ */
 function datumLabel(datum: string): string {
   const parsed = new Date(`${datum}T12:00:00`)
   return Number.isNaN(parsed.getTime()) ? datum : datumFormat.format(parsed)
 }
 
+/** Kurztext für den Fortschrittsbalken, mit korrektem Singular/Plural. */
 function fortschrittText(fortschritt: TrainingsSatzFortschritt[]): string {
   const { fertig, gesamt } = trainingZusammenfassung(fortschritt)
   return `${fertig} von ${gesamt} ${gesamt === 1 ? 'Satz' : 'Sätzen'} erledigt`
 }
 
 interface TrainingScreenProps {
+  /** Wechselt nach dem Start eines Satzes in den Timer-Tab. */
   onZumTimer: () => void
 }
 
+/**
+ * Training-Tab mit Liste und Detailansicht.
+ *
+ * Ein Training wird über `app.anlegeTraining` erzeugt und lokal gemerkt.
+ * Sätze lassen sich nur bearbeiten, solange sie „offen“ sind; „bereit“ und
+ * „läuft“ führen zurück in den Timer. Gelöschte Trainings behalten ihre
+ * bereits gemessenen Sätze und Läufe im Verlauf.
+ */
 export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
   const app = useApp()
   const [gewaehlt, setGewaehlt] = useState<string | null>(leseAuswahl)
@@ -82,8 +113,10 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
   const [umbenennen, setUmbenennen] = useState(false)
   const [frageLoeschen, setFrageLoeschen] = useState(false)
 
+  // Eine gemerkte, inzwischen gelöschte ID fällt auf die Liste zurück.
   const training = app.trainings.find((eintrag) => eintrag.id === gewaehlt) ?? null
 
+  /** Wechselt zwischen Liste und Detail und merkt die Wahl für den nächsten Start. */
   const waehle = (id: string | null) => {
     setGewaehlt(id)
     merkeAuswahl(id)
@@ -92,7 +125,7 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
   if (!training) {
     return (
       <div className="flex h-full flex-col">
-        <header className="border-b border-line px-4 py-3">
+        <header className="border-b border-line px-4 py-3 rail:px-6">
           <h1 className="text-lg font-semibold">Training</h1>
           <p className="text-xs text-muted">
             {app.trainings.length === 1
@@ -101,7 +134,7 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
           </p>
         </header>
 
-        <div className="flex-1 overflow-y-auto px-4 pb-8 pt-3">
+        <div className="flex-1 overflow-y-auto px-4 pb-8 pt-3 rail:px-6">
           {app.trainings.length === 0 ? (
             <div className="mt-16 px-4 text-center">
               <p className="text-sm font-semibold">Noch kein Training vorbereitet</p>
@@ -111,8 +144,10 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
               </p>
             </div>
           ) : (
-            <ul className="space-y-2">
+            <ul className="grid grid-cols-1 gap-2 rail:grid-cols-2">
               {app.trainings.map((eintrag) => {
+                // Fortschritt je Training aus den bereits gestarteten Sätzen;
+                // `aktive` zählt nur tatsächlich besetzte Bahnen.
                 const fortschritt = trainingsFortschritt(eintrag, app.satze, app.laeufe)
                 const { fertig, gesamt } = trainingZusammenfassung(fortschritt)
                 const aktive = eintrag.aktive.filter(Boolean).length
@@ -121,13 +156,15 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
                     <button
                       type="button"
                       onClick={() => waehle(eintrag.id)}
-                      className="w-full rounded-2xl border border-line bg-surface p-4 text-left"
+                      className="h-full w-full rounded-2xl border border-line bg-surface p-4 text-left"
                     >
                       <div className="flex items-center gap-2">
                         <span className="text-[11px] font-bold uppercase tracking-wider text-muted">
                           {datumLabel(eintrag.datum)}
                         </span>
                         {gesamt > 0 && fertig === gesamt ? (
+                          // Ohne Sätze wäre `fertig === gesamt` ebenfalls wahr;
+                          // die Längenprüfung verhindert die falsche Marke.
                           <span className="ml-auto rounded bg-ok/15 px-1.5 py-0.5 text-[10px] font-bold text-ok">
                             abgeschlossen
                           </span>
@@ -168,7 +205,9 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
   }
 
   const fortschritt = trainingsFortschritt(training, app.satze, app.laeufe)
+  // Der nächste Satz ist der laufende/bereite, sonst der erste offene.
   const naechster = naechsterSatz(fortschritt)
+  // Nur besetzte Aktive anzeigen; leere Bahnen bleiben in `training.aktive`.
   const namen = training.aktive
     .map((id) => (id ? app.schwimmer.find((eintrag) => eintrag.id === id)?.name : null))
     .filter((name): name is string => Boolean(name))
@@ -176,8 +215,13 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
     ? (training.saetze.find((eintrag) => eintrag.id === bearbeitet) ?? null)
     : null
 
+  /** Einheitlicher Schreibpfad: Das ganze Training wird ersetzt gespeichert. */
   const speichere = (naechstes: Training) => app.speichereTraining(naechstes)
 
+  /**
+   * Fügt einen Satz hinzu oder ersetzt ihn an seiner bisherigen Position.
+   * Ein unbekannter Satz (neu) wird hinten angehängt.
+   */
   const aktualisiereSatz = (satz: TrainingsSatz) => {
     const index = training.saetze.findIndex((eintrag) => eintrag.id === satz.id)
     const saetze =
@@ -189,6 +233,7 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
     setNeuerSatz(null)
   }
 
+  /** Löscht einen Satz; ein Training muss mindestens einen Satz behalten. */
   const entferneSatz = (satzId: string) => {
     if (training.saetze.length <= 1) {
       app.zeigeToast('Ein Training braucht mindestens einen Satz.')
@@ -198,10 +243,15 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
     setBearbeitet(null)
   }
 
+  /** Verschiebt einen Satz in der festen Reihenfolge um eine Position. */
   const verschiebe = (satzId: string, richtung: -1 | 1) => {
     speichere(verschiebeTrainingsSatz(training, satzId, richtung))
   }
 
+  /**
+   * Startet einen Trainingssatz: Dabei entstehen Satz und Läufe, der Trainer
+   * wechselt in den Timer. Ein bereits gestarteter Satz wird nur ausgewählt.
+   */
   const starte = (satzId: string) => {
     const laufId = app.starteTrainingsSatz(
       training.id,
@@ -212,6 +262,10 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
     if (laufId) onZumTimer()
   }
 
+  /**
+   * Ein Tipp auf eine Satzzeile: offene Sätze öffnen den Editor, fertige sind
+   * gesperrt, alles andere führt in die laufende Messung.
+   */
   const oeffneSatz = (eintrag: TrainingsSatzFortschritt) => {
     if (eintrag.status === 'offen') {
       setBearbeitet(eintrag.eintrag.id)
@@ -223,7 +277,8 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-center gap-2 border-b border-line px-2 py-2">
+      <header className="border-b border-line">
+        <div className="mx-auto flex w-full max-w-3xl items-center gap-2 px-2 py-2 rail:px-6">
         <button
           type="button"
           onClick={() => waehle(null)}
@@ -252,9 +307,10 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
         >
           <TrashIcon className="h-5 w-5" />
         </button>
+        </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-4 pb-6 pt-4">
+      <div className="mx-auto w-full max-w-3xl flex-1 overflow-y-auto px-4 pb-6 pt-4 rail:px-6">
         <button
           type="button"
           onClick={() => setAktiveOffen(true)}
@@ -275,6 +331,7 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
         </button>
 
         <div className="mt-3 flex items-center gap-2 px-1">
+          {/* Breite aus dem Anteil fertiger Sätze; ohne Sätze bleibt der Balken leer. */}
           <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-line">
             <span
               className="block h-full rounded-full bg-ok transition-[width]"
@@ -294,6 +351,7 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
         <ol className="space-y-2">
           {fortschritt.map((eintrag) => {
             const titel = trainingsSatzTitel(eintrag.eintrag)
+            // Fertige Sätze sind nur noch Anzeige; alles andere ist antippbar.
             const oeffnen = eintrag.status !== 'fertig'
             return (
               <li key={eintrag.eintrag.id}>
@@ -349,6 +407,9 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
           type="button"
           disabled={training.saetze.length >= MAX_TRAININGS_SAETZE}
           onClick={() => {
+            // Neuer Satz als Kopie des letzten: Wiederholungen, Takt und
+            // Konfiguration sind meist ähnlich. ID und Bezeichnung werden
+            // zurückgesetzt, damit kein bestehender Satz überschrieben wird.
             const basis = training.saetze.at(-1) ?? neuerTrainingsSatz()
             setNeuerSatz(
               neuerTrainingsSatz({
@@ -371,7 +432,10 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
         </p>
       </div>
 
-      <div className="border-t border-line p-3 pb-[max(env(safe-area-inset-bottom),0.75rem)]">
+      <div className="border-t border-line p-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] rail:px-4">
+        <div className="mx-auto w-full max-w-3xl">
+        {/* Der Hauptknopf folgt dem nächsten Satz: starten, fortsetzen oder
+            zurück in die laufende Messung; ohne nächsten Satz ist alles fertig. */}
         {naechster ? (
           <button
             type="button"
@@ -390,6 +454,7 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
             <p className="text-xs text-muted">Alle Sätze sind im Ziel.</p>
           </div>
         )}
+        </div>
       </div>
 
       {bearbeiteterSatz ? (
@@ -433,6 +498,8 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
           schwimmer={app.schwimmer}
           onClose={() => setAktiveOffen(false)}
           onSpeichern={(bahnen, aktive) => {
+            // Die Zuordnung gilt nur für noch nicht gestartete Sätze; bereits
+            // gestartete Sätze behalten ihre kopierten Bahnen.
             speichere({ ...training, bahnen, aktive })
             setAktiveOffen(false)
           }}
@@ -457,6 +524,8 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
         bestaetigenLabel="Training löschen"
         onBestaetigen={() => {
           setFrageLoeschen(false)
+          // Zuerst die Auswahl lösen, damit die Detailansicht nicht auf ein
+          // gerade gelöschtes Training zeigt.
           waehle(null)
           app.loescheTraining(training.id)
         }}
@@ -466,6 +535,7 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
   )
 }
 
+/** Kleines Sheet zum Umbenennen des Trainings; speichert erst auf Knopfdruck. */
 function UmbenennenSheet({
   wert,
   onClose,

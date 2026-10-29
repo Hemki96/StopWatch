@@ -1,8 +1,40 @@
+/**
+ * Gemeinsame Helfer der E2E-Specs.
+ *
+ * Alle Specs laufen gegen die echte App (Vite im Dev- bzw. Preview-Modus,
+ * siehe `playwright.config.ts`) und wiederholen dieselben Vorbedingungen:
+ * Onboarding überspringen, auf die Tab-Abstimmung warten, auf asynchrone
+ * IndexedDB-Schreibvorgänge warten und bei Bedarf einen zweiten Tab öffnen.
+ *
+ * Playwright gibt jedem Test einen frischen Browser-Kontext. IndexedDB und
+ * `localStorage` sind damit pro Test leer — genau das erwarten Specs, die
+ * „Noch keine Messungen“ oder „0 Schwimmer“ prüfen. Seed-Daten setzen die
+ * Specs selbst über `addInitScript` (etwa die Serien-Einstellungen), nicht
+ * diese Helfer.
+ *
+ * Die Helfer bedienen die Oberfläche nicht, sondern schreiben nur den
+ * Onboarding-Merker in `localStorage` und lesen IndexedDB. So bleiben sie
+ * unabhängig von Layout und Beschriftungen.
+ */
+
 import { expect, type Page } from '@playwright/test'
 
 /**
- * Onboarding überspringen und warten, bis der Tab die Messung hält. Der erste
- * Tab wird erst nach der kurzen Abstimmung mit anderen Tabs aktiv.
+ * Überspringt das Onboarding und wartet, bis der Tab die Messung hält.
+ *
+ * @param page - Seite des Tests; der Aufruf muss vor dem ersten `goto`
+ * erfolgen, damit das Init-Skript greift.
+ * @returns Promise, das nach der Tab-Abstimmung aufgelöst wird.
+ *
+ * Der Merker wird per `addInitScript` gesetzt: Das Skript läuft vor jedem
+ * Dokumentaufbau, also auch nach einem `page.reload()` im selben Test. Dadurch
+ * erscheint das Onboarding nie, ohne dass es durchgeklickt werden muss.
+ *
+ * Der erste Tab wird erst nach der kurzen Abstimmung mit anderen Tabs aktiv
+ * (`BroadcastChannel`). Aktionen sind nur dort wirksam; deshalb wartet der
+ * Helfer auf `data-tab-status="aktiv"` statt auf einen sichtbaren Screen.
+ * Dieses Attribut ist in `src/App.tsx` eigens als Bereitschaftsanzeige für
+ * die E2E-Tests vorgesehen.
  */
 export async function oeffneApp(page: Page): Promise<void> {
   await page.addInitScript(() => {
@@ -17,8 +49,17 @@ export async function oeffneApp(page: Page): Promise<void> {
 }
 
 /**
- * Wartet, bis eine Schwimmerzuordnung wirklich in IndexedDB liegt. Die
- * Oberfläche aktualisiert sofort, das Schreiben läuft aber asynchron.
+ * Wartet, bis eine Schwimmerzuordnung wirklich in IndexedDB liegt.
+ *
+ * @param page - Seite mit geöffneter App.
+ * @returns Promise, das auflöst, sobald irgendeine Bahn eine `schwimmerId`
+ * trägt.
+ *
+ * Die Oberfläche aktualisiert sofort, das Schreiben läuft aber asynchron. Ein
+ * `reload()` direkt nach dem Zuordnen würde die Änderung sonst verlieren.
+ * `waitForFunction` fragt den Object-Store `lauf` so lange ab, bis die
+ * Bedingung stimmt; die Verbindung wird in jedem Fall geschlossen, damit kein
+ * offenes Upgrade spätere Zugriffe blockiert.
  */
 export async function warteAufSchwimmerzuordnung(page: Page): Promise<void> {
   await page.waitForFunction(async () => {
@@ -45,7 +86,15 @@ export async function warteAufSchwimmerzuordnung(page: Page): Promise<void> {
 
 /**
  * Wartet, bis die Zielzeiten eines Wettkampfs wirklich in IndexedDB liegen.
- * Die Oberfläche aktualisiert sofort, das Schreiben läuft aber asynchron.
+ *
+ * @param page - Seite mit geöffneter App.
+ * @param anzahl - Mindestzahl an Bahnen mit einem Anschlag `istFinish`.
+ * @returns Promise, das auflöst, sobald genug Zielanschläge gespeichert sind.
+ *
+ * Gezählt wird über alle Läufe hinweg, weil die Heats eines Wettkampfs als
+ * einzelne Läufe gespeichert sind. Gleiche Begründung wie oben: Die Anzeige
+ * ist sofort, die Persistenz asynchron; erst nach diesem Warten ist ein
+ * Reload verlustfrei.
  */
 export async function warteAufZielzeiten(page: Page, anzahl: number): Promise<void> {
   await page.waitForFunction(async (erwartet) => {
@@ -78,7 +127,19 @@ export async function warteAufZielzeiten(page: Page, anzahl: number): Promise<vo
   }, anzahl)
 }
 
-/** Öffnet einen zweiten Tab mit derselben Herkunft. */
+/**
+ * Öffnet einen zweiten Tab mit derselben Herkunft.
+ *
+ * @param page - Seite des ersten Tabs; sie liefert den Browser-Kontext für
+ * den neuen Tab.
+ * @returns Die neue Seite. Sie ist noch nicht aktiv; die Tab-Tests warten
+ * selbst auf den Zustand, den sie prüfen wollen.
+ *
+ * Beide Tabs teilen sich den Kontext, also `localStorage` und IndexedDB — nur
+ * so greift die Tab-Abstimmung über `BroadcastChannel`. Der Onboarding-Merker
+ * wird erneut per `addInitScript` gesetzt, weil das Skript an die Seite
+ * gebunden ist und nicht an den Kontext.
+ */
 export async function oeffneZweitenTab(page: Page): Promise<Page> {
   const zweiter = await page.context().newPage()
   await zweiter.addInitScript(() => {
@@ -92,7 +153,16 @@ export async function oeffneZweitenTab(page: Page): Promise<Page> {
   return zweiter
 }
 
-/** Wartet, bis eine Satzbezeichnung wirklich in IndexedDB liegt. */
+/**
+ * Wartet, bis eine Satzbezeichnung wirklich in IndexedDB liegt.
+ *
+ * @param page - Seite mit geöffneter App.
+ * @param bezeichnung - Erwarteter Wert im Feld `bezeichnung` des Satzes.
+ *
+ * Das Umbenennen im Verlauf ist optimistisch: Die Liste zeigt den neuen Namen
+ * sofort, der Schreibvorgang folgt. Ohne dieses Warten würde ein Reload die
+ * alte Bezeichnung zurückbringen.
+ */
 export async function warteAufSatzbezeichnung(page: Page, bezeichnung: string): Promise<void> {
   await page.waitForFunction(async (erwartet) => {
     const db = await new Promise<IDBDatabase>((resolve, reject) => {

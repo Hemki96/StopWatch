@@ -1,3 +1,15 @@
+/**
+ * Wettkampfmodus: ein Tap ist das Ziel, Platzierung und Fortschritt.
+ *
+ * Sichert ab, dass ein Heat (`modus: 'wettkampf'`) ohne Längen-Splits
+ * funktioniert, dass Platz und Rückstand aus den Zielzeiten entstehen und dass
+ * zeitgleiche Zeiten auf Hundertstel denselben Platz teilen. Der Rückstand
+ * bezieht sich auf die rohe Zeit, nicht auf die angezeigte Hundertstel-Zeit.
+ *
+ * Fixture ist ein Heat über 100 m Freistil mit drei Bahnen (Anna auf 3, Ben auf
+ * 4, Clara auf 5) im 50-m-Becken. Die Bahnnummern sind absichtlich nicht
+ * fortlaufend ab 1, damit Sortierung und CSV-Spalten prüfbar bleiben.
+ */
 import { describe, expect, it } from 'vitest'
 import { createLauf, setzeZielzeit, startAll, tapLane } from './lauf'
 import {
@@ -9,6 +21,8 @@ import {
 } from './wettkampf'
 import type { Lauf } from './types'
 
+// Baut über die echten Erzeuger einen Heat mit drei belegten Bahnen; der Name
+// des Starts wird direkt als Schwimmer-ID verwendet.
 function wettkampfLauf(): Lauf {
   const wettkampf = createWettkampf({
     name: 'Herbstpokal',
@@ -35,7 +49,11 @@ function wettkampfLauf(): Lauf {
   )
 }
 
+// Bedienung im Wettkampf: Der erste Tap nach dem Start ist bereits das Finish,
+// ohne Zwischenanschlag.
 describe('Wettkampfmodus', () => {
+  // Start bei 1000 ms, Tap bei 61_250 ms: Die Zielzeit ist 60_250 ms und der
+  // Anschlag trägt sofort `istFinish`.
   it('macht aus dem ersten Tap nach dem Start direkt das Ziel', () => {
     let lauf = startAll(wettkampfLauf(), 1000, 10_000)
     const bahn = lauf.bahnen[0]!
@@ -46,6 +64,8 @@ describe('Wettkampfmodus', () => {
     expect(lauf.bahnen[0]?.anschlaege[0]?.splitMs).toBe(60_250)
   })
 
+  // Wie im Training startet der erste Tap eine noch bereite Bahn, statt eine
+  // Zeit zu erfassen.
   it('startet eine noch nicht gestartete Bahn mit dem ersten Tap', () => {
     let lauf = wettkampfLauf()
     const bahn = lauf.bahnen[0]!
@@ -54,6 +74,8 @@ describe('Wettkampfmodus', () => {
     expect(lauf.bahnen[0]?.anschlaege).toHaveLength(0)
   })
 
+  // „Start alle“ darf eine beendete Bahn nicht zurücksetzen; ihr Start bleibt
+  // bei 0, obwohl der neue Aufruf 100_000 ms liefert.
   it('startet beendete Bahnen nicht erneut', () => {
     let lauf = startAll(wettkampfLauf(), 0, 0)
     const bahn = lauf.bahnen[0]!
@@ -63,7 +85,10 @@ describe('Wettkampfmodus', () => {
   })
 })
 
+// Ergebnisliste eines Heats: gewertete Bahnen nach Zeit, offene hinten.
 describe('wettkampfErgebnis', () => {
+  // Die Zeiten werden über den Bahnindex zugeordnet: Anna 62 s, Ben 60 s,
+  // Clara 61 s. Erwartet wird die Reihenfolge nach Bahnnummern 4, 5, 3.
   function mitZeiten(zeiten: (number | null)[]): Lauf {
     let lauf = startAll(wettkampfLauf(), 0, 0)
     zeiten.forEach((zeit, index) => {
@@ -75,6 +100,8 @@ describe('wettkampfErgebnis', () => {
     return lauf
   }
 
+  // Der Rückstand ist die Differenz zur Siegerzeit (0 bzw. 1000 ms), nicht die
+  // Differenz zum Vordermann.
   it('sortiert nach Zeit und vergibt Plätze', () => {
     const ergebnis = wettkampfErgebnis(mitZeiten([62_000, 60_000, 61_000]))
     expect(ergebnis.map((zeile) => zeile.bahn.nummer)).toEqual([4, 5, 3])
@@ -83,6 +110,9 @@ describe('wettkampfErgebnis', () => {
     expect(ergebnis[1]?.rueckstandMs).toBe(1000)
   })
 
+  // 60_001 und 60_009 ms sind angezeigt beide 1:00,00; sie teilen Platz 1,
+  // die nächste Zeit bekommt Platz 3. Der Rückstand von 8 ms bleibt roh, weil
+  // die Anzeige sonst einen falschen Gleichstand vortäuschen würde.
   it('teilt Plätze bei zeitgleichen Ergebnissen auf Hundertstel', () => {
     const ergebnis = wettkampfErgebnis(mitZeiten([60_001, 60_009, 61_000]))
     expect(ergebnis.map((zeile) => zeile.platz)).toEqual([1, 1, 3])
@@ -90,6 +120,8 @@ describe('wettkampfErgebnis', () => {
     expect(ergebnis[1]?.rueckstandMs).toBe(8)
   })
 
+  // Nur eine Bahn hat eine Zeit; die beiden offenen Bahnen stehen dahinter in
+  // Bahnreihenfolge und behalten `platz: null`.
   it('hängt offene Bahnen hinten an', () => {
     const ergebnis = wettkampfErgebnis(mitZeiten([60_000, null, null]))
     expect(ergebnis[0]?.bahn.nummer).toBe(3)
@@ -97,7 +129,11 @@ describe('wettkampfErgebnis', () => {
   })
 })
 
+// Manuelle Zielzeit: nachtragen oder korrigieren, immer als `manuell`
+// markiert, damit eine Bestzeit nicht unbemerkt von Hand entsteht.
 describe('setzeZielzeit', () => {
+  // Eine nie gestartete Bahn lässt sich nachtragen; `erfasstAt` ist die
+  // Wanduhr des Eintrags (hier 1234).
   it('trägt eine fehlende Zielzeit manuell nach', () => {
     let lauf = startAll(wettkampfLauf(), 0, 0)
     const bahn = lauf.bahnen[0]!
@@ -110,6 +146,8 @@ describe('setzeZielzeit', () => {
     expect(anschlag?.erfasstAt).toBe(1234)
   })
 
+  // Eine Korrektur ersetzt den vorhandenen Finish-Anschlag, statt einen
+  // zweiten anzuhängen; die Anzahl der Anschläge bleibt 1.
   it('korrigiert eine vorhandene Zielzeit ohne einen zweiten Anschlag', () => {
     let lauf = startAll(wettkampfLauf(), 0, 0)
     const bahn = lauf.bahnen[0]!
@@ -121,6 +159,8 @@ describe('setzeZielzeit', () => {
     expect(lauf.bahnen[0]?.anschlaege[0]?.manuell).toBe(true)
   })
 
+  // Im Trainingsmodus ist die Funktion wirkungslos; dort entsteht das Finish
+  // aus der Strecke.
   it('lässt Trainingsläufe unangetastet', () => {
     const training = createLauf(
       { beckenlaengeM: 50, streckeM: 100, schwimmart: 'freistil' },
@@ -131,6 +171,8 @@ describe('setzeZielzeit', () => {
   })
 })
 
+// Fortschritt zählt Bahnen, nicht Läufe: ein Heat mit drei Bahnen und einer
+// Zielzeit ergibt 1 von 3.
 describe('wettkampfFortschritt', () => {
   it('zählt gewertete Bahnen über mehrere Läufe', () => {
     let lauf = startAll(wettkampfLauf(), 0, 0)

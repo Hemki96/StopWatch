@@ -233,8 +233,9 @@ die noch völlig unberührt sind. Vollständige Runden bleiben erhalten. Siehe
 - Vor dem Start prüfen, ob Beckenlänge und Strecke stimmen. Nach dem ersten Anschlag sind sie
   gesperrt.
 - Bei vielen Bahnen die Kacheln nicht zu klein werden lassen: 10 Bahnen sind auf einem kleinen
-  Handy eng. Für 8–10 Bahnen ein größeres Gerät oder Querformat prüfen — die App ist auf Hochformat
-  ausgelegt.
+  Handy eng. Für 8–10 Bahnen ein größeres Gerät oder Querformat verwenden — die App zeigt dann
+  mehr Spalten und rückt auf dem Tablet die Navigation an die Seite. Auf einem kleinen Handy im
+  Querformat bleibt dagegen wenig Höhe; dort lieber hochkant messen.
 - Den Startknopf mit dem Daumen erreichbar halten; die untere Aktionsleiste scrollt nicht weg.
 - Bei Sonne das dunkle Design und volle Helligkeit verwenden.
 - Vor dem ersten Einsatz einen Testlauf mit zwei Bahnen machen und den Verlauf prüfen.

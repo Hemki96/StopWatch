@@ -1,3 +1,14 @@
+/**
+ * Einstellungen: Darstellung, Vorgaben für den nächsten Lauf, Daten und Installation.
+ *
+ * Der Screen bündelt alles, was nicht zur laufenden Messung gehört: Theme,
+ * Standardkonfiguration (öffnet `KonfigurationSheet` im Modus „einstellungen“),
+ * CSV-Export, JSON-Backup mit Prüfvorschau, den dauerhaften Speicher und den
+ * Installationshinweis. Datenändernde Aktionen (Import, Löschen) sind gesperrt,
+ * solange dieser Tab nicht der aktive ist (`app.tabGesperrt`), damit nur ein Tab
+ * den Bestand verändert. Gelesen und geschrieben wird über `app/AppProvider`;
+ * Formate und Prüfungen kommen aus export/ und storage/.
+ */
 import { useEffect, useState } from 'react'
 import { useApp } from '../app/AppProvider'
 import { useInstallPrompt } from '../app/pwa'
@@ -17,10 +28,18 @@ import { KonfigurationSheet } from './KonfigurationSheet'
 import { Sheet } from './Sheet'
 import { CheckIcon, DownloadIcon, MoonIcon, SunIcon, UploadIcon } from './icons'
 
+/** Karte als optischer Rahmen für eine Gruppe von Einstellungszeilen. */
 function Karte({ children }: { children: React.ReactNode }) {
   return <div className="overflow-hidden rounded-2xl border border-line bg-surface">{children}</div>
 }
 
+/**
+ * Eine Zeile innerhalb einer Karte: Label, optionaler Erklärtext und Icon.
+ *
+ * `gefahr` färbt den Text für nicht umkehrbare Aktionen, `disabled` sperrt die
+ * Zeile etwa während der Tab gesperrt ist. Die Zeile ist immer ein Button,
+ * damit die ganze Fläche als Ziel dient.
+ */
 function Zeile({
   label,
   wert,
@@ -52,21 +71,33 @@ function Zeile({
   )
 }
 
+/**
+ * Einstellungs-Tab mit Darstellung, Lauf-Vorgaben, Daten und Installation.
+ *
+ * Alle Aktionen laufen über `app`: Theme umschalten, Standardkonfiguration
+ * ändern, CSV/Backup schreiben, Backup nach Prüfung einlesen oder alle Daten
+ * löschen. Import und Löschen fragen vorher nach; Fehler landen als Meldung im
+ * Sheet oder als Toast, damit der vorhandene Bestand unverändert bleibt.
+ */
 export function SettingsScreen() {
   const app = useApp()
   const install = useInstallPrompt()
   const [sheet, setSheet] = useState(false)
   const [frageLoeschen, setFrageLoeschen] = useState(false)
   const [speicher, setSpeicher] = useState<SpeicherSchutz>('unbekannt')
+  // Import läuft in zwei Stufen: erst prüfen und als Vorschau merken, dann
+  // erst nach Bestätigung schreiben. `importMeldung` zeigt Ablehnungen an.
   const [importVorschau, setImportVorschau] = useState<{ backup: Backup; text: string } | null>(
     null,
   )
   const [importMeldung, setImportMeldung] = useState<string | null>(null)
 
+  // Nur lesen, nicht anfordern: Die Anfrage beim Start erledigt main.tsx.
   useEffect(() => {
     void leseSpeicherSchutz().then(setSpeicher)
   }, [])
 
+  /** Fordert dauerhaften Speicher an und meldet das Ergebnis als Toast. */
   const fordereSpeicherSchutz = async () => {
     const status = await schuetzeSpeicher()
     setSpeicher(status)
@@ -77,6 +108,8 @@ export function SettingsScreen() {
 
   const konfiguration = app.einstellungen.konfiguration
   const art = SCHWIMMARTEN.find((s) => s.wert === konfiguration.schwimmart)?.label ?? ''
+  // Vorschau des nächsten Laufs: Serie nur mit Wiederholungszahl und Takt,
+  // Versatz nur wenn gesetzt. `null`-Teile werden vor dem Join entfernt.
   const naechsterLauf = [
     app.einstellungen.wiederholungen > 1
       ? `${app.einstellungen.wiederholungen}×${formatStrecke(konfiguration.streckeM)}`
@@ -92,6 +125,7 @@ export function SettingsScreen() {
     .filter((teil): teil is string => teil !== null)
     .join(' · ')
 
+  /** Schreibt alle Läufe samt Sätzen und Schwimmern als CSV. */
   const exportiereCsv = () => {
     const csv = laeufeAlsCsv(app.laeufe, app.satze, app.schwimmer)
     void speichereDatei(csvDateiname(), csv, 'text/csv;charset=utf-8').catch(() =>
@@ -99,6 +133,7 @@ export function SettingsScreen() {
     )
   }
 
+  /** Sichert den kompletten Bestand als JSON; das Datum steckt im Dateinamen. */
   const exportiereBackup = async () => {
     try {
       const backup = await exportBackup()
@@ -112,6 +147,13 @@ export function SettingsScreen() {
     }
   }
 
+  /**
+   * Liest eine JSON-Datei ein und prüft sie, ohne zu schreiben.
+   *
+   * Nur der aktive Tab darf importieren. Erst nach `pruefeBackup` entsteht eine
+   * Vorschau; eine ungültige Datei ändert nichts und zeigt stattdessen eine
+   * Meldung. Ein Abbruch der Dateiauswahl ist kein Fehler.
+   */
   const importiereBackup = async () => {
     if (app.tabGesperrt) return
     const datei = await waehleDatei('application/json')
@@ -132,6 +174,12 @@ export function SettingsScreen() {
     }
   }
 
+  /**
+   * Schreibt das geprüfte Backup und lädt anschließend alle Daten neu.
+   *
+   * Der Import ergänzt den Bestand, er ersetzt ihn nicht. Schlägt das Schreiben
+   * fehl, wird die Vorschau geschlossen und die Fehlermeldung angezeigt.
+   */
   const fuehreImportAus = async () => {
     if (!importVorschau || app.tabGesperrt) return
     const { backup, text } = importVorschau
@@ -150,17 +198,23 @@ export function SettingsScreen() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="border-b border-line px-4 py-3">
-        <h1 className="text-lg font-semibold">Einstellungen</h1>
+      <header className="border-b border-line">
+        <div className="mx-auto w-full max-w-2xl px-4 py-3 rail:px-6">
+          <h1 className="text-lg font-semibold">Einstellungen</h1>
+        </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-4 pb-10 pt-4">
+      <div className="mx-auto w-full max-w-2xl flex-1 overflow-y-auto px-4 pb-10 pt-4 rail:px-6">
+        {/* Darstellung: Theme gilt sofort und wird in den Einstellungen gemerkt. */}
         <h2 className="mb-2 px-1 text-[11px] font-bold uppercase tracking-wider text-muted">
           Darstellung
         </h2>
         <Karte>
           <div className="px-4 py-3.5">
             <p className="mb-2 text-sm font-medium">Design</p>
+            {/* Drei feste Werte; „system“ folgt der Betriebssystem-Einstellung.
+                Als Radiogruppe ausgezeichnet, damit die Auswahl auch für
+                Screenreader eindeutig ist. */}
             <div role="radiogroup" aria-label="Design" className="grid grid-cols-3 gap-2">
               {(
                 [
@@ -223,11 +277,13 @@ export function SettingsScreen() {
             label="Backup einlesen"
             onClick={() => void importiereBackup()}
             icon={<UploadIcon className="h-5 w-5" />}
+            // Gesperrte Tabs dürfen den Bestand nicht verändern.
             disabled={app.tabGesperrt}
           />
           <Zeile
             label={speicher === 'geschuetzt' ? 'Speicher geschützt' : 'Speicher dauerhaft sichern'}
             wert={
+              // Drei Zustände: bereits geschützt, Schutz möglich, API fehlt.
               speicher === 'geschuetzt'
                 ? 'Der Browser löscht die Daten nicht bei Platzmangel'
                 : speicher === 'ungeschuetzt'
@@ -253,6 +309,8 @@ export function SettingsScreen() {
           Installation
         </h2>
         <Karte>
+          {/* Drei Installationszustände: schon installiert, Dialog verfügbar,
+              sonst eine browserspezifische Anleitung (v. a. iOS). */}
           {install.installiert ? (
             <div className="flex items-center gap-3 px-4 py-3.5">
               <CheckIcon className="h-5 w-5 text-ok" />
@@ -292,6 +350,7 @@ export function SettingsScreen() {
         text={
           importVorschau
             ? `Vorhandene Daten bleiben erhalten. Übernommen werden: ${importVorschau.text}.${
+                // Eine laufende Messung wird beim Neuladen zurückgesetzt.
                 app.brauchtTakt ? ' Eine laufende Messung wird dabei unterbrochen.' : ''
               }`
             : ''
@@ -329,6 +388,7 @@ export function SettingsScreen() {
         bestaetigenLabel="Alles löschen"
         onBestaetigen={() => {
           setFrageLoeschen(false)
+          // Doppelte Absicherung gegen einen parallel gesperrten Tab.
           if (app.tabGesperrt) return
           void clearAll()
             .then(() => app.neuLaden())

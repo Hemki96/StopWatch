@@ -1,9 +1,29 @@
+/**
+ * Toleranter CSV-Import für Meldelisten.
+ *
+ * Sichert ab, dass ein Wettkampfprogramm aus verschiedenen Quellen ohne Umbau
+ * importierbar ist: deutsche und englische Spaltennamen, Semikolon, Komma oder
+ * Tabulator, Kopfzeile oder Schnellformat, getrennte Vor- und Nachnamen sowie
+ * Anführungszeichen. Gleichzeitig muss jeder echte Widerspruch (doppelte Bahn,
+ * Strecke passt nicht zum Becken, fehlender Name) mit Zeilennummer abbrechen,
+ * statt still einen halben Plan zu liefern.
+ *
+ * Es gibt keine Datei-Fixtures: Die CSV-Texte stehen als String im Test, damit
+ * Trennzeichen und Zeilenumbrüche sichtbar bleiben. `vorgabe` entspricht den
+ * Vorgaben des Import-Dialogs (50-m-Becken, 100 m Freistil).
+ */
 import { describe, expect, it } from 'vitest'
 import { meldelisteZusammenfassung, parseMeldeliste } from './meldeliste'
 
+// Vorgaben des Dialogs; sie greifen nur, wenn die Datei die Angabe nicht selbst
+// enthält. 100 m passen zu einem 50-m-Becken (zwei Längen).
 const vorgabe = { beckenlaengeM: 50, streckeM: 100, schwimmart: 'freistil' } as const
 
+// Vollständige Meldeliste: Gruppierung nach Disziplin und Lauf, Zählung der
+// Starts und Erhalt der Jahrgänge.
 describe('parseMeldeliste', () => {
+  // 4 Starts in 3 Läufen: 100 m Freistil mit zwei Heats, 50 m Brust mit einem.
+  // Anna und Ben starten im selben Heat, Clara im zweiten.
   it('liest eine vollständige Meldeliste mit Kopfzeile', () => {
     const ergebnis = parseMeldeliste(
       [
@@ -33,6 +53,8 @@ describe('parseMeldeliste', () => {
     expect(freistil.laeufe[0]?.starts[0]?.jahrgang).toBe(2010)
   })
 
+  // Zwei Spalten ohne Kopfzeile bedeuten „Bahn;Name“; Strecke und Schwimmart
+  // kommen aus der Vorgabe (50 m Brust im 25-m-Becken, also zwei Längen).
   it('versteht das Schnellformat Bahn;Name ohne Kopfzeile', () => {
     const ergebnis = parseMeldeliste('1;Anna\n2;Ben\n', {
       beckenlaengeM: 25,
@@ -46,6 +68,8 @@ describe('parseMeldeliste', () => {
     expect(ergebnis.meldeliste.disziplinen[0]?.schwimmart).toBe('brust')
   })
 
+  // Die Meldeliste wird zu einem Namen zusammengesetzt; so entsteht eine
+  // eindeutige Zuordnung, obwohl zwei Spalten getrennt sind.
   it('setzt Vor- und Nachname aus getrennten Spalten zusammen', () => {
     const ergebnis = parseMeldeliste('bahn;vorname;nachname\n1;Anna;Muster\n2;Ben;Beispiel\n', vorgabe)
     expect(ergebnis.ok).toBe(true)
@@ -56,6 +80,8 @@ describe('parseMeldeliste', () => {
     ])
   })
 
+  // Ohne Bahnspalte wird die erste freie Bahn vergeben; sie beginnt in jedem
+  // Lauf wieder bei 1, damit Bahnnummern heizweise eindeutig sind.
   it('vergibt fehlende Bahnen der Reihe nach', () => {
     const ergebnis = parseMeldeliste('name;lauf\nAnna;1\nBen;1\nClara;2\n', vorgabe)
     expect(ergebnis.ok).toBe(true)
@@ -65,6 +91,8 @@ describe('parseMeldeliste', () => {
     expect(laeufe[1]?.starts[0]?.bahn).toBe(1)
   })
 
+  // Disziplintext schlägt die Vorgaben: „200 m Rücken“ liefert Strecke und
+  // Schwimmart, ohne dass eigene Spalten nötig sind.
   it('erkennt Schwimmart und Strecke aus der Disziplin', () => {
     const ergebnis = parseMeldeliste('disziplin;name\n200 m Rücken;Anna\n', {
       beckenlaengeM: 25,
@@ -77,6 +105,8 @@ describe('parseMeldeliste', () => {
     expect(ergebnis.meldeliste.disziplinen[0]?.schwimmart).toBe('ruecken')
   })
 
+  // Ein Semikolon innerhalb von Anführungszeichen ist Text, `""` ist ein
+  // wörtliches Anführungszeichen; die Spaltenstruktur bleibt intakt.
   it('liest Semikolons und Anführungszeichen in Namen', () => {
     const ergebnis = parseMeldeliste(
       'bahn;name\n1;"Muster; Anna"\n2;"Beispiel, ""Ben"""\n',
@@ -90,6 +120,8 @@ describe('parseMeldeliste', () => {
     ])
   })
 
+  // Zwei Namen auf derselben Bahn würden später eine der beiden Zeiten
+  // überschreiben; der Import bricht deshalb mit Bahnnummer ab.
   it('lehnt doppelte Bahnen in einem Lauf ab', () => {
     const ergebnis = parseMeldeliste('lauf;bahn;name\n1;3;Anna\n1;3;Ben\n', vorgabe)
     expect(ergebnis.ok).toBe(false)
@@ -98,6 +130,8 @@ describe('parseMeldeliste', () => {
     expect(ergebnis.fehler).toContain('doppelt')
   })
 
+  // 75 m sind kein Vielfaches der 50-m-Beckenlänge; die Meldung nennt die
+  // konkrete Strecke, damit der Fehler in der Datei zu finden ist.
   it('lehnt eine Strecke ab, die nicht zur Beckenlänge passt', () => {
     const ergebnis = parseMeldeliste('strecke_m;name\n75;Anna\n', {
       beckenlaengeM: 50,
@@ -109,6 +143,8 @@ describe('parseMeldeliste', () => {
     expect(ergebnis.fehler).toContain('75 m')
   })
 
+  // Die Zeilennummer bezieht sich auf die Datei: Kopfzeile ist Zeile 1, Anna
+  // Zeile 2, der leere Name steht in Zeile 3.
   it('nennt die Zeile bei fehlendem Namen', () => {
     const ergebnis = parseMeldeliste('bahn;name\n1;Anna\n2;\n', vorgabe)
     expect(ergebnis.ok).toBe(false)
@@ -117,6 +153,8 @@ describe('parseMeldeliste', () => {
     expect(ergebnis.fehler).toContain('Name')
   })
 
+  // Eine einzelne Spalte ohne Kopfzeile ist eine reine Namensliste; die Bahnen
+  // werden in Dateireihenfolge ab 1 vergeben.
   it('akzeptiert eine reine Namensliste mit einer Spalte', () => {
     const ergebnis = parseMeldeliste('name\nAnna\nBen\n', vorgabe)
     expect(ergebnis.ok).toBe(true)
@@ -127,6 +165,8 @@ describe('parseMeldeliste', () => {
   })
 })
 
+// Die Vorschauzeile muss Singular und Plural unterscheiden; „Disziplin“ und
+// „Lauf“ bekommen eigene Formen, „Start“ ebenfalls.
 describe('meldelisteZusammenfassung', () => {
   it('formatiert Singular und Plural', () => {
     expect(

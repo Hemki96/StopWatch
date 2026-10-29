@@ -89,8 +89,9 @@ export function LaufDetail({ laufId, onClose }: { laufId: string; onClose: () =>
   }
 
   return (
-    <div className="fixed inset-0 z-30 flex flex-col bg-bg">
-      <header className="flex items-center gap-1 border-b border-line px-2 py-2">
+    <div className="safe-x fixed inset-0 z-30 flex flex-col bg-bg">
+      <header className="border-b border-line">
+        <div className="mx-auto flex w-full max-w-5xl items-center gap-1 px-2 py-2 rail:px-4">
         {/* Kopfzeile: zurück zum Verlauf, CSV-Export und Löschen. Die
             Icon-Knöpfe tragen ein aria-label, weil das Symbol allein nichts
             vorlesbares enthält. */}
@@ -120,9 +121,10 @@ export function LaufDetail({ laufId, onClose }: { laufId: string; onClose: () =>
         >
           <TrashIcon className="h-5 w-5" />
         </button>
+        </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-4 pb-8 pt-4">
+      <div className="mx-auto w-full max-w-4xl flex-1 overflow-y-auto px-4 pb-8 pt-4 rail:px-6">
         {/* Startzeit aus der Wanduhr, damit sie mit dem Verlauf und anderen
             Geräten vergleichbar bleibt. */}
         <p className="text-xs text-muted">
@@ -157,7 +159,7 @@ export function LaufDetail({ laufId, onClose }: { laufId: string; onClose: () =>
           </p>
         ) : null}
 
-        <ul className="mt-4 space-y-2">
+        <ul className="mt-4 grid grid-cols-1 items-start gap-2 rail:grid-cols-2">
           {lauf.bahnen.map((bahn) => {
             // Anzeigewerte pro Bahn: Zielzeit, Delta zur Bestzeit, Status und
             // ob der Zielanschlag von Hand gesetzt wurde.

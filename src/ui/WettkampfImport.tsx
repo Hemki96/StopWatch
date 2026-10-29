@@ -1,3 +1,12 @@
+/**
+ * Sheet für den Meldelisten-Import als CSV.
+ *
+ * Zwei Betriebsarten: ohne `wettkampf` entsteht ein neuer Wettkampf (Name,
+ * Datum, Beckenlänge), mit `wettkampf` wird ein bestehender ergänzt. Die
+ * eingefügte oder geladene CSV wird über domain/meldeliste geparst und vor dem
+ * Import als Zusammenfassung mit Warnungen angezeigt; geschrieben wird erst
+ * über `onImport` bzw. app/AppProvider. Eine Vorlage lässt sich herunterladen.
+ */
 import { useEffect, useMemo, useState } from 'react'
 import { useApp } from '../app/AppProvider'
 import { lokalesDatum } from '../domain/format'
@@ -14,6 +23,14 @@ import { UploadIcon } from './icons'
 
 const STRECKEN = [50, 100, 200, 400, 800, 1500] as const
 
+/**
+ * Import-Dialog für eine Meldeliste.
+ *
+ * Eingaben: optionaler Wettkampfrahmen, Vorgaben für Zeilen ohne Disziplin
+ * (Strecke und Schwimmart) und der CSV-Text. Die Vorschau zeigt Anzahl und
+ * Namen der Disziplinen sowie Warnungen. Der Import-Knopf bleibt gesperrt,
+ * solange die CSV unlesbar ist, ein Wettkampfname fehlt oder das Datum leer ist.
+ */
 export function WettkampfImportSheet({
   open,
   onClose,
@@ -34,6 +51,8 @@ export function WettkampfImportSheet({
   const [text, setText] = useState('')
   const [dateiFehler, setDateiFehler] = useState<string | null>(null)
 
+  // Beim Öffnen alles zurücksetzen; im Rahmen eines Wettkampfs werden dessen
+  // Stammdaten übernommen und sind nicht mehr editierbar.
   useEffect(() => {
     if (!open) return
     setName(wettkampf?.name ?? '')
@@ -45,7 +64,10 @@ export function WettkampfImportSheet({
     setDateiFehler(null)
   }, [open, wettkampf])
 
+  // Die Beckenlänge des bestehenden Wettkampfs hat Vorrang vor der Auswahl.
   const pool = wettkampf?.beckenlaengeM ?? beckenlaengeM
+  // Vorschau wird bei jeder Textänderung neu geparst; die Vorgaben gelten nur
+  // für Zeilen, die selbst keine Disziplin nennen.
   const ergebnis = useMemo(
     () =>
       text.trim()
@@ -61,9 +83,11 @@ export function WettkampfImportSheet({
 
   const fehler = ergebnis && !ergebnis.ok ? ergebnis.fehler : null
   const meldeliste = ergebnis && ergebnis.ok ? ergebnis.meldeliste : null
+  // Ohne bestehenden Wettkampf braucht ein neuer einen Namen.
   const nameFehlt = !wettkampf && !name.trim()
   const kannImportieren = !!meldeliste && !nameFehlt && !!datum
 
+  /** Liest eine CSV- oder Textdatei in das Textfeld; Abbruch ist kein Fehler. */
   const ladeDatei = async () => {
     const datei = await waehleDatei('text/csv,text/plain,.csv,.txt')
     if (!datei) return
@@ -75,6 +99,10 @@ export function WettkampfImportSheet({
     }
   }
 
+  /**
+   * Reicht den geparsten Plan weiter. Im bestehenden Wettkampf bleiben Name,
+   * Datum und Beckenlänge unverändert; nur die Disziplinen kommen hinzu.
+   */
   const importiere = () => {
     if (!meldeliste) return
     onImport(
@@ -96,6 +124,7 @@ export function WettkampfImportSheet({
     >
       {!wettkampf ? (
         <>
+          {/* Nur ohne bestehenden Wettkampf: Rahmen selbst festlegen. */}
           <section className="mb-5">
             <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted">
               Wettkampf
@@ -134,6 +163,7 @@ export function WettkampfImportSheet({
           </section>
         </>
       ) : (
+        // Bestehender Wettkampf: Stammdaten nur anzeigen, nicht ändern.
         <p className="mb-5 rounded-xl border border-line bg-surface2 px-3 py-2 text-xs leading-relaxed text-muted">
           {wettkampf.name} · {wettkampf.datum} · {wettkampf.beckenlaengeM} m-Becken
         </p>
@@ -143,6 +173,8 @@ export function WettkampfImportSheet({
         <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted">
           Vorgabe, wenn die Datei keine Disziplin nennt
         </h3>
+        {/* Diese Werte füllen nur Zeilen ohne eigene Disziplin; eine explizite
+            Disziplin in der CSV hat immer Vorrang. */}
         <div className="flex flex-wrap gap-2">
           {STRECKEN.map((wert) => (
             <button
@@ -230,6 +262,8 @@ export function WettkampfImportSheet({
       ) : null}
 
       {meldeliste ? (
+        // Vorschau: Zusammenfassung, erkannte Disziplinen und höchstens vier
+        // Warnungen. Erst „Importieren“ schreibt tatsächlich.
         <div className="mb-4 rounded-xl border border-ok/40 bg-ok/10 px-3 py-2">
           <p className="text-xs font-semibold text-ok">
             {meldelisteZusammenfassung(meldeliste)}
@@ -239,6 +273,7 @@ export function WettkampfImportSheet({
           </p>
           {meldeliste.warnungen.length > 0 ? (
             <ul className="mt-2 space-y-1 text-[11px] text-warn">
+              {/* Nur die ersten vier Warnungen, damit die Vorschau kompakt bleibt. */}
               {meldeliste.warnungen.slice(0, 4).map((warnung) => (
                 <li key={warnung}>{warnung}</li>
               ))}

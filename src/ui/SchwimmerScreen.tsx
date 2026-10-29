@@ -1,3 +1,13 @@
+/**
+ * Schwimmer-Tab: Stammdaten und Bestzeiten je Person.
+ *
+ * Die Liste zeigt alle Schwimmer mit Jahrgang und Anzahl der Bestzeiten; ein
+ * Eintrag klappt die Zeitentwicklung auf, „Bearbeiten“ öffnet das Formular.
+ * Bestzeiten werden aus den Läufen berechnet (domain/analyse), gruppiert nach
+ * Strecke, Schwimmart und Beckenlänge. Schreibende Aktionen laufen über
+ * app/AppProvider; gelöschte Schwimmer verlieren nur die Bahnzuordnung, nicht
+ * die gemessenen Zeiten.
+ */
 import { useMemo, useState } from 'react'
 import { useApp } from '../app/AppProvider'
 import { berechnePbs, pbKey } from '../domain/analyse'
@@ -8,16 +18,22 @@ import { Bestaetigung } from './Bestaetigung'
 import { Sheet } from './Sheet'
 import { ChevronRightIcon, PlusIcon } from './icons'
 
+// Formularzustand: geschlossen, neuer Schwimmer oder ein bestehender Eintrag.
 type Bearbeitung = { modus: 'neu' } | { modus: 'bearbeiten'; schwimmer: Schwimmer } | null
 
+/** Eine gemessene Zielzeit in der Zeitentwicklung eines Schwimmers. */
 interface ZeitEintrag {
   ms: number
+  /** Wanduhr des Laufstarts; 0, wenn unbekannt. */
   startWallMs: number
   laufId: string
+  /** Diese Zeit ist die aktuelle Bestzeit der Gruppe. */
   istPb: boolean
+  /** Zielzeit wurde nachträglich korrigiert. */
   istManuell: boolean
 }
 
+/** Alle Zeiten eines Schwimmers für eine Strecke/Schwimmart/Beckenlänge. */
 interface BestzeitenGruppe {
   key: string
   titel: string
@@ -25,6 +41,7 @@ interface BestzeitenGruppe {
   eintraege: ZeitEintrag[]
 }
 
+/** Gruppentitel aus Strecke, Schwimmart und Beckenlänge, z. B. „100 m · Freistil · 50 m“. */
 function beschreibeGruppe(lauf: Lauf): string {
   const art = SCHWIMMARTEN.find((s) => s.wert === lauf.konfiguration.schwimmart)?.label ?? ''
   return `${formatStrecke(lauf.konfiguration.streckeM)} · ${art} · ${lauf.konfiguration.beckenlaengeM} m`
@@ -33,19 +50,27 @@ function beschreibeGruppe(lauf: Lauf): string {
 /**
  * Bestzeiten und Zeitentwicklung je Schwimmer. Grundlage ist die PB-Berechnung
  * aus `analyse.ts`; hier wird nur gruppiert und dargestellt.
+ *
+ * Offene Strecken haben keine vergleichbare Bestzeit und bleiben außen vor.
+ * Eine Zeit zählt nur, wenn die Bahn dem Schwimmer gehört und einen
+ * Zielanschlag hat. Innerhalb einer Gruppe stehen die Zeiten chronologisch.
  */
 function bestzeitenFuer(schwimmerId: string, laeufe: Lauf[]): BestzeitenGruppe[] {
   const pbs = berechnePbs(laeufe)
   const gruppen = new Map<string, BestzeitenGruppe>()
 
   for (const lauf of laeufe) {
+    // Ohne feste Strecke gibt es keinen Schlüssel für einen Vergleich.
     if (lauf.konfiguration.streckeM === null) continue
     for (const bahn of lauf.bahnen) {
       if (bahn.schwimmerId !== schwimmerId) continue
       const ms = finishMs(bahn)
       if (ms === null) continue
+      // Der Schlüssel enthält Strecke, Schwimmart und Beckenlänge.
       const key = pbKey(lauf.konfiguration, schwimmerId)
       const pb = pbs.get(key)
+      // Fehlt der PB-Eintrag (etwa bei unvollständigen Daten), dient die erste
+      // gefundene Zeit als Anzeigewert der Gruppe.
       const gruppe = gruppen.get(key) ?? {
         key,
         titel: beschreibeGruppe(lauf),
@@ -63,6 +88,7 @@ function bestzeitenFuer(schwimmerId: string, laeufe: Lauf[]): BestzeitenGruppe[]
     }
   }
 
+  // Zeiten chronologisch, Gruppen alphabetisch nach Titel.
   return [...gruppen.values()]
     .map((gruppe) => ({
       ...gruppe,
@@ -71,11 +97,13 @@ function bestzeitenFuer(schwimmerId: string, laeufe: Lauf[]): BestzeitenGruppe[]
     .sort((a, b) => a.titel.localeCompare(b.titel, 'de'))
 }
 
+/** Tagesdatum ohne Jahr für die kompakte Zeitentwicklung; 0 wird zu „—“. */
 function datumKurz(ms: number): string {
   if (!ms) return '—'
   return new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit' }).format(ms)
 }
 
+/** Aufgeklappte Bestzeiten eines Schwimmers; ohne Gruppen steht ein Hinweis. */
 function Bestzeiten({ gruppen }: { gruppen: BestzeitenGruppe[] }) {
   if (gruppen.length === 0) {
     return (
@@ -95,6 +123,8 @@ function Bestzeiten({ gruppen }: { gruppen: BestzeitenGruppe[] }) {
             <span className="tabular text-sm font-semibold text-ok">{formatTime(gruppe.pbMs)}</span>
           </div>
           <ol className="mt-1 space-y-0.5">
+            {/* Schlüssel aus Lauf und Zeit; Bestzeit und Korrektur sind
+                zusätzlich als Text markiert, nicht nur farblich. */}
             {gruppe.eintraege.map((eintrag) => (
               <li
                 key={`${eintrag.laufId}-${eintrag.ms}`}
@@ -115,6 +145,13 @@ function Bestzeiten({ gruppen }: { gruppen: BestzeitenGruppe[] }) {
   )
 }
 
+/**
+ * Formular für einen neuen oder bestehenden Schwimmer.
+ *
+ * Speichert erst bei gültigem Namen; Jahrgang wird zu einer Zahl oder `null`.
+ * Bei bestehenden Einträgen gibt es zusätzlich Löschen mit Bestätigung:
+ * Gemessene Zeiten bleiben erhalten, verlieren aber die Zuordnung.
+ */
 function SchwimmerFormular({
   eintrag,
   onClose,
@@ -129,8 +166,10 @@ function SchwimmerFormular({
   const [notiz, setNotiz] = useState(vorhanden?.notiz ?? '')
   const [frageLoeschen, setFrageLoeschen] = useState(false)
 
+  /** Legt an oder aktualisiert; ohne Namen passiert nichts. */
   const speichern = () => {
     if (!name.trim()) return
+    // Ein leerer oder unlesbarer Jahrgang wird als `null` gespeichert.
     const jahr = Number.parseInt(jahrgang, 10)
     app.speichereSchwimmer({
       id: vorhanden?.id,
@@ -168,6 +207,8 @@ function SchwimmerFormular({
         <input
           name="jahrgang"
           value={jahrgang}
+          // Nur Ziffern, höchstens vier Stellen; verhindert Buchstaben und
+          // lange Eingaben direkt im Feld.
           onChange={(e) => setJahrgang(e.target.value.replace(/\D/g, '').slice(0, 4))}
           inputMode="numeric"
           autoComplete="off"
@@ -229,11 +270,21 @@ function SchwimmerFormular({
   )
 }
 
+/**
+ * Schwimmer-Tab mit Liste und aufgeklappten Bestzeiten.
+ *
+ * Der Zustand ist bewusst lokal: `bearbeitung` steuert das Formular, `offen`
+ * die einzige ausgeklappte Zeile. Bestzeiten und Bahnzuordnung werden aus den
+ * Läufen abgeleitet; der Screen selbst speichert nichts außer über `app`.
+ */
 export function SchwimmerScreen() {
   const app = useApp()
   const [bearbeitung, setBearbeitung] = useState<Bearbeitung>(null)
   const [offen, setOffen] = useState<string | null>(null)
 
+  // IDs aller Schwimmer, die aktuell oder früher auf einer Bahn standen.
+  // Dient nur der Unterscheidung „noch keine Zielzeit“ vs. „keiner Bahn
+  // zugeordnet“ in der Zeile.
   const zugeordnet = useMemo(() => {
     const ids = new Set<string>()
     for (const lauf of app.laeufe) {
@@ -244,6 +295,8 @@ export function SchwimmerScreen() {
     return ids
   }, [app.laeufe])
 
+  // Anzeigezeilen in einem Durchlauf: Schwimmer, ob je einer Bahn zugeordnet
+  // und die daraus berechneten Bestzeiten-Gruppen.
   const eintraege = useMemo(
     () =>
       app.schwimmer.map((schwimmer) => ({
@@ -256,7 +309,7 @@ export function SchwimmerScreen() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-center justify-between border-b border-line px-4 py-3">
+      <header className="flex items-center justify-between border-b border-line px-4 py-3 rail:px-6">
         <div>
           <h1 className="text-lg font-semibold">Schwimmer</h1>
           <p className="text-xs text-muted">
@@ -273,15 +326,16 @@ export function SchwimmerScreen() {
         </button>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-4 pb-8 pt-3">
+      <div className="flex-1 overflow-y-auto px-4 pb-8 pt-3 rail:px-6">
         {app.schwimmer.length === 0 ? (
           <p className="mt-16 text-center text-sm text-muted">
             Noch keine Schwimmer. Lege Namen an, um Bahnen zuzuordnen.
           </p>
         ) : null}
 
-        <ul className="space-y-2">
+        <ul className="grid grid-cols-1 items-start gap-2 rail:grid-cols-2">
           {eintraege.map(({ schwimmer, hatBahn, gruppen }) => {
+            // Nur eine Zeile ist gleichzeitig aufgeklappt; erneutes Tippen schließt sie.
             const aufgeklappt = offen === schwimmer.id
             return (
               <li
@@ -298,6 +352,8 @@ export function SchwimmerScreen() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold">{schwimmer.name}</p>
                       <p className="text-xs text-muted">
+                        {/* Drei Fälle: Bestzeiten vorhanden, Bahn aber noch kein
+                            Ziel, oder noch nie einer Bahn zugeordnet. */}
                         {schwimmer.jahrgang ? `Jahrgang ${schwimmer.jahrgang}` : 'ohne Jahrgang'}
                         {gruppen.length > 0
                           ? ` · ${gruppen.length} ${gruppen.length === 1 ? 'Bestzeit' : 'Bestzeiten'}`
@@ -333,6 +389,8 @@ export function SchwimmerScreen() {
         </ul>
 
         {app.schwimmer.length > 0 && eintraege.every((e) => e.gruppen.length === 0) ? (
+          // Fußnote nur, wenn es Einträge gibt, aber noch nirgends eine
+          // gültige Bestzeit entstanden ist.
           <p className="mt-4 rounded-xl bg-surface2 px-3 py-2 text-xs leading-relaxed text-muted">
             Bestzeiten erscheinen, sobald ein Schwimmer einer Bahn zugeordnet ist und einen Lauf
             mit fester Strecke vollständig beendet hat.

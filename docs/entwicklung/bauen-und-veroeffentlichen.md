@@ -77,7 +77,7 @@ VitePWA({
     start_url: '.',
     scope: '.',
     display: 'standalone',
-    orientation: 'portrait',
+    orientation: 'any',
     background_color: '#070c15',
     theme_color: '#070c15',
     icons: [...],
@@ -97,7 +97,7 @@ VitePWA({
 | `includeManifestIcons: false` | Icons sind bereits über `globPatterns` im Precache |
 | `start_url`/`scope`/`id`: `.` | relative Pfade für den Pages-Unterpfad |
 | `display: standalone` | Vollbild ohne Browserleiste |
-| `orientation: portrait` | die Messansicht ist auf Hochformat optimiert |
+| `orientation: any` | Handy und Tablet, Hoch- und Querformat; das Layout wechselt ab 768 × 560 auf die seitliche Navigation |
 | `background_color`/`theme_color` | dunkle Splash-Farbe passend zum Start |
 | `clientsClaim: true` | erster Besuch wird sofort kontrolliert, Offline-Reload funktioniert |
 | `navigateFallback` | SPA-Routen fallen auf `index.html` zurück |

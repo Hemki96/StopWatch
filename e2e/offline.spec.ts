@@ -1,3 +1,12 @@
+/**
+ * Offline-Fähigkeit der installierten PWA.
+ *
+ * Der Test lädt die App einmal mit Netz, wartet auf einen aktiven Service
+ * Worker und prüft, dass der Cache gefüllt ist. Danach wird der Kontext offline
+ * geschaltet und neu geladen: Die Oberfläche muss aus dem Cache starten und der
+ * zuvor angelegte Lauf weiterhin sichtbar sein. Voraussetzung ist ein
+ * Produktions-Build, weil der Dev-Server keinen Service Worker registriert.
+ */
 import { expect, test } from '@playwright/test'
 import { oeffneApp } from './helfer'
 

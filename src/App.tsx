@@ -270,7 +270,7 @@ export default function App() {
                   type="button"
                   onClick={() => setTab(id)}
                   aria-current={aktiv ? 'page' : undefined}
-                  className={`flex min-h-14 flex-col items-center justify-center gap-1 pb-[max(env(safe-area-inset-bottom),0.35rem)] pt-2 text-[11px] font-medium transition-colors short:min-h-12 short:flex-row short:gap-1.5 short:py-1 short:text-xs rail:min-h-16 rail:flex-col rail:gap-1.5 rail:rounded-xl rail:py-2 rail:pb-2 rail:pt-2 ${
+                  className={`flex min-h-14 flex-col items-center justify-center gap-1 px-0.5 pb-[max(env(safe-area-inset-bottom),0.35rem)] pt-2 text-[10px] font-medium leading-tight transition-colors min-[360px]:text-[11px] short:min-h-12 short:flex-row short:gap-1.5 short:pt-1 short:text-xs rail:min-h-16 rail:flex-col rail:gap-1.5 rail:rounded-xl rail:pb-2 rail:pt-2 rail:text-xs ${
                     aktiv
                       ? 'text-accent rail:bg-accent/10'
                       : 'text-muted rail:hover:bg-surface2'
@@ -285,12 +285,15 @@ export default function App() {
         </nav>
       </div>
 
-      {/* Bleibt dauerhaft im DOM, sonst kündigen Screenreader den Toast nicht an. */}
+      {/* Bleibt dauerhaft im DOM, sonst kündigen Screenreader den Toast nicht an.
+          Der Abstand hält ihn über der unteren Aktionsleiste — auch auf dem
+          Tablet, wo es keine Tab-Leiste, aber weiterhin den festen Aktionsknopf
+          gibt. */}
       <div
         role="status"
         aria-live="polite"
         aria-atomic="true"
-        className="pointer-events-none fixed inset-x-0 bottom-24 z-50 flex justify-center px-4 rail:bottom-8"
+        className="pointer-events-none fixed inset-x-0 bottom-24 z-50 flex justify-center px-4 rail:bottom-32"
       >
         {toast ? (
           <div className="rounded-full bg-fg px-4 py-2 text-sm font-medium text-bg shadow-xl">

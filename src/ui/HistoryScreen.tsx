@@ -131,24 +131,27 @@ export function HistoryScreen() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="border-b border-line px-4 py-3">
+      <header className="border-b border-line px-4 py-3 rail:px-6">
         <h1 className="text-lg font-semibold">Verlauf</h1>
         <p className="text-xs text-muted">
           {begonneneLaeufe} {begonneneLaeufe === 1 ? 'Lauf' : 'Läufe'}
         </p>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-4 pb-8 pt-3">
+      <div className="flex-1 overflow-y-auto px-4 pb-8 pt-3 rail:px-6">
         {gruppen.length === 0 ? (
           <p className="mt-16 text-center text-sm text-muted">
             Noch keine Messungen. Starte den ersten Lauf im Tab „Timer“.
           </p>
         ) : null}
 
+        <div className="grid grid-cols-1 items-start gap-6 rail:grid-cols-2">
         {gruppen.map((gruppe) => (
-          <section key={gruppe.id} className="mb-6">
-            {/* Kopfzeile: Datum links, Bezeichnung und Kennzeichen rechts. */}
-            <div className="mb-2 flex items-center justify-between gap-2">
+          <section key={gruppe.id} className="min-w-0">
+            {/* Kopfzeile: Datum links, Bezeichnung und Kennzeichen rechts.
+                Auf schmalen Geräten darf sie umbrechen, statt den Titel zu
+                zerquetschen. */}
+            <div className="mb-2 flex flex-wrap items-center gap-2">
               <h2 className="shrink-0 text-[11px] font-bold uppercase tracking-wider text-muted">
                 {datumText(gruppe.datum)}
               </h2>
@@ -258,6 +261,7 @@ export function HistoryScreen() {
             </ul>
           </section>
         ))}
+        </div>
       </div>
 
       {/* Das Detail liegt als Vollbild über dem Verlauf; Schließen setzt nur
