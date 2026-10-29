@@ -14,7 +14,7 @@ import type { Einstellungen } from './einstellungen'
 
 export interface SchwimmerAktionenDeps {
   istAktiv: () => boolean
-  verfolge: <T>(vorgang: Promise<T>) => Promise<T>
+  verfolge: <T>(vorgang: () => Promise<T>) => Promise<T>
   schwimmerRef: Ref<Schwimmer[]>
   laeufeRef: Ref<Lauf[]>
   trainingsRef: Ref<Training[]>
@@ -75,7 +75,7 @@ export function createSchwimmerAktionen(deps: SchwimmerAktionenDeps): SchwimmerA
           eintrag,
         ]),
       )
-      verfolge(saveSchwimmer(eintrag))
+      verfolge(() => saveSchwimmer(eintrag))
       return eintrag
     },
 
@@ -87,7 +87,7 @@ export function createSchwimmerAktionen(deps: SchwimmerAktionenDeps): SchwimmerA
     loescheSchwimmer: (id) => {
       if (!istAktiv()) return
       setSchwimmer(schwimmerRef.current.filter((s) => s.id !== id))
-      verfolge(deleteSchwimmer(id))
+      verfolge(() => deleteSchwimmer(id))
 
       const geaenderteLaeufe: Lauf[] = []
       const naechsteLaeufe = laeufeRef.current.map((lauf) => {
@@ -103,7 +103,7 @@ export function createSchwimmerAktionen(deps: SchwimmerAktionenDeps): SchwimmerA
       })
       if (geaenderteLaeufe.length > 0) {
         setLaeufe(naechsteLaeufe)
-        for (const lauf of geaenderteLaeufe) verfolge(saveLauf(lauf))
+        for (const lauf of geaenderteLaeufe) verfolge(() => saveLauf(lauf))
       }
 
       const einstellungen = getEinstellungen()
@@ -130,7 +130,7 @@ export function createSchwimmerAktionen(deps: SchwimmerAktionenDeps): SchwimmerA
       })
       if (geaenderteTrainings.length > 0) {
         setTrainings(naechsteTrainings)
-        for (const training of geaenderteTrainings) verfolge(saveTraining(training))
+        for (const training of geaenderteTrainings) verfolge(() => saveTraining(training))
       }
     },
   }

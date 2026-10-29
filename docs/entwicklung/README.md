@@ -96,8 +96,10 @@ Synonyme wie „Session“, „Heat“ (außer als erklärte Übersetzung) oder 
 
 ### 6. Keine stillen Fehler
 
-Speicherfehler werden zu einem dauerhaften Banner. Der Service Worker lädt die App nicht mitten im
-Lauf neu. Eine Render-Ausnahme landet in der `ErrorBoundary` statt in einer weißen Seite.
+Speicherfehler werden kurz erneut versucht und erst dann zu einem Banner, wenn sie dauerhaft
+bleiben. Ein späterer erfolgreicher Schreibvorgang nimmt es zurück. Der Service Worker lädt die
+App nicht mitten im Lauf neu. Eine Render-Ausnahme landet in der `ErrorBoundary` statt in einer
+weißen Seite.
 
 ## Wo Ändere ich was?
 

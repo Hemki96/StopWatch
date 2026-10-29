@@ -54,7 +54,7 @@ import { einheitVon } from '../domain/einheit'
 
 export interface LaufAktionenDeps {
   istAktiv: () => boolean
-  verfolge: <T>(vorgang: Promise<T>) => Promise<T>
+  verfolge: <T>(vorgang: () => Promise<T>) => Promise<T>
   laeufeRef: Ref<Lauf[]>
   satzeRef: Ref<Satz[]>
   aktiveIdsRef: Ref<string[]>
@@ -144,7 +144,7 @@ export function createLaufAktionen(deps: LaufAktionenDeps): LaufAktionen {
     const naechster = fn(aktuell)
     if (naechster === aktuell) return
     setLaeufe(laeufeRef.current.map((l) => (l.id === id ? naechster : l)))
-    verfolge(saveLauf(naechster))
+    verfolge(() => saveLauf(naechster))
   }
 
   /**
@@ -159,7 +159,7 @@ export function createLaufAktionen(deps: LaufAktionenDeps): LaufAktionen {
     if (!istAktiv()) return
     if (naechster === lauf) return
     setLaeufe(laeufeRef.current.map((eintrag) => (eintrag.id === lauf.id ? naechster : eintrag)))
-    verfolge(saveLauf(naechster))
+    verfolge(() => saveLauf(naechster))
   }
 
   /**
@@ -277,7 +277,7 @@ export function createLaufAktionen(deps: LaufAktionenDeps): LaufAktionen {
         return ergaenzt
       })
       setLaeufe(naechste)
-      for (const eintrag of geaendert) verfolge(saveLauf(eintrag))
+      for (const eintrag of geaendert) verfolge(() => saveLauf(eintrag))
       return
     }
 
@@ -353,7 +353,7 @@ export function createLaufAktionen(deps: LaufAktionenDeps): LaufAktionen {
     if (geaendert.length === 0) return
     const nachId = new Map(geaendert.map((lauf) => [lauf.id, lauf]))
     setLaeufe(laeufeRef.current.map((lauf) => nachId.get(lauf.id) ?? lauf))
-    for (const lauf of geaendert) verfolge(saveLauf(lauf))
+    for (const lauf of geaendert) verfolge(() => saveLauf(lauf))
   }
 
   /** Bahnzuordnung in einem beliebigen Lauf, etwa beim Nachtragen im Detail. */
@@ -368,7 +368,7 @@ export function createLaufAktionen(deps: LaufAktionenDeps): LaufAktionen {
     const naechster = setSchwimmerOnLane(lauf, bahnId, schwimmerId)
     if (naechster === lauf) return
     setLaeufe(laeufeRef.current.map((l) => (l.id === laufId ? naechster : l)))
-    verfolge(saveLauf(naechster))
+    verfolge(() => saveLauf(naechster))
   }
 
   /** Korrigiert einen erfassten Anschlag; die Domäne prüft die Reihenfolge. */
@@ -384,7 +384,7 @@ export function createLaufAktionen(deps: LaufAktionenDeps): LaufAktionen {
     const naechster = korrigiereAnschlagImLauf(lauf, bahnId, laengeNr, splitMs)
     if (naechster === lauf) return
     setLaeufe(laeufeRef.current.map((l) => (l.id === laufId ? naechster : l)))
-    verfolge(saveLauf(naechster))
+    verfolge(() => saveLauf(naechster))
   }
 
   /**
@@ -481,7 +481,7 @@ export function createLaufAktionen(deps: LaufAktionenDeps): LaufAktionen {
     setLaeufe([...neueLaeufe, ...laeufeRef.current])
     // Satz und Läufe gehören zusammen: Entweder ist der Lauf vollständig
     // angelegt oder gar nicht.
-    verfolge(saveMehrere({ satze: neuerSatz ? [neuerSatz] : [], laeufe: neueLaeufe }))
+    verfolge(() => saveMehrere({ satze: neuerSatz ? [neuerSatz] : [], laeufe: neueLaeufe }))
 
     // Fertig gemessene Einträge verschwinden beim Anlegen aus der Leiste,
     // bleiben aber im Verlauf. Offene Läufe werden weitergeführt.
@@ -533,7 +533,7 @@ export function createLaufAktionen(deps: LaufAktionenDeps): LaufAktionen {
       const naechste = aktiveIdsRef.current.filter((eintrag) => !ids.has(eintrag))
       setAktiveIds(naechste)
       setAktivenLaufId(naechste[0] ?? null)
-      verfolge(deleteSatzUndLaeufe(satz.id))
+      verfolge(() => deleteSatzUndLaeufe(satz.id))
       zeigeToast('Serie abgebrochen.')
       return
     }
@@ -542,14 +542,14 @@ export function createLaufAktionen(deps: LaufAktionenDeps): LaufAktionen {
     const naechste = aktiveIdsRef.current.filter((eintrag) => eintrag !== id)
     setAktiveIds(naechste)
     setAktivenLaufId(naechste[0] ?? null)
-    verfolge(deleteLauf(id))
+    verfolge(() => deleteLauf(id))
 
     const satzId = lauf?.satzId
     // Ein Satz ohne Läufe wäre im Verlauf unsichtbar; er verschwindet mit
     // seinem letzten Lauf.
     if (satzId && !laeufeRef.current.some((eintrag) => eintrag.satzId === satzId)) {
       setSatze(satzeRef.current.filter((eintrag) => eintrag.id !== satzId))
-      verfolge(deleteSatzUndLaeufe(satzId))
+      verfolge(() => deleteSatzUndLaeufe(satzId))
     }
     zeigeToast('Lauf verworfen.')
   }
@@ -566,7 +566,7 @@ export function createLaufAktionen(deps: LaufAktionenDeps): LaufAktionen {
       : undefined
     const verbleibend = laeufeRef.current.filter((eintrag) => eintrag.id !== id)
     setLaeufe(verbleibend)
-    verfolge(deleteLauf(id))
+    verfolge(() => deleteLauf(id))
 
     // War der gelöschte Lauf der Anker einer Serie, übernimmt die nächste
     // verbliebene Wiederholung die Rolle in der Leiste.
@@ -585,7 +585,7 @@ export function createLaufAktionen(deps: LaufAktionenDeps): LaufAktionen {
     const satzId = lauf?.satzId
     if (satzId && !verbleibend.some((eintrag) => eintrag.satzId === satzId)) {
       setSatze(satzeRef.current.filter((eintrag) => eintrag.id !== satzId))
-      verfolge(deleteSatzUndLaeufe(satzId))
+      verfolge(() => deleteSatzUndLaeufe(satzId))
     }
   }
 
@@ -601,7 +601,7 @@ export function createLaufAktionen(deps: LaufAktionenDeps): LaufAktionen {
     if (betroffen.some((lauf) => lauf.id === aktiverLaufIdRef.current)) {
       setAktivenLaufId(naechste[0] ?? null)
     }
-    verfolge(deleteSatzUndLaeufe(id))
+    verfolge(() => deleteSatzUndLaeufe(id))
   }
 
   /** Benennt einen Satz um; leerer Text entfernt die Bezeichnung. */
@@ -611,7 +611,7 @@ export function createLaufAktionen(deps: LaufAktionenDeps): LaufAktionen {
     if (!satz) return
     const naechster = { ...satz, bezeichnung: bezeichnung.trim() }
     setSatze(satzeRef.current.map((eintrag) => (eintrag.id === id ? naechster : eintrag)))
-    verfolge(saveSatz(naechster))
+    verfolge(() => saveSatz(naechster))
   }
 
   /**

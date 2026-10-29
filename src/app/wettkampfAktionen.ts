@@ -37,7 +37,7 @@ import { schwimmerIdFuer, sortiereSchwimmer } from './schwimmer'
 
 export interface WettkampfAktionenDeps {
   istAktiv: () => boolean
-  verfolge: <T>(vorgang: Promise<T>) => Promise<T>
+  verfolge: <T>(vorgang: () => Promise<T>) => Promise<T>
   laeufeRef: Ref<Lauf[]>
   satzeRef: Ref<Satz[]>
   wettkampfeRef: Ref<Wettkampf[]>
@@ -179,7 +179,7 @@ export function createWettkampfAktionen(deps: WettkampfAktionenDeps): WettkampfA
     setLaeufe([...neueLaeufe, ...laeufeRef.current])
     // Ein Wettkampf mit Disziplinen, Heats und neuen Schwimmern gehört
     // zusammen: eine Transaktion statt bis zu tausender Einzel-Schreibvorgänge.
-    verfolge(
+    verfolge(() =>
       saveMehrere({
         wettkampfe: vorhanden ? [] : [wettkampf],
         schwimmer: neueSchwimmer,
@@ -197,7 +197,7 @@ export function createWettkampfAktionen(deps: WettkampfAktionenDeps): WettkampfA
       if (!name || !/^\d{4}-\d{2}-\d{2}$/.test(daten.datum)) return null
       const wettkampf = createWettkampf({ ...daten, name })
       setWettkampfe([wettkampf, ...wettkampfeRef.current])
-      verfolge(saveWettkampf(wettkampf))
+      verfolge(() => saveWettkampf(wettkampf))
       return wettkampf.id
     },
 
@@ -209,7 +209,7 @@ export function createWettkampfAktionen(deps: WettkampfAktionenDeps): WettkampfA
       setWettkampfe(
         wettkampfeRef.current.map((eintrag) => (eintrag.id === id ? naechster : eintrag)),
       )
-      verfolge(saveWettkampf(naechster))
+      verfolge(() => saveWettkampf(naechster))
     },
 
     importiereWettkampf,
@@ -260,7 +260,7 @@ export function createWettkampfAktionen(deps: WettkampfAktionenDeps): WettkampfA
       )
       setSatze([satz, ...satzeRef.current])
       setLaeufe([...neueLaeufe, ...laeufeRef.current])
-      verfolge(saveMehrere({ satze: [satz], laeufe: neueLaeufe }))
+      verfolge(() => saveMehrere({ satze: [satz], laeufe: neueLaeufe }))
       return satz.id
     },
 
@@ -292,7 +292,7 @@ export function createWettkampfAktionen(deps: WettkampfAktionenDeps): WettkampfA
           setAktivenLaufId(naechsteAktive[0] ?? null)
         }
       }
-      verfolge(deleteWettkampfUndDaten(id))
+      verfolge(() => deleteWettkampfUndDaten(id))
     },
 
     /**
@@ -345,7 +345,7 @@ export function createWettkampfAktionen(deps: WettkampfAktionenDeps): WettkampfA
       })
       if (neueSchwimmer.length > 0) {
         setSchwimmer(sortiereSchwimmer([...schwimmerRef.current, ...neueSchwimmer]))
-        for (const eintrag of neueSchwimmer) verfolge(saveSchwimmer(eintrag))
+        for (const eintrag of neueSchwimmer) verfolge(() => saveSchwimmer(eintrag))
       }
       aendereLauf(lauf, naechster)
     },

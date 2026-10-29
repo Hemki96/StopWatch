@@ -24,7 +24,7 @@ import type { Einstellungen } from './einstellungen'
 
 export interface TrainingsAktionenDeps {
   istAktiv: () => boolean
-  verfolge: <T>(vorgang: Promise<T>) => Promise<T>
+  verfolge: <T>(vorgang: () => Promise<T>) => Promise<T>
   laeufeRef: Ref<Lauf[]>
   satzeRef: Ref<Satz[]>
   trainingsRef: Ref<Training[]>
@@ -94,7 +94,7 @@ export function createTrainingsAktionen(deps: TrainingsAktionenDeps): TrainingsA
         ],
       })
       setTrainings([training, ...trainingsRef.current])
-      verfolge(saveTraining(training))
+      verfolge(() => saveTraining(training))
       return training.id
     },
 
@@ -114,7 +114,7 @@ export function createTrainingsAktionen(deps: TrainingsAktionenDeps): TrainingsA
             )
           : [training, ...trainingsRef.current],
       )
-      verfolge(saveTraining(training))
+      verfolge(() => saveTraining(training))
     },
 
     /**
@@ -124,7 +124,7 @@ export function createTrainingsAktionen(deps: TrainingsAktionenDeps): TrainingsA
     loescheTraining: (id) => {
       if (!istAktiv()) return
       setTrainings(trainingsRef.current.filter((eintrag) => eintrag.id !== id))
-      verfolge(deleteTraining(id))
+      verfolge(() => deleteTraining(id))
     },
 
     /**
@@ -196,7 +196,7 @@ export function createTrainingsAktionen(deps: TrainingsAktionenDeps): TrainingsA
       )
       // Satz, Trainingsverweis und Läufe gehören zusammen. Eine Transaktion
       // verhindert den Zustand „gestartet, aber ohne Läufe“ nach einem Abbruch.
-      verfolge(saveMehrere({ satze: [satz], trainings: [naechstesTraining], laeufe: neueLaeufe }))
+      verfolge(() => saveMehrere({ satze: [satz], trainings: [naechstesTraining], laeufe: neueLaeufe }))
 
       setAktiveIds([...new Set([anker.id, ...aktiveIdsRef.current])])
       setAktivenLaufId(anker.id)

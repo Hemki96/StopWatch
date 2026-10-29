@@ -179,7 +179,7 @@ in kleinen Modulen unter `src/app/`:
 | --- | --- |
 | `einstellungen.ts` | Vorbelegung lesen, begrenzen, schreiben; Designwahl |
 | `aktiveLaeufe.ts` | Leiste, Migration der Einzel-ID, Bereinigung und abgeleitete Anzeige |
-| `schreibpfad.ts` | Tab-Tor, Warteschlange offener Schreibvorgänge, Fehlerbanner (`useSchreibpfad`) |
+| `schreibpfad.ts` | Tab-Tor, Warteschlange offener Schreibvorgänge, Wiederholung, Fehlerbanner (`useSchreibpfad`) |
 | `laufAktionen.ts` | Messen, Anlegen, Auswählen und Löschen von Läufen und Serien |
 | `wettkampfAktionen.ts` | Meldeliste, Disziplinen, Heats und Löschen von Wettkämpfen |
 | `trainingsAktionen.ts` | Trainingspläne speichern und Sätze starten |
@@ -206,7 +206,9 @@ Der Ablauf einer Bedienung ist:
 2. React-State wird sofort aktualisiert.
 3. Die Persistenz läuft asynchron (`saveLauf`, `saveSatz`, …).
 4. Schreibvorgänge werden im Schreibpfad (`useSchreibpfad`) verfolgt.
-5. Ein Fehler setzt `speicherFehler` und zeigt das dauerhafte Banner.
+5. Vorübergehende Fehler werden mit kurzem Backoff erneut versucht. Erst ein dauerhafter
+   Fehler oder der letzte Versuch setzt `speicherFehler` und zeigt das Banner; ein späterer
+   erfolgreicher Schreibvorgang nimmt es zurück.
 
 Die Oberfläche wartet nicht auf IndexedDB. Das ist am Beckenrand wichtig: Ein Tap muss sofort
 sichtbar werden. Die Kehrseite ist, dass ein Speicherfehler erst kurz danach auffällt — deshalb das
