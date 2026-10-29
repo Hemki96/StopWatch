@@ -347,6 +347,10 @@ Details: [Oberfläche](oberflaeche.md).
 
 - Keine Netzwerkaufrufe mit Messdaten.
 - Kein `dangerouslySetInnerHTML`; Namen werden als Text gerendert.
+- Eine Content-Security-Policy im gebauten `index.html` begrenzt die Folgen einer XSS-Lücke:
+  Skripte nur von der eigenen Origin (plus Hash des Theme-Boots), Netzwerk nur zur eigenen
+  Origin. Der Dev-Server bleibt davon ausgenommen. Siehe
+  [Bauen und Veröffentlichen](bauen-und-veroeffentlichen.md#content-security-policy).
 - CSV schützt vor Formel-Injection durch ein führendes Apostroph.
 - Das Backup wird vollständig validiert und in einer Transaktion geschrieben.
 - Lokale Daten sind nicht verschlüsselt. Wer Gerätezugriff hat, hat Datenzugriff.
