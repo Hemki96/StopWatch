@@ -20,6 +20,7 @@
  */
 
 import { formatTime } from './format'
+import { formatBeckenlaenge } from './einheit'
 import { newId } from './id'
 import type {
   Anschlag,
@@ -64,6 +65,22 @@ export function lengthCount(konfiguration: LaufKonfiguration): number | null {
 }
 
 /**
+ * True, wenn die Strecke ein Vielfaches der Beckenlänge ist. Der Vergleich
+ * arbeitet mit einer kleinen Toleranz, weil Yard-Becken kanonisch 22,86 m lang
+ * sind und 91,44 / 22,86 in Gleitkomma nicht exakt 4 ergibt.
+ */
+export function istVielfacheDerBeckenlaenge(
+  streckeM: number,
+  beckenlaengeM: number,
+): boolean {
+  if (!Number.isFinite(streckeM) || !Number.isFinite(beckenlaengeM) || beckenlaengeM <= 0) {
+    return false
+  }
+  const laengen = streckeM / beckenlaengeM
+  return Math.abs(laengen - Math.round(laengen)) < 1e-9
+}
+
+/**
  * Prüft eine Streckenkonfiguration und liefert eine deutsche Fehlermeldung oder
  * `null`, wenn alles gültig ist. Eine offene Strecke ist immer gültig.
  *
@@ -75,8 +92,11 @@ export function validateKonfiguration(konfiguration: LaufKonfiguration): string 
   if (!Number.isFinite(konfiguration.streckeM) || konfiguration.streckeM <= 0) {
     return 'Die Strecke muss größer als 0 m sein.'
   }
-  if (konfiguration.streckeM % konfiguration.beckenlaengeM !== 0) {
-    return `Die Strecke muss ein Vielfaches der Beckenlänge (${konfiguration.beckenlaengeM} m) sein.`
+  if (!istVielfacheDerBeckenlaenge(konfiguration.streckeM, konfiguration.beckenlaengeM)) {
+    return `Die Strecke muss ein Vielfaches der Beckenlänge (${formatBeckenlaenge(
+      konfiguration.beckenlaengeM,
+      konfiguration.einheit === 'yd' ? 'yd' : 'm',
+    )}) sein.`
   }
   return null
 }

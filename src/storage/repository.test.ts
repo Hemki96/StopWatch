@@ -18,6 +18,7 @@ import {
   normalizeOnLoad,
   normalizeSatzOnLoad,
   normalizeTrainingOnLoad,
+  normalizeWettkampfOnLoad,
 } from './repository'
 import type { Lauf, Satz, Training } from '../domain/types'
 
@@ -95,6 +96,37 @@ describe('normalizeOnLoad', () => {
     const normalisiert = normalizeOnLoad(fertig)
     expect(normalisiert.bahnen[0]?.startMs).toBe(0)
     expect(normalisiert.bahnen[0]?.anschlaege).toHaveLength(2)
+  })
+})
+
+// Yard-Wettkämpfe tragen die Einheit und die kanonische Länge 22,86 m. Ältere
+// Wettkämpfe ohne Feld bleiben Meter; ein unbekannter Wert fällt auf die
+// Vorgabe der Einheit zurück.
+describe('normalizeWettkampfOnLoad', () => {
+  it('behält Yard-Becken und Einheit', () => {
+    const wettkampf = {
+      id: 'w1',
+      name: 'Herbstpokal',
+      datum: '2026-10-29',
+      beckenlaengeM: 22.86 as const,
+      einheit: 'yd' as const,
+      erstelltAm: 1,
+    }
+    const normalisiert = normalizeWettkampfOnLoad(wettkampf)
+    expect(normalisiert.beckenlaengeM).toBe(22.86)
+    expect(normalisiert.einheit).toBe('yd')
+  })
+
+  it('fällt bei unbekannter Beckenlänge auf die Einheit zurück', () => {
+    const normalisiert = normalizeWettkampfOnLoad({
+      id: 'w1',
+      name: 'Herbstpokal',
+      datum: '2026-10-29',
+      beckenlaengeM: 33 as unknown as 25,
+      einheit: 'yd',
+      erstelltAm: 1,
+    })
+    expect(normalisiert.beckenlaengeM).toBe(22.86)
   })
 })
 

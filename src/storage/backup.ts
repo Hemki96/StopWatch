@@ -113,8 +113,11 @@ function istIndex(wert: unknown): wert is number {
  */
 function pruefeKonfiguration(wert: unknown, pfad: string): string | null {
   if (!istObjekt(wert)) return `${pfad}: Die Konfiguration fehlt oder ist kein Objekt.`
-  if (wert.beckenlaengeM !== 25 && wert.beckenlaengeM !== 50) {
-    return `${pfad}: Feld "beckenlaengeM" muss 25 oder 50 sein.`
+  if (wert.beckenlaengeM !== 25 && wert.beckenlaengeM !== 50 && wert.beckenlaengeM !== 22.86) {
+    return `${pfad}: Feld "beckenlaengeM" muss 25, 50 oder 22.86 sein.`
+  }
+  if (wert.einheit !== undefined && wert.einheit !== 'm' && wert.einheit !== 'yd') {
+    return `${pfad}: Feld "einheit" muss "m", "yd" oder leer sein.`
   }
   if (wert.streckeM !== null && (!istZahl(wert.streckeM) || wert.streckeM <= 0)) {
     return `${pfad}: Feld "streckeM" muss eine positive Zahl oder null sein.`
@@ -160,8 +163,11 @@ function pruefeWettkampf(wert: unknown, index: number): string | null {
   if (!istText(wert.datum) || !/^\d{4}-\d{2}-\d{2}$/.test(wert.datum)) {
     return `${pfad}: Feld "datum" muss ein Datum im Format JJJJ-MM-TT sein.`
   }
-  if (wert.beckenlaengeM !== 25 && wert.beckenlaengeM !== 50) {
-    return `${pfad}: Feld "beckenlaengeM" muss 25 oder 50 sein.`
+  if (wert.beckenlaengeM !== 25 && wert.beckenlaengeM !== 50 && wert.beckenlaengeM !== 22.86) {
+    return `${pfad}: Feld "beckenlaengeM" muss 25, 50 oder 22.86 sein.`
+  }
+  if (wert.einheit !== undefined && wert.einheit !== 'm' && wert.einheit !== 'yd') {
+    return `${pfad}: Feld "einheit" muss "m", "yd" oder leer sein.`
   }
   if (!istZahl(wert.erstelltAm)) return `${pfad}: Feld "erstelltAm" fehlt oder ist keine Zahl.`
   return null

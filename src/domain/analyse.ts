@@ -12,8 +12,9 @@
  */
 
 import { finishMs } from './lauf'
+import { einheitVon, pacePro100Einheit } from './einheit'
 import { istWettkampfSatz } from './wettkampf'
-import type { Bahn, Lauf, LaufKonfiguration, Satz } from './types'
+import type { Bahn, Einheit, Lauf, LaufKonfiguration, Satz } from './types'
 
 /**
  * Ein PB-Eintrag mit Verweis auf die messende Bahn: `ms` ist die Bestzeit,
@@ -41,6 +42,9 @@ export function pbKey(konfiguration: LaufKonfiguration, schwimmerId: string): st
     konfiguration.streckeM ?? 'offen',
     konfiguration.schwimmart,
     konfiguration.beckenlaengeM,
+    // Meter- und Yard-Becken erzeugen getrennte Bestzeiten, auch wenn die
+    // kanonische Länge zufällig gleich wäre (ADR 0009).
+    einheitVon(konfiguration),
   ].join('|')
 }
 
@@ -106,8 +110,8 @@ export function pbDelta(
  * Es gibt keine Division-durch-0-Prüfung: `streckeM` muss positiv sein. Für
  * offene Strecken ist keine Pace definiert, Aufrufer lassen sie dort weg.
  */
-export function pacePro100(ms: number, streckeM: number): number {
-  return (ms / streckeM) * 100
+export function pacePro100(ms: number, streckeM: number, einheit: Einheit = 'm'): number {
+  return pacePro100Einheit(ms, streckeM, einheit)
 }
 
 /**
@@ -226,7 +230,8 @@ function gleicheBasis(a: Satz, b: Satz): boolean {
   return (
     a.konfiguration.streckeM === b.konfiguration.streckeM &&
     a.konfiguration.schwimmart === b.konfiguration.schwimmart &&
-    a.konfiguration.beckenlaengeM === b.konfiguration.beckenlaengeM
+    a.konfiguration.beckenlaengeM === b.konfiguration.beckenlaengeM &&
+    einheitVon(a.konfiguration) === einheitVon(b.konfiguration)
   )
 }
 

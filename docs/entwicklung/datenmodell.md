@@ -17,9 +17,10 @@ type Beckenlaenge = 25 | 50
 type LaufModus = 'training' | 'wettkampf'
 
 interface LaufKonfiguration {
-  beckenlaengeM: Beckenlaenge
-  streckeM: number | null      // null = offene Strecke
+  beckenlaengeM: Beckenlaenge  // 25 | 50 | 22.86 (25 yd), kanonisch in Metern
+  streckeM: number | null      // null = offene Strecke, kanonisch in Metern
   schwimmart: Schwimmart
+  einheit?: 'm' | 'yd'         // Anzeige-Einheit; fehlt = 'm'
 }
 ```
 
@@ -224,7 +225,10 @@ eigene Tabelle und keine Migrationsschritte.
 
 - `name` ist nicht leer.
 - `datum` ist ein ISO-Datum.
-- `beckenlaengeM` ist 25 oder 50.
+- `beckenlaengeM` ist 25, 50 oder 22,86 (25-Yard-Becken). Kanonisch gespeichert wird immer in
+  Metern; `einheit` steuert nur Anzeige und Eingabe (ADR 0009).
+- Eine Yard-Konfiguration speichert 100 yd als `streckeM: 91.44`; die Längenprüfung arbeitet mit
+  einer kleinen Toleranz, weil `91.44 / 22.86` in Gleitkomma nicht exakt 4 ergibt.
 
 ### Referenzielle Integrität
 

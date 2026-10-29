@@ -20,6 +20,7 @@ import { getDb } from './db'
 import type { Lauf, Satz, Schwimmer, Training, Wettkampf } from '../domain/types'
 import { MAX_BAHNEN, MAX_REIHEN, bahnenGesamt } from '../domain/training'
 import { bahnReihe, isFinished } from '../domain/lauf'
+import { istBeckenlaenge } from '../domain/einheit'
 import { BACKUP_FORMAT, BACKUP_VERSION, pruefeBackup, type Backup } from './backup'
 
 /**
@@ -92,10 +93,18 @@ export function normalizeSatzOnLoad(satz: Satz): Satz {
 
 /** Ältere Wettkämpfe gibt es nicht; fehlende Felder werden defensiv ergänzt. */
 export function normalizeWettkampfOnLoad(wettkampf: Wettkampf): Wettkampf {
+  const einheit = wettkampf.einheit === 'yd' ? 'yd' : undefined
+  // 25, 50 und 22.86 (25 yd) sind gültig; alles andere fällt auf die
+  // Vorgabe der Einheit zurück.
+  const beckenlaengeM = istBeckenlaenge(wettkampf.beckenlaengeM)
+    ? wettkampf.beckenlaengeM
+    : einheit === 'yd'
+      ? 22.86
+      : 50
   return {
     ...wettkampf,
-    // Nur 25 und 50 sind gültige Beckenlängen; alles andere fällt auf 50 zurück.
-    beckenlaengeM: wettkampf.beckenlaengeM === 25 ? 25 : 50,
+    beckenlaengeM,
+    ...(einheit ? { einheit } : {}),
   }
 }
 

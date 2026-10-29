@@ -52,6 +52,17 @@ describe('pbKey', () => {
     expect(kurz).not.toBe(lang)
   })
 
+  // Meter- und Yard-Becken sind getrennte Bestzeiten, auch wenn die
+  // kanonische Länge gleich wäre.
+  it('trennt Meter- und Yard-Becken', () => {
+    const meter = pbKey({ ...K100, beckenlaengeM: 25 }, 's1')
+    const yard = pbKey(
+      { beckenlaengeM: 22.86, streckeM: 91.44, schwimmart: 'freistil', einheit: 'yd' },
+      's1',
+    )
+    expect(meter).not.toBe(yard)
+  })
+
   // Strecke und Schwimmart sind eigene Dimensionen des Schlüssels.
   it('trennt Strecke und Schwimmart', () => {
     expect(pbKey(K100, 's1')).not.toBe(pbKey({ ...K100, streckeM: 200 }, 's1'))

@@ -130,6 +130,40 @@ describe('pruefeBackup', () => {
     expect(ergebnis.backup).toEqual(backup)
   })
 
+  // Ein Yard-Backup trägt die Einheit und die kanonische 25-Yard-Beckenlänge;
+  // ein Backup ohne Einheit bleibt ein Meter-Backup (Rückwärtskompatibilität).
+  it('liest Yard-Konfigurationen und lässt fehlende Einheiten als Meter', () => {
+    const roh = kopie()
+    const laufRoh = (roh.laeufe as Record<string, unknown>[])[0]!
+    laufRoh.konfiguration = {
+      beckenlaengeM: 22.86,
+      streckeM: 91.44,
+      schwimmart: 'freistil',
+      einheit: 'yd',
+    }
+    const ergebnis = pruefeBackup(roh)
+    expect(ergebnis.ok).toBe(true)
+    if (!ergebnis.ok) return
+    expect(ergebnis.backup.laeufe[0]?.konfiguration).toMatchObject({
+      beckenlaengeM: 22.86,
+      streckeM: 91.44,
+      einheit: 'yd',
+    })
+
+    // Das unveränderte Fixture hat kein Feld `einheit`; das bleibt gültig.
+    expect(pruefeBackup(kopie()).ok).toBe(true)
+  })
+
+  it('lehnt eine unbekannte Einheit ab', () => {
+    const roh = kopie()
+    ;((roh.laeufe as Record<string, unknown>[])[0]!.konfiguration as Record<string, unknown>).einheit =
+      'meter'
+    const ergebnis = pruefeBackup(roh)
+    expect(ergebnis.ok).toBe(false)
+    if (ergebnis.ok) return
+    expect(ergebnis.fehler).toContain('einheit')
+  })
+
   // DNS/DNF ist ein optionales Bahnfeld; ein Backup mit Markierung bleibt
   // vollständig einlesbar und unverändert.
   it('erhält DNS und DNF am Lauf', () => {

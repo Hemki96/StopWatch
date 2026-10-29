@@ -43,7 +43,9 @@ import {
   type Training,
   type Wettkampf,
   type WettkampfStatus,
+  type Einheit,
 } from '../domain/types'
+import { einheitVon } from '../domain/einheit'
 import {
   bahnReihe,
   createLauf,
@@ -52,6 +54,7 @@ import {
   hatLaufendeBahn,
   isComplete,
   isFinished,
+  istVielfacheDerBeckenlaenge,
   korrigiereAnschlag as korrigiereAnschlagImLauf,
   planeLauf,
   setzeWettkampfStatus as setzeWettkampfStatusImLauf,
@@ -485,19 +488,32 @@ export function leseEinstellungen(): Einstellungen {
       typeof parsed.konfiguration === 'object' && parsed.konfiguration !== null
         ? parsed.konfiguration
         : STANDARD_EINSTELLUNGEN.konfiguration
-    const beckenlaengeM: Beckenlaenge = roheKonfiguration.beckenlaengeM === 25 ? 25 : 50
+    // Fehlt die Einheit, gelten Meter; eine unbekannte Yard-Kombination wird
+    // auf ein 25-Yard-Becken zurückgeführt, statt stillschweigend Meter zu
+    // zeigen. So bleibt jede gespeicherte Einstellung in sich stimmig.
+    const einheit: Einheit = einheitVon(roheKonfiguration)
+    // Meter kennt 25/50, Yards nur 25 yd (22,86 m). Alles andere fällt auf die
+    // Vorgabe der Einheit zurück.
+    const beckenlaengeM: Beckenlaenge =
+      einheit === 'yd'
+        ? 22.86
+        : roheKonfiguration.beckenlaengeM === 25
+          ? 25
+          : 50
     const roheStrecke = roheKonfiguration.streckeM
     // `null` bleibt erhalten und bedeutet „offene Strecke“; nur ein
-    // unbrauchbarer Zahlenwert fällt auf den Standard zurück.
+    // unbrauchbarer Zahlenwert fällt auf den Standard der Einheit zurück.
     const streckeM =
       roheStrecke === null
         ? null
         : typeof roheStrecke === 'number' &&
             Number.isFinite(roheStrecke) &&
             roheStrecke > 0 &&
-            roheStrecke % beckenlaengeM === 0
-          ? Math.round(roheStrecke)
-          : STANDARD_EINSTELLUNGEN.konfiguration.streckeM
+            istVielfacheDerBeckenlaenge(roheStrecke, beckenlaengeM)
+          ? Math.round(roheStrecke * 100) / 100
+          : einheit === 'yd'
+            ? 91.44
+            : STANDARD_EINSTELLUNGEN.konfiguration.streckeM
     const schwimmart =
       SCHWIMMARTEN.find((eintrag) => eintrag.wert === roheKonfiguration.schwimmart)?.wert ??
       'freistil'
@@ -508,7 +524,12 @@ export function leseEinstellungen(): Einstellungen {
     const begrenzt = Math.min(MAX_BAHNEN, Math.max(1, Math.round(bahnen)))
     const reihen = begrenzeReihen(parsed.reihen)
     return {
-      konfiguration: { beckenlaengeM, streckeM, schwimmart },
+      konfiguration: {
+        beckenlaengeM,
+        streckeM,
+        schwimmart,
+        ...(einheit === 'yd' ? { einheit: 'yd' as const } : {}),
+      },
       bahnen: begrenzt,
       reihen,
       schwimmerProBahn: normalisiereSchwimmerProBahn(
@@ -546,7 +567,8 @@ function gleicheKonfiguration(a: LaufKonfiguration, b: LaufKonfiguration): boole
   return (
     a.beckenlaengeM === b.beckenlaengeM &&
     a.streckeM === b.streckeM &&
-    a.schwimmart === b.schwimmart
+    a.schwimmart === b.schwimmart &&
+    einheitVon(a) === einheitVon(b)
   )
 }
 
@@ -1787,7 +1809,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    * muss `YYYY-MM-DD` sein (Formularformat), sonst wird abgelehnt.
    */
   const erstelleWettkampf = useCallback(
-    (daten: { name: string; datum: string; beckenlaengeM: Beckenlaenge }) => {
+    (daten: { name: string; datum: string; beckenlaengeM: Beckenlaenge; einheit?: Einheit }) => {
       if (!tabAktivRef.current) return null
       const name = daten.name.trim()
       if (!name || !/^\d{4}-\d{2}-\d{2}$/.test(daten.datum)) return null
@@ -1842,6 +1864,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           name,
           datum: plan.datum,
           beckenlaengeM: plan.beckenlaengeM,
+          einheit: plan.einheit,
         })
       if (!vorhanden) {
         setWettkampfeSafe([wettkampf, ...wettkampfeRef.current])
@@ -1907,14 +1930,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!tabAktivRef.current) return null
       const wettkampf = wettkampfeRef.current.find((eintrag) => eintrag.id === wettkampfId)
       if (!wettkampf) return null
-      const streckeM = Math.round(disziplin.streckeM)
+      const streckeM = Math.round(disziplin.streckeM * 100) / 100
       if (
         !Number.isFinite(streckeM) ||
         streckeM <= 0 ||
-        streckeM % wettkampf.beckenlaengeM !== 0
+        !istVielfacheDerBeckenlaenge(streckeM, wettkampf.beckenlaengeM)
       ) {
         return null
       }
+      const einheit: Einheit = einheitVon(wettkampf)
       const laeufe = Math.min(20, Math.max(1, Math.round(disziplin.laeufe)))
       const bahnen = Math.min(10, Math.max(1, Math.round(disziplin.bahnen)))
       const plan: WettkampfDisziplinPlan = {
@@ -1922,9 +1946,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // „100 m Freistil“; das ist auch der Name im Verlauf.
         bezeichnung:
           disziplin.bezeichnung.trim() ||
-          disziplinBezeichnung(streckeM, disziplin.schwimmart),
+          disziplinBezeichnung(streckeM, disziplin.schwimmart, einheit),
         streckeM,
         schwimmart: disziplin.schwimmart,
+        einheit,
         laeufe: Array.from({ length: laeufe }, (_, index) => ({
           nummer: index + 1,
           starts: Array.from({ length: bahnen }, (_, bahnIndex) => ({

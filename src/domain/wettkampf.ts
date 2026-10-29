@@ -16,6 +16,7 @@
 import { finishMs, istBahnBeendet } from './lauf'
 import { newId } from './id'
 import { truncateToHundredths } from './format'
+import { einheitVon, formatStreckeEinheit } from './einheit'
 import {
   SCHWIMMARTEN,
   type Bahn,
@@ -25,6 +26,7 @@ import {
   type Schwimmart,
   type Wettkampf,
   type WettkampfStatus,
+  type Einheit,
 } from './types'
 
 /** Eine Zeile einer Meldeliste: Name und Bahn innerhalb eines Laufs. */
@@ -45,6 +47,8 @@ export interface WettkampfDisziplinPlan {
   bezeichnung: string
   streckeM: number
   schwimmart: Schwimmart
+  /** Anzeige-Einheit; fehlt sie, gilt die des Wettkampfs bzw. Meter. */
+  einheit?: Einheit
   laeufe: WettkampfLaufPlan[]
 }
 
@@ -53,6 +57,8 @@ export interface WettkampfPlan {
   name: string
   datum: string
   beckenlaengeM: Beckenlaenge
+  /** Anzeige-Einheit; fehlt sie, gilt Meter. */
+  einheit?: Einheit
   disziplinen: WettkampfDisziplinPlan[]
 }
 
@@ -65,12 +71,14 @@ export function createWettkampf(daten: {
   name: string
   datum: string
   beckenlaengeM: Beckenlaenge
+  einheit?: Einheit
 }): Wettkampf {
   return {
     id: newId(),
     name: daten.name.trim(),
     datum: daten.datum,
     beckenlaengeM: daten.beckenlaengeM,
+    ...(daten.einheit === 'yd' ? { einheit: 'yd' as const } : {}),
     erstelltAm: Date.now(),
   }
 }
@@ -80,9 +88,13 @@ export function createWettkampf(daten: {
  * z. B. „100 m Freistil“. Eine unbekannte Schwimmart fällt auf Freistil
  * zurück, damit die Anzeige nie leer bleibt.
  */
-export function disziplinBezeichnung(streckeM: number, schwimmart: Schwimmart): string {
+export function disziplinBezeichnung(
+  streckeM: number,
+  schwimmart: Schwimmart,
+  einheit: Einheit = 'm',
+): string {
   const art = SCHWIMMARTEN.find((eintrag) => eintrag.wert === schwimmart)?.label ?? 'Freistil'
-  return `${streckeM} m ${art}`
+  return `${formatStreckeEinheit(streckeM, einheit)} ${art}`
 }
 
 /**
@@ -101,11 +113,18 @@ export function createWettkampfSatz(
   return {
     id: newId(),
     datum: wettkampf.datum,
-    bezeichnung: disziplin.bezeichnung || disziplinBezeichnung(disziplin.streckeM, disziplin.schwimmart),
+    bezeichnung:
+      disziplin.bezeichnung ||
+      disziplinBezeichnung(
+        disziplin.streckeM,
+        disziplin.schwimmart,
+        einheitVon({ einheit: disziplin.einheit ?? wettkampf.einheit }),
+      ),
     konfiguration: {
       beckenlaengeM: wettkampf.beckenlaengeM,
       streckeM: disziplin.streckeM,
       schwimmart: disziplin.schwimmart,
+      einheit: einheitVon({ einheit: disziplin.einheit ?? wettkampf.einheit }),
     },
     plan: null,
     wettkampfId: wettkampf.id,

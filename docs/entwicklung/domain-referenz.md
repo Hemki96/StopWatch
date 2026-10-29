@@ -580,6 +580,23 @@ Alias für `formatTime`; für Eingabefelder gedacht.
 
 `YYYY-MM-DD` in der lokalen Zeitzone, nicht UTC. Wichtig für Wettkampf- und CSV-Daten.
 
+## `einheit.ts`
+
+Die einzige Quelle für Meter ↔ Yards (ADR 0009).
+
+| Funktion | Ergebnis |
+| --- | --- |
+| `einheitVon(konfiguration)` | `'yd'` oder `'m'`; fehlendes Feld = Meter |
+| `anzeigeZuMeter(wert, einheit)` | kanonische Meter, auf zwei Nachkommastellen gerundet |
+| `meterZuAnzeige(meter, einheit)` | Anzeigewert; Yards auf ganze Yards gerundet |
+| `beckenlaengenFuer(einheit)` | Meter `[25, 50]`, Yards `[22.86]` |
+| `istBeckenlaenge(wert)` | Type Guard für 25, 50, 22.86 |
+| `pacePro100Einheit(ms, streckeM, einheit)` | Pace pro 100 m bzw. 100 yd |
+| `formatStreckeEinheit` / `formatBeckenlaenge` | Beschriftung mit Einheit |
+
+Kanonische Werte: 25 yd = 22,86 m, 100 yd = 91,44 m, 1 yd = 0,9144 m. Vielfache werden mit einer
+Toleranz von `1e-9` geprüft (`istVielfacheDerBeckenlaenge` in `lauf.ts`).
+
 ## `analyse.ts`
 
 ### `pbKey(konfiguration, schwimmerId): string`
@@ -608,9 +625,10 @@ Alias für `formatTime`; für Eingabefelder gedacht.
 
 Sonst `{ deltaMs: ms - pb.ms, istPb: pb.bahnId === bahn.id }`.
 
-### `pacePro100(ms, streckeM): number`
+### `pacePro100(ms, streckeM, einheit = 'm'): number`
 
-`(ms / streckeM) * 100`. Keine Division durch 0; Aufrufer prüfen `streckeM`.
+`(ms / streckeM) * 100` für Meter, `ms * 91,44 / streckeM` für Yards. Keine Division durch 0;
+Aufrufer prüfen `streckeM`.
 
 ### `schnellsteZeit(lauf): number | null`
 

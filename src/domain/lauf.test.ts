@@ -81,6 +81,29 @@ describe('lengthCount', () => {
 // Nur Vielfache der Beckenlänge sind gültig: 75 m im 50-m-Becken und eine
 // Strecke von 0 m sind Fehler, die offene Strecke (`null`) dagegen immer gültig.
 describe('validateKonfiguration', () => {
+  // 100 yd in einem 25-Yard-Becken sind vier Längen. Die kanonischen Meter
+  // (91,44 / 22,86) dürfen wegen Gleitkomma nicht als „kein Vielfaches“ gelten.
+  it('akzeptiert ein Yard-Becken mit 100 yd', () => {
+    const konfiguration = {
+      beckenlaengeM: 22.86 as const,
+      streckeM: 91.44,
+      schwimmart: 'freistil' as const,
+      einheit: 'yd' as const,
+    }
+    expect(validateKonfiguration(konfiguration)).toBeNull()
+    expect(lengthCount(konfiguration)).toBe(4)
+  })
+
+  it('lehnt eine Meter-Strecke in einem Yard-Becken ab', () => {
+    const konfiguration = {
+      beckenlaengeM: 22.86 as const,
+      streckeM: 100,
+      schwimmart: 'freistil' as const,
+      einheit: 'yd' as const,
+    }
+    expect(validateKonfiguration(konfiguration)).toContain('25 yd')
+  })
+
   it('lehnt Strecken ab, die kein Vielfaches der Beckenlänge sind', () => {
     expect(validateKonfiguration({ ...K100, streckeM: 75 })).not.toBeNull()
     expect(validateKonfiguration({ ...K100, streckeM: 0 })).not.toBeNull()

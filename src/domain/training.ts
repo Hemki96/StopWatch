@@ -18,6 +18,7 @@
 
 import { isComplete, validateKonfiguration } from './lauf'
 import { formatStrecke, formatTakt } from './format'
+import { einheitVon, formatBeckenlaenge } from './einheit'
 import { newId } from './id'
 import {
   SCHWIMMARTEN,
@@ -133,7 +134,7 @@ export function neuesTraining(daten: {
  * z. B. „4×100 m · Freistil“. Bei einer Wiederholung entfällt das „n×“.
  */
 export function beschreibeTrainingsSatz(satz: TrainingsSatz): string {
-  const strecke = formatStrecke(satz.konfiguration.streckeM)
+  const strecke = formatStrecke(satz.konfiguration.streckeM, einheitVon(satz.konfiguration))
   const art = SCHWIMMARTEN.find((eintrag) => eintrag.wert === satz.konfiguration.schwimmart)?.label
   const distanz = satz.wiederholungen > 1 ? `${satz.wiederholungen}×${strecke}` : strecke
   return art ? `${distanz} · ${art}` : distanz
@@ -153,7 +154,12 @@ export function trainingsSatzTitel(satz: TrainingsSatz): string {
  * Versatz wird für die Anzeige auf ganze Sekunden gerundet.
  */
 export function trainingsSatzMeta(satz: TrainingsSatz): string {
-  const teile = [`${satz.konfiguration.beckenlaengeM} m-Becken`]
+  const teile = [
+    `${formatBeckenlaenge(
+      satz.konfiguration.beckenlaengeM,
+      einheitVon(satz.konfiguration),
+    )}-Becken`,
+  ]
   if (satz.wiederholungen > 1) teile.push(`Takt ${formatTakt(satz.taktSek)}`)
   if (satz.startversatzMs > 0) teile.push(`${Math.round(satz.startversatzMs / 1000)} s Reihenversatz`)
   return teile.join(' · ')
