@@ -14,7 +14,16 @@
  * durchschlagen.
  */
 import { describe, expect, it } from 'vitest'
-import { BACKUP_FORMAT, BACKUP_VERSION, pruefeBackup, zusammenfassungText } from './backup'
+import {
+  BACKUP_FORMAT,
+  BACKUP_VERSION,
+  ermittleBackupKonflikte,
+  konfliktText,
+  loeseBackupKonflikte,
+  pruefeBackup,
+  zusammenfassungText,
+  type BackupBestand,
+} from './backup'
 import type { Lauf, Satz, Schwimmer, Training } from '../domain/types'
 
 // 100 m im 50-m-Becken; die Konfiguration kommt in Schwimmer-unabhängigen
@@ -565,5 +574,112 @@ describe('zusammenfassungText', () => {
     expect(
       zusammenfassungText({ schwimmer: 2, wettkampfe: 1, trainings: 2, satze: 3, laeufe: 5 }),
     ).toBe('2 Schwimmer, 1 Wettkampf, 2 Trainings, 3 Sätze, 5 Läufe')
+  })
+})
+
+// Konflikterkennung vor dem Import: gleiche IDs mit abweichendem Inhalt dürfen
+// nicht stillschweigend überschrieben werden. Der Vergleich arbeitet auf
+// normalisierten Datensätzen; hier reichen die Fixtures, weil sie bereits alle
+// aktuellen Felder tragen.
+describe('Import-Konflikte', () => {
+  function bestand(): BackupBestand {
+    return {
+      schwimmer: [{ ...schwimmer }],
+      satze: [{ ...satz }],
+      laeufe: [JSON.parse(JSON.stringify(lauf)) as Lauf],
+      wettkampfe: [],
+      trainings: [],
+    }
+  }
+
+  // Ein Lauf mit drei Anschlägen statt zwei; die Finish-Markierung wandert an
+  // den letzten Anschlag, damit der Datensatz fachlich gültig bleibt.
+  function laufMitDreiAnschlaegen(): Lauf {
+    const ergebnis = JSON.parse(JSON.stringify(lauf)) as Lauf
+    ergebnis.bahnen[0]!.anschlaege = [
+      { laengeNr: 1, splitMs: 30_000, erfasstAt: 2, istFinish: false },
+      { laengeNr: 2, splitMs: 60_000, erfasstAt: 3, istFinish: false },
+      { laengeNr: 3, splitMs: 90_000, erfasstAt: 4, istFinish: true },
+    ]
+    return ergebnis
+  }
+
+  it('meldet keinen Konflikt bei fachlich gleichem Inhalt', () => {
+    expect(ermittleBackupKonflikte(backup, bestand())).toEqual({
+      eintraege: [],
+      gesamt: 0,
+      neuereLokale: 0,
+    })
+  })
+
+  it('erkennt einen lokalen Lauf mit mehr Anschlägen als neuer', () => {
+    const lokal = bestand()
+    lokal.laeufe = [laufMitDreiAnschlaegen()]
+
+    const konflikte = ermittleBackupKonflikte(backup, lokal)
+
+    expect(konflikte.eintraege).toEqual([{ bestand: 'laeufe', id: 'l1', art: 'lokalNeuer' }])
+    expect(konflikte.gesamt).toBe(1)
+    expect(konflikte.neuereLokale).toBe(1)
+    expect(konfliktText(konflikte)).toBe('1 Konflikt: 1 Lauf. 1 davon ist lokal neuer.')
+  })
+
+  it('erkennt einen späteren lokalen Start auch ohne mehr Anschläge', () => {
+    const lokal = bestand()
+    lokal.laeufe[0]!.startWallMs = 2
+
+    const konflikte = ermittleBackupKonflikte(backup, lokal)
+
+    expect(konflikte.eintraege).toEqual([{ bestand: 'laeufe', id: 'l1', art: 'lokalNeuer' }])
+  })
+
+  it('meldet abweichende Stammdaten ohne neueren Zeitstempel als abweichend', () => {
+    const lokal = bestand()
+    lokal.schwimmer = [{ ...schwimmer, name: 'Mia Neu', erstelltAm: 1 }]
+
+    const konflikte = ermittleBackupKonflikte(backup, lokal)
+
+    expect(konflikte.eintraege).toEqual([
+      { bestand: 'schwimmer', id: 's1', art: 'abweichend' },
+    ])
+    expect(konflikte.neuereLokale).toBe(0)
+    expect(konfliktText(konflikte)).toBe('1 Konflikt: 1 Schwimmer.')
+  })
+
+  it('nennt bei mehreren Beständen Zahl und Art der Konflikte', () => {
+    const lokal = bestand()
+    lokal.laeufe = [laufMitDreiAnschlaegen()]
+    lokal.schwimmer = [{ ...schwimmer, name: 'Mia Neu' }]
+
+    const konflikte = ermittleBackupKonflikte(backup, lokal)
+
+    expect(konflikte.gesamt).toBe(2)
+    expect(konfliktText(konflikte)).toBe(
+      '2 Konflikte: 1 Schwimmer, 1 Lauf. 1 davon ist lokal neuer.',
+    )
+  })
+
+  // Standardfall: Der lokale Stand bleibt, alle Konflikte fallen aus dem Import.
+  it('behält beim Standard den lokalen Stand und importiert den Rest', () => {
+    const lokal = bestand()
+    lokal.laeufe = [laufMitDreiAnschlaegen()]
+    const konflikte = ermittleBackupKonflikte(backup, lokal).eintraege
+
+    const zuSchreiben = loeseBackupKonflikte(backup, konflikte, 'lokalBehalten')
+
+    expect(zuSchreiben.laeufe).toEqual([])
+    expect(zuSchreiben.schwimmer).toHaveLength(1)
+    expect(zuSchreiben.satze).toHaveLength(1)
+  })
+
+  // Bewusstes Ersetzen schreibt alle Backup-Datensätze, auch die kollidierenden.
+  it('übernimmt beim bewussten Ersetzen alle Backup-Datensätze', () => {
+    const lokal = bestand()
+    lokal.laeufe = [laufMitDreiAnschlaegen()]
+    const konflikte = ermittleBackupKonflikte(backup, lokal).eintraege
+
+    const zuSchreiben = loeseBackupKonflikte(backup, konflikte, 'backupErsetzen')
+
+    expect(zuSchreiben.laeufe).toEqual(backup.laeufe)
   })
 })

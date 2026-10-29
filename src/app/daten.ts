@@ -11,15 +11,29 @@
  * Dort sind Tab-Rolle und Warteschlange offener Schreibvorgänge zu Hause. Hier
  * wird nichts geschrieben und kein React benötigt.
  */
-import { pruefeBackup, zusammenfassungText, type Backup } from '../storage/backup'
-import { exportBackup } from '../storage/repository'
+import {
+  ermittleBackupKonflikte,
+  konfliktText,
+  pruefeBackup,
+  zusammenfassungText,
+  type Backup,
+  type BackupKonflikte,
+} from '../storage/backup'
+import { exportBackup, loadAll, normalisiereBackup } from '../storage/repository'
 import {
   leseSpeicherSchutz,
   schuetzeSpeicher,
   type SpeicherSchutz,
 } from '../storage/persistenz'
 
-export type { Backup, SpeicherSchutz }
+export type { Backup, BackupKonflikt, BackupKonflikte, KonfliktAufloesung } from '../storage/backup'
+export type { SpeicherSchutz }
+
+/** Konfliktprüfung samt fertigem Text für die Import-Vorschau. */
+export interface ImportKonflikte extends BackupKonflikte {
+  /** Formatierte Zusammenfassung, leer wenn es keinen Konflikt gibt. */
+  text: string
+}
 
 /**
  * Ergebnis der Import-Prüfung, fertig für die Vorschau.
@@ -47,6 +61,21 @@ export function pruefeBackupFuerImport(inhalt: unknown): BackupVorschau {
     backup: pruefung.backup,
     text: zusammenfassungText(pruefung.zusammenfassung),
   }
+}
+
+/**
+ * Ermittelt, welche Datensätze eines geprüften Backups mit dem lokalen Bestand
+ * kollidieren, und liefert die fertige Beschreibung für die Vorschau.
+ *
+ * Der Vergleich läuft normalisiert, damit ein älteres Backup nicht allein
+ * wegen fehlender Zusatzfelder als abweichend gilt. Der Import prüft erneut
+ * innerhalb seiner Transaktion; diese Vorschau ist eine Entscheidungshilfe,
+ * keine Schreibfreigabe.
+ */
+export async function ermittleImportKonflikte(backup: Backup): Promise<ImportKonflikte> {
+  const bestand = await loadAll()
+  const konflikte = ermittleBackupKonflikte(normalisiereBackup(backup), bestand)
+  return { ...konflikte, text: konfliktText(konflikte) }
 }
 
 /** Liest den kompletten Bestand als Backup-Objekt; geschrieben wird über `export/`. */

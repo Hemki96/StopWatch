@@ -62,11 +62,15 @@ import {
 } from '../storage/repository'
 import {
   erzeugeBackup,
+  ermittleImportKonflikte as ermittleKonflikte,
   fordereSchutzAn,
   leseSchutz,
   pruefeBackupFuerImport,
   type Backup,
+  type BackupKonflikte,
   type BackupVorschau,
+  type ImportKonflikte,
+  type KonfliktAufloesung,
   type SpeicherSchutz,
 } from './daten'
 import {
@@ -100,7 +104,7 @@ import { useSchreibpfad } from './schreibpfad'
 export { leseEinstellungen } from './einstellungen'
 export type { Einstellungen } from './einstellungen'
 export type { Theme, ThemeEinstellung } from './theme'
-export type { Backup, SpeicherSchutz } from './daten'
+export type { Backup, ImportKonflikte, KonfliktAufloesung, SpeicherSchutz } from './daten'
 
 export type { AktiverEintrag } from './aktiveLaeufe'
 
@@ -127,8 +131,14 @@ export interface AppContextValue {
    * Schreibt ein geprüftes Backup und lädt den Bestand neu. Nur der aktive Tab
    * darf das; der Schreibvorgang läuft über dieselbe Warteschlange wie die
    * Messungen, damit eine Tab-Übergabe ihn abwartet.
+   *
+   * `aufloesung` entscheidet über Kollisionen: Ohne Angabe bleibt der lokale
+   * Datensatz erhalten. Die Rückgabe nennt die tatsächlich erkannten Konflikte.
    */
-  importiereBackup: (backup: Backup) => Promise<void>
+  importiereBackup: (
+    backup: Backup,
+    aufloesung?: KonfliktAufloesung,
+  ) => Promise<BackupKonflikte>
   /** Erzeugt ein Backup des kompletten Bestands; geschrieben wird über `export/`. */
   exportiereBackup: () => Promise<Backup>
   /**
@@ -136,6 +146,11 @@ export interface AppContextValue {
    * geschrieben; erst `importiereBackup` übernimmt die Daten.
    */
   pruefeBackupFuerImport: (inhalt: unknown) => BackupVorschau
+  /**
+   * Vergleicht ein geprüftes Backup mit dem lokalen Bestand, ohne zu schreiben.
+   * Liefert Anzahl und Art der Kollisionen samt Text für die Vorschau.
+   */
+  ermittleImportKonflikte: (backup: Backup) => Promise<ImportKonflikte>
   /** Zuletzt gelesener Zustand des dauerhaften Speichers. */
   speicherSchutz: SpeicherSchutz
   /** Fordert dauerhaften Speicher an und liefert den resultierenden Zustand. */
@@ -618,15 +633,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
    * Bewusst im Provider und nicht im Einstellungs-Screen: Nur hier ist die
    * Tab-Rolle bekannt, und nur hier landet der Vorgang in der Warteschlange,
    * auf die eine Tab-Übergabe wartet. Die Prüfung läuft in `importBackup`
-   * erneut, damit kein Aufrufer sie überspringen kann.
+   * erneut, damit kein Aufrufer sie überspringen kann. Dort werden auch die
+   * Konflikte gegen den aktuellen Stand neu ermittelt; `aufloesung` legt fest,
+   * ob der lokale Stand bleibt (Standard) oder das Backup ihn ersetzt.
    */
   const importiereBackup = useCallback(
-    async (backup: Backup) => {
+    async (backup: Backup, aufloesung: KonfliktAufloesung = 'lokalBehalten') => {
       if (!istAktiv()) {
         throw new Error('Nur der aktive Tab darf ein Backup importieren.')
       }
-      const vorgang = verfolge(() => importBackup(backup).then(() => ladeDaten()))
-      await vorgang
+      return verfolge(() =>
+        importBackup(backup, { konflikte: aufloesung }).then(async (konflikte) => {
+          await ladeDaten()
+          return konflikte
+        }),
+      )
     },
     [istAktiv, ladeDaten, verfolge],
   )
@@ -855,6 +876,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // sie durch, damit `ui/` nichts aus `storage/` importiert.
       exportiereBackup: erzeugeBackup,
       pruefeBackupFuerImport,
+      ermittleImportKonflikte: ermittleKonflikte,
       speicherSchutz,
       fordereSpeicherSchutz,
       loescheAlles,

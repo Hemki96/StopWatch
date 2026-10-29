@@ -8,10 +8,12 @@
  */
 import 'fake-indexeddb/auto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { clearAll } from '../storage/repository'
+import { clearAll, saveLauf } from '../storage/repository'
 import { BACKUP_FORMAT, BACKUP_VERSION } from '../storage/backup'
+import type { Lauf } from '../domain/types'
 import {
   erzeugeBackup,
+  ermittleImportKonflikte,
   fordereSchutzAn,
   leseSchutz,
   pruefeBackupFuerImport,
@@ -88,5 +90,74 @@ describe('Speicherschutz-Fassade', () => {
     vi.stubGlobal('navigator', {})
     await expect(leseSchutz()).resolves.toBe('unbekannt')
     await expect(fordereSchutzAn()).resolves.toBe('unbekannt')
+  })
+})
+
+// Die Fassade vergleicht das Backup mit dem geladenen Bestand und liefert den
+// fertigen Text für die Vorschau; sie schreibt nichts.
+describe('ermittleImportKonflikte', () => {
+  const konfiguration = { beckenlaengeM: 50, streckeM: 100, schwimmart: 'freistil' } as const
+
+  function laufMitAnschlaegen(id: string, anzahl: number): Lauf {
+    return {
+      id,
+      satzId: null,
+      konfiguration: { ...konfiguration },
+      startWallMs: 1_700_000_000_000,
+      startversatzMs: 0,
+      wiederholung: null,
+      modus: 'training',
+      bahnen: [
+        {
+          id: `${id}-bahn-1`,
+          nummer: 1,
+          reihe: 1,
+          schwimmerId: null,
+          startMs: null,
+          anschlaege: Array.from({ length: anzahl }, (_, index) => ({
+            laengeNr: index + 1,
+            splitMs: (index + 1) * 30_000,
+            erfasstAt: index + 1,
+            istFinish: index === anzahl - 1,
+          })),
+        },
+      ],
+    }
+  }
+
+  it('nennt Zahl und Art der Konflikte samt Text', async () => {
+    await saveLauf(laufMitAnschlaegen('l1', 2))
+
+    const ergebnis = await ermittleImportKonflikte({
+      format: BACKUP_FORMAT,
+      version: BACKUP_VERSION,
+      exportiertAm: '2026-10-29T10:00:00.000Z',
+      schwimmer: [],
+      satze: [],
+      laeufe: [laufMitAnschlaegen('l1', 1), laufMitAnschlaegen('l2', 1)],
+      wettkampfe: [],
+      trainings: [],
+    })
+
+    expect(ergebnis.gesamt).toBe(1)
+    expect(ergebnis.neuereLokale).toBe(1)
+    expect(ergebnis.text).toBe('1 Konflikt: 1 Lauf. 1 davon ist lokal neuer.')
+    // Nur gelesen: Der lokale Lauf bleibt unverändert.
+    expect((await erzeugeBackup()).laeufe[0]?.bahnen[0]?.anschlaege).toHaveLength(2)
+  })
+
+  it('liefert für einen leeren Bestand keine Konflikte', async () => {
+    const ergebnis = await ermittleImportKonflikte({
+      format: BACKUP_FORMAT,
+      version: BACKUP_VERSION,
+      exportiertAm: '2026-10-29T10:00:00.000Z',
+      schwimmer: [],
+      satze: [],
+      laeufe: [laufMitAnschlaegen('l1', 1)],
+      wettkampfe: [],
+      trainings: [],
+    })
+
+    expect(ergebnis).toEqual({ eintraege: [], gesamt: 0, neuereLokale: 0, text: '' })
   })
 })

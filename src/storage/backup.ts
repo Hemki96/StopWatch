@@ -90,6 +90,49 @@ export interface BackupZusammenfassung {
 }
 
 /**
+ * Der lokal vorhandene Bestand, gegen den ein Import geprüft wird. Die Form
+ * entspricht den Listen eines Backups ohne Hülle; so lässt sich derselbe
+ * Vergleich für Vorschau und Schreiben verwenden.
+ */
+export interface BackupBestand {
+  schwimmer: Schwimmer[]
+  satze: Satz[]
+  laeufe: Lauf[]
+  wettkampfe: Wettkampf[]
+  trainings: Training[]
+}
+
+/**
+ * Warum ein Datensatz als Konflikt gilt.
+ *
+ * `lokalNeuer` heißt: Der lokale Stand ist nachweislich weiter (mehr
+ * Anschläge, späterer Start, später erfasst oder später angelegt).
+ * `abweichend` heißt: Der Inhalt unterscheidet sich, ohne dass der lokale
+ * Stand eindeutig neuer ist.
+ */
+export type KonfliktArt = 'lokalNeuer' | 'abweichend'
+
+/** Eine Kollision zwischen einem Backup-Datensatz und dem lokalen Bestand. */
+export interface BackupKonflikt {
+  bestand: keyof BackupBestand
+  id: string
+  art: KonfliktArt
+}
+
+/** Ergebnis der Konfliktprüfung; `neuereLokale` zählt nur `lokalNeuer`. */
+export interface BackupKonflikte {
+  eintraege: BackupKonflikt[]
+  gesamt: number
+  neuereLokale: number
+}
+
+/**
+ * Entscheidung für den Import. `lokalBehalten` ist der Standard: Kollidierende
+ * Datensätze werden übersprungen. `backupErsetzen` schreibt sie bewusst.
+ */
+export type KonfliktAufloesung = 'lokalBehalten' | 'backupErsetzen'
+
+/**
  * Ergebnis der Backup-Prüfung.
  *
  * Bei Erfolg stehen das typisierte Backup und die Zählung bereit; bei einem
@@ -637,4 +680,179 @@ export function zusammenfassungText(zahlen: BackupZusammenfassung): string {
     teil(zahlen.satze, 'Satz', 'Sätze'),
     teil(zahlen.laeufe, 'Lauf', 'Läufe'),
   ].join(', ')
+}
+
+/**
+ * Kanonische Textform eines Werts: Schlüssel sortiert, `undefined` wie ein
+ * fehlendes Feld. Zwei Datensätze sind damit gleich, wenn sie fachlich
+ * denselben Inhalt haben — unabhängig von der Reihenfolge im JSON.
+ */
+function kanonisch(wert: unknown): string {
+  if (Array.isArray(wert)) return `[${wert.map(kanonisch).join(',')}]`
+  if (istObjekt(wert)) {
+    const felder = Object.entries(wert)
+      .filter(([, eintrag]) => eintrag !== undefined)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([schluessel, eintrag]) => `${JSON.stringify(schluessel)}:${kanonisch(eintrag)}`)
+    return `{${felder.join(',')}}`
+  }
+  return JSON.stringify(wert) ?? 'null'
+}
+
+/** Wahr, wenn beide Werte fachlich denselben Inhalt haben. */
+function istGleich(a: unknown, b: unknown): boolean {
+  return kanonisch(a) === kanonisch(b)
+}
+
+/** Summe aller Anschläge eines Laufs über alle Bahnen. */
+function anschlaegeGesamt(lauf: Lauf): number {
+  return lauf.bahnen.reduce((summe, bahn) => summe + bahn.anschlaege.length, 0)
+}
+
+/** Spätester Erfassungszeitpunkt eines Laufs; 0, wenn noch nichts erfasst ist. */
+function letzteErfassung(lauf: Lauf): number {
+  let spaeteste = 0
+  for (const bahn of lauf.bahnen) {
+    for (const anschlag of bahn.anschlaege) {
+      if (anschlag.erfasstAt > spaeteste) spaeteste = anschlag.erfasstAt
+    }
+  }
+  return spaeteste
+}
+
+/**
+ * Bewertet einen Lauf-Konflikt. Maßgeblich sind die Messdaten, nicht die
+ * Reihenfolge im Backup: mehr Anschläge, ein späterer Start oder eine später
+ * erfasste Zeit sprechen für den lokalen Stand.
+ */
+function laufKonfliktArt(lokal: Lauf, ausBackup: Lauf): KonfliktArt | null {
+  if (istGleich(lokal, ausBackup)) return null
+  const lokalNeuer =
+    anschlaegeGesamt(lokal) > anschlaegeGesamt(ausBackup) ||
+    (lokal.startWallMs ?? 0) > (ausBackup.startWallMs ?? 0) ||
+    letzteErfassung(lokal) > letzteErfassung(ausBackup)
+  return lokalNeuer ? 'lokalNeuer' : 'abweichend'
+}
+
+/** Bewertet einen Datensatz mit `erstelltAm`; ein späteres Datum gilt als neuer. */
+function erstelltAmKonfliktArt<T extends { erstelltAm: number }>(
+  lokal: T,
+  ausBackup: T,
+): KonfliktArt | null {
+  if (istGleich(lokal, ausBackup)) return null
+  return lokal.erstelltAm > ausBackup.erstelltAm ? 'lokalNeuer' : 'abweichend'
+}
+
+/**
+ * Vergleicht ein geprüftes Backup mit dem lokalen Bestand und liefert alle
+ * Kollisionen. Datensätze ohne lokales Gegenstück sind keine Konflikte, ebenso
+ * fachlich gleiche Datensätze.
+ *
+ * Beide Seiten müssen normalisiert sein (siehe `normalisiereBackup` im
+ * Repository), sonst würde ein älteres Backup allein wegen fehlender
+ * Zusatzfelder als abweichend gelten.
+ */
+export function ermittleBackupKonflikte(
+  backup: BackupBestand,
+  bestand: BackupBestand,
+): BackupKonflikte {
+  const eintraege: BackupKonflikt[] = []
+
+  const vergleiche = <T extends { id: string }>(
+    name: keyof BackupBestand,
+    ausBackup: T[],
+    lokal: T[],
+    art: (lokal: T, ausBackup: T) => KonfliktArt | null,
+  ) => {
+    const nachId = new Map(lokal.map((eintrag) => [eintrag.id, eintrag]))
+    for (const eintrag of ausBackup) {
+      const vorhanden = nachId.get(eintrag.id)
+      if (!vorhanden) continue
+      const ergebnis = art(vorhanden, eintrag)
+      if (ergebnis) eintraege.push({ bestand: name, id: eintrag.id, art: ergebnis })
+    }
+  }
+
+  // Läufe zuerst, weil sie die Messdaten tragen und in der Anzeige zählen.
+  vergleiche('laeufe', backup.laeufe, bestand.laeufe, laufKonfliktArt)
+  vergleiche('schwimmer', backup.schwimmer, bestand.schwimmer, erstelltAmKonfliktArt)
+  vergleiche('wettkampfe', backup.wettkampfe, bestand.wettkampfe, erstelltAmKonfliktArt)
+  vergleiche('trainings', backup.trainings, bestand.trainings, erstelltAmKonfliktArt)
+  vergleiche('satze', backup.satze, bestand.satze, erstelltAmKonfliktArt)
+
+  return {
+    eintraege,
+    gesamt: eintraege.length,
+    neuereLokale: eintraege.filter((eintrag) => eintrag.art === 'lokalNeuer').length,
+  }
+}
+
+/**
+ * Wendet die Entscheidung auf das Backup an.
+ *
+ * `lokalBehalten` entfernt alle kollidierenden Datensätze aus dem Import; sie
+ * bleiben im lokalen Bestand unverändert. `backupErsetzen` gibt das Backup
+ * unverändert zurück. Die übrigen Datensätze werden in beiden Fällen
+ * übernommen.
+ */
+export function loeseBackupKonflikte(
+  backup: BackupBestand,
+  konflikte: BackupKonflikt[],
+  aufloesung: KonfliktAufloesung,
+): BackupBestand {
+  if (aufloesung === 'backupErsetzen' || konflikte.length === 0) return backup
+  const betroffen: Record<keyof BackupBestand, Set<string>> = {
+    schwimmer: new Set(),
+    satze: new Set(),
+    laeufe: new Set(),
+    wettkampfe: new Set(),
+    trainings: new Set(),
+  }
+  for (const konflikt of konflikte) betroffen[konflikt.bestand].add(konflikt.id)
+  return {
+    ...backup,
+    schwimmer: backup.schwimmer.filter((eintrag) => !betroffen.schwimmer.has(eintrag.id)),
+    satze: backup.satze.filter((eintrag) => !betroffen.satze.has(eintrag.id)),
+    laeufe: backup.laeufe.filter((eintrag) => !betroffen.laeufe.has(eintrag.id)),
+    wettkampfe: backup.wettkampfe.filter((eintrag) => !betroffen.wettkampfe.has(eintrag.id)),
+    trainings: backup.trainings.filter((eintrag) => !betroffen.trainings.has(eintrag.id)),
+  }
+}
+
+/** Anzeigenamen je Bestand, Reihenfolge wie in `zusammenfassungText`. */
+const KONFLIKT_LABELS: Record<keyof BackupBestand, [string, string]> = {
+  schwimmer: ['Schwimmer', 'Schwimmer'],
+  wettkampfe: ['Wettkampf', 'Wettkämpfe'],
+  trainings: ['Training', 'Trainings'],
+  satze: ['Satz', 'Sätze'],
+  laeufe: ['Lauf', 'Läufe'],
+}
+
+const KONFLIKT_REIHENFOLGE: Array<keyof BackupBestand> = [
+  'schwimmer',
+  'wettkampfe',
+  'trainings',
+  'satze',
+  'laeufe',
+]
+
+/**
+ * Formatiert die Konfliktprüfung für die Import-Vorschau, z. B.
+ * „3 Konflikte: 2 Läufe, 1 Schwimmer. 2 davon sind lokal neuer.“
+ * Ohne Konflikte ist der Text leer, damit die Vorschau unverändert bleibt.
+ */
+export function konfliktText(konflikte: BackupKonflikte): string {
+  if (konflikte.gesamt === 0) return ''
+  const zaehler = new Map<keyof BackupBestand, number>()
+  for (const eintrag of konflikte.eintraege) {
+    zaehler.set(eintrag.bestand, (zaehler.get(eintrag.bestand) ?? 0) + 1)
+  }
+  const teile = KONFLIKT_REIHENFOLGE.filter((name) => (zaehler.get(name) ?? 0) > 0).map((name) => {
+    const anzahl = zaehler.get(name) ?? 0
+    const [singular, plural] = KONFLIKT_LABELS[name]
+    return `${anzahl} ${anzahl === 1 ? singular : plural}`
+  })
+  const kopf = `${konflikte.gesamt} ${konflikte.gesamt === 1 ? 'Konflikt' : 'Konflikte'}: ${teile.join(', ')}.`
+  if (konflikte.neuereLokale === 0) return kopf
+  return `${kopf} ${konflikte.neuereLokale} davon ${konflikte.neuereLokale === 1 ? 'ist' : 'sind'} lokal neuer.`
 }

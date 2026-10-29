@@ -151,24 +151,39 @@ Backups werden als leer ergänzt. Ein Backup einer neueren Version wird abgelehn
 2. Eine `.json`-Datei wählen.
 3. Die App prüft die Datei vollständig, **bevor** sie schreibt.
 4. Bei Erfolg erscheint eine Vorschau, z. B.:
-   > Vorhandene Daten bleiben erhalten. Übernommen werden: 12 Schwimmer, 1 Wettkampf, 2 Trainings,
-   > 8 Sätze, 24 Läufe.
-5. **Importieren** bestätigt.
-6. Die App lädt den Datenbestand neu und zeigt eine Bestätigung.
+   > Vorhandene Daten bleiben erhalten; neue Datensätze werden ergänzt. Übernommen werden:
+   > 12 Schwimmer, 1 Wettkampf, 2 Trainings, 8 Sätze, 24 Läufe.
+5. Gibt es Kollisionen, nennt die Vorschau zusätzlich Zahl und Art der Konflikte, z. B.
+   > 3 Konflikte: 2 Läufe, 1 Schwimmer. 2 davon sind lokal neuer.
+6. **Importieren** bestätigt. Sollen die Konflikte bewusst durch den Stand des Backups ersetzt
+   werden, vorher **Konflikte durch den Stand des Backups ersetzen** anhaken.
+7. Die App lädt den Datenbestand neu und zeigt eine Bestätigung.
 
-### Der Import ersetzt nichts
+### Konflikte: der lokale Stand gewinnt standardmäßig
 
 Der Import ist eine **Zusammenführung**:
 
-- Vorhandene Datensätze bleiben erhalten.
-- Datensätze mit derselben ID werden überschrieben.
-- Datensätze mit anderer ID werden ergänzt.
+- Neue Datensätze mit unbekannter ID werden ergänzt.
+- Datensätze mit derselben ID und gleichem Inhalt ändern nichts.
+- Datensätze mit derselben ID und abweichendem Inhalt sind ein **Konflikt**. Ohne Häkchen
+  bleiben sie lokal unverändert; das Backup überschreibt sie nicht.
 - Dadurch können gleiche Personen oder Sätze doppelt erscheinen, wenn sie auf zwei Geräten
   unabhängig angelegt wurden.
 
-Ein Import ist deshalb **kein Wiederherstellen eines alten Zustands**. Wer exakt den Stand des
-Backups will, muss vorher **Alle Daten löschen** und dann importieren. Dabei gehen alle Daten
-verloren, die nicht im Backup stehen.
+Als Konflikt zählt jeder abweichende Datensatz mit gleicher ID. Bei einem **Lauf** gilt der
+lokale Stand zusätzlich als neuer, wenn er mehr Anschläge, einen späteren `startWallMs` oder
+einen später erfassten Anschlag (`erfasstAt`) hat. Bei Schwimmern, Sätzen, Wettkämpfen und
+Trainings entscheidet `erstelltAm`: Ein späteres lokales Datum meldet „lokal neuer“.
+
+Die Konfliktprüfung läuft noch einmal beim Schreiben, innerhalb derselben Transaktion. Ändert
+sich der Bestand zwischen Vorschau und Bestätigung, geht trotzdem keine neuere Messung
+verloren. Der Import bleibt ganz oder gar nicht: Entweder werden alle nicht kollidierenden
+Datensätze übernommen oder bei einem Fehler keine.
+
+Ein Import ist **kein Wiederherstellen eines alten Zustands**. Wer exakt den Stand des Backups
+will, muss vorher **Alle Daten löschen** und dann importieren. Dabei gehen alle Daten
+verloren, die nicht im Backup stehen. Alternativ die Konflikt-Option bewusst anhaken; sie
+ersetzt **alle** kollidierenden Datensätze durch den Stand des Backups, auch ältere.
 
 ### Prüfung und Fehler
 
