@@ -18,7 +18,7 @@ import 'fake-indexeddb/auto'
 import { act } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Training } from '../domain/types'
-import { isComplete } from '../domain/lauf'
+import { isComplete, isFinished } from '../domain/lauf'
 import { clearAll, loadAll } from '../storage/repository'
 import { BACKUP_FORMAT, BACKUP_VERSION } from '../storage/backup'
 import { speicherSchluessel } from '../storage/namensraum'
@@ -289,6 +289,74 @@ describe('AppProvider', () => {
     })
     expect(app.wert().aktiveRunden.every(isComplete)).toBe(true)
     expect(app.wert().brauchtTakt).toBe(false)
+  })
+
+  // #54: Ein Doppeltipp auf derselben Serienzeile darf höchstens eine Runde
+  // schließen. Der zweite Tap würde sonst die nächste, bereits laufende Runde
+  // treffen; die Sperre gilt pro Zeile und Bahnindex.
+  it('verwirft einen Doppeltipp auf derselben Serienzeile', async () => {
+    const app = await geladeneApp()
+    act(() => {
+      app.wert().neuerLauf(K100, 1, [], { wiederholungen: 3, taktSek: 60 })
+      app.wert().startAlle(0, 1_700_000_000_000)
+    })
+
+    act(() => app.wert().tippeSerie(0, 30_000, 1_700_000_030_000))
+    // Zwei Taps 100 ms auseinander: Runde 2 läuft seit 60 s und wäre das Ziel
+    // des zweiten Taps.
+    act(() => {
+      app.wert().tippeSerie(0, 61_000, 1_700_000_061_000)
+      app.wert().tippeSerie(0, 61_100, 1_700_000_061_100)
+    })
+
+    expect(isComplete(app.wert().aktiveRunden[0]!)).toBe(true)
+    expect(app.wert().aktiveRunden[1]?.bahnen[0]?.anschlaege).toHaveLength(0)
+
+    // Nach dem Zeitfenster funktioniert ein bewusster Tap normal und schließt
+    // die nächste Runde.
+    act(() => app.wert().tippeSerie(0, 90_000, 1_700_000_090_000))
+    expect(app.wert().aktiveRunden[1]?.bahnen[0]?.anschlaege).toHaveLength(1)
+  })
+
+  // Die Sperre gilt je Zeile: Eine andere Bahn bleibt sofort bedienbar.
+  it('blockiert einen Tap auf einer anderen Bahn nicht', async () => {
+    const app = await geladeneApp()
+    act(() => {
+      app.wert().neuerLauf(K100, 2, [], { wiederholungen: 2, taktSek: 60 })
+      app.wert().startAlle(0, 1_700_000_000_000)
+    })
+
+    act(() => {
+      app.wert().tippeSerie(0, 61_000, 1_700_000_061_000)
+      app.wert().tippeSerie(1, 61_050, 1_700_000_061_050)
+    })
+
+    expect(app.wert().aktiveRunden[0]?.bahnen[0]?.anschlaege).toHaveLength(1)
+    expect(app.wert().aktiveRunden[0]?.bahnen[1]?.anschlaege).toHaveLength(1)
+  })
+
+  // Der Zielknopf liegt auf derselben Zeile; ein Doppelklick darf nicht die
+  // nächste Runde mitbeenden.
+  it('schließt bei schnellem Doppelklick auf „Ziel“ nur eine Runde', async () => {
+    const app = await geladeneApp()
+    act(() => {
+      app.wert().neuerLauf({ ...K100, streckeM: null }, 1, [], {
+        wiederholungen: 3,
+        taktSek: 60,
+      })
+      app.wert().startAlle(0, 1_700_000_000_000)
+    })
+
+    act(() => {
+      app.wert().beendeSerie(0, 61_000, 1_700_000_061_000)
+      app.wert().beendeSerie(0, 61_100, 1_700_000_061_100)
+    })
+
+    expect(isFinished(app.wert().aktiveRunden[0]!.bahnen[0]!)).toBe(true)
+    expect(isFinished(app.wert().aktiveRunden[1]!.bahnen[0]!)).toBe(false)
+
+    act(() => app.wert().beendeSerie(0, 90_000, 1_700_000_090_000))
+    expect(isFinished(app.wert().aktiveRunden[1]!.bahnen[0]!)).toBe(true)
   })
 
   // Regressionsfall aus dem Reload: Eine Runde kann teilweise gefüllt sein

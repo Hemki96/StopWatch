@@ -136,8 +136,12 @@ start = t0 + (k - 1) * takt + (i - 1) * startversatz
 ```
 
 Es gibt keinen `setTimeout`, der eine Runde „nachholt“. Überlappende Runden sind erlaubt: Ein Tipp
-schließt die älteste offene Runde. Die Serien-Ansicht verdichtet die Läufe zu einer Zeile pro
-Bahn. Siehe [ADR-0005](../adr/0005-serie-mit-festem-takt.md).
+schließt die älteste offene Runde. Ein zweiter Tipp auf derselben Zeile innerhalb von 300 ms wird
+als Doppeltipp verworfen (`tippeSerie`/`beendeSerie` in `src/app/laufAktionen.ts`), damit nicht die
+nächste, bereits laufende Runde mitgeschlossen wird. Die Sperre gilt je Serie, Bahnindex und Art
+(Tap oder Ziel), also nicht für eine andere Bahn; nach dem Fenster schließt der nächste Tipp die
+nächste Runde. Die Serien-Ansicht verdichtet die Läufe zu einer Zeile pro Bahn. Siehe
+[ADR-0005](../adr/0005-serie-mit-festem-takt.md).
 
 ### Reload
 

@@ -52,6 +52,20 @@ import type { Ref } from './ref'
 import { heute } from './datum'
 import { einheitVon } from '../domain/einheit'
 
+/**
+ * Mindestabstand zwischen zwei Bedienhandlungen auf derselben Serienzeile.
+ *
+ * Ein schneller Doppeltipp am Beckenrand würde sonst zwei Runden schließen:
+ * Der erste Tap beendet die älteste offene Runde, der zweite trifft bereits die
+ * nächste, oft mit unrealistisch kurzer Zeit (#54). Die Zielrunde taugt deshalb
+ * nicht zur Unterscheidung; das Fenster gilt pro Zeile für Tap, Klick und
+ * Tastatur gleichermaßen.
+ */
+const SERIEN_TIPP_SPERRE_MS = 300
+
+/** Art der Bedienhandlung auf einer Serienzeile: Anschlag oder Ziel. */
+type SerienBedienung = 'tippe' | 'beende'
+
 export interface LaufAktionenDeps {
   istAktiv: () => boolean
   verfolge: <T>(vorgang: () => Promise<T>) => Promise<T>
@@ -127,6 +141,49 @@ export function createLaufAktionen(deps: LaufAktionenDeps): LaufAktionen {
     getEinstellungen,
     zeigeToast,
   } = deps
+
+  /**
+   * Zeitpunkt der letzten angenommenen Bedienhandlung je Serie, Bahnindex und
+   * Art (Tap oder Ziel). Der Anker-Lauf identifiziert die Serie; eine andere
+   * Serie beginnt damit ein eigenes Fenster, eine andere Bahn derselben Serie
+   * ebenfalls. Tap und Ziel bleiben getrennt, damit „Alle beenden“ direkt nach
+   * einem Tap nicht blockiert.
+   */
+  const letzteSerienBedienung = new Map<string, number>()
+
+  /** Schlüssel einer Serienzeile: Serie (Anker-Lauf), Bahnindex und Art. */
+  function zeilenSchluessel(
+    laufId: string,
+    bahnIndex: number,
+    art: SerienBedienung,
+  ): string {
+    return `${laufId}:${bahnIndex}:${art}`
+  }
+
+  /**
+   * Nimmt eine Bedienhandlung an, wenn seit der letzten gleichen Art auf
+   * derselben Zeile mindestens das Doppeltipp-Fenster vergangen ist, und merkt
+   * sie. Der zweite Tap einer schnellen Geste wird damit verworfen, bevor er
+   * die nächste, bereits laufende Runde schließen kann.
+   */
+  function serienBedienungErlaubt(
+    laufId: string,
+    bahnIndex: number,
+    art: SerienBedienung,
+    now: number,
+  ): boolean {
+    const schluessel = zeilenSchluessel(laufId, bahnIndex, art)
+    const letzte = letzteSerienBedienung.get(schluessel)
+    if (letzte !== undefined && now - letzte < SERIEN_TIPP_SPERRE_MS) return false
+    letzteSerienBedienung.set(schluessel, now)
+    return true
+  }
+
+  /** Beendet das Zeitfenster einer Zeile, etwa nach einer bewussten Rücknahme. */
+  function vergissSerienBedienung(laufId: string, bahnIndex: number): void {
+    letzteSerienBedienung.delete(zeilenSchluessel(laufId, bahnIndex, 'tippe'))
+    letzteSerienBedienung.delete(zeilenSchluessel(laufId, bahnIndex, 'beende'))
+  }
 
   /**
    * Wendet eine reine Domänenfunktion auf den sichtbaren Lauf an.
@@ -308,6 +365,7 @@ export function createLaufAktionen(deps: LaufAktionenDeps): LaufAktionen {
     if (!serie) return
     const ziel = offeneRunde(serie.runden, bahnIndex, now)
     if (!ziel) return
+    if (!serienBedienungErlaubt(serie.lauf.id, bahnIndex, 'tippe', now)) return
     aendereLauf(ziel.lauf, tapLane(ziel.lauf, ziel.bahn.id, now, wallNow))
   }
 
@@ -317,6 +375,9 @@ export function createLaufAktionen(deps: LaufAktionenDeps): LaufAktionen {
     if (!serie) return
     const ziel = offeneRunde(serie.runden, bahnIndex, now)
     if (!ziel) return
+    // Auch der Zielknopf liegt auf der Zeile; ein Doppelklick darf nicht die
+    // nächste Runde mitbeenden.
+    if (!serienBedienungErlaubt(serie.lauf.id, bahnIndex, 'beende', now)) return
     aendereLauf(ziel.lauf, finishLane(ziel.lauf, ziel.bahn.id, now, wallNow))
   }
 
@@ -330,6 +391,9 @@ export function createLaufAktionen(deps: LaufAktionenDeps): LaufAktionen {
     if (!serie) return
     const treffer = letzterAnschlag(serie.runden, bahnIndex)
     if (!treffer) return
+    // Eine bewusste Rücknahme beendet die Geste: Der nächste Tap darf sofort
+    // wieder einen Anschlag setzen, auch wenn er im alten Zeitfenster liegt.
+    vergissSerienBedienung(serie.lauf.id, bahnIndex)
     aendereLauf(treffer.lauf, undoLane(treffer.lauf, treffer.bahn.id))
   }
 

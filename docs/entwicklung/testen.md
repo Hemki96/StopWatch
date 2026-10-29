@@ -209,7 +209,8 @@ einem echten Gerät weiterhin nötig.
 
 - Ein Tipp auf eine geplante Bahn wird absichtlich ignoriert.
 - Ein Tipp auf eine beendete Bahn ändert nichts.
-- Ein Doppeltipp auf einer Serienzeile schließt zwei Runden.
+- Ein Doppeltipp auf einer Serienzeile schließt nur eine Runde: Ein zweiter Tap innerhalb
+  von 300 ms auf derselben Zeile wird verworfen. Danach schließt ein Tap wieder die nächste Runde.
 - Der Test könnte auf einen alten Stand schauen; auf IndexedDB warten.
 
 ### Port belegt

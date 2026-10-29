@@ -109,8 +109,11 @@ Zeit bleibt korrekt, aber der Anschlag fehlt und muss im Verlauf nachgetragen we
 | **läuft** | Ein Tipp erfasst einen Anschlag. |
 | **im Ziel** | Weitere Tipps ändern nichts. |
 
-Bei einer Serie schließt ein Tipp immer die **älteste offene Runde**. Ein Doppeltipp kann deshalb
-zwei Runden schließen. Wenn das passiert: langes Drücken nimmt den letzten Anschlag zurück.
+Bei einer Serie schließt ein Tipp immer die **älteste offene Runde**. Ein zweiter Tipp auf
+derselben Zeile innerhalb von 300 ms gilt als Doppeltipp und wird verworfen, damit nicht
+versehentlich die nächste Runde mitgeschlossen wird. Nach dieser Sperrzeit schließt ein Tipp
+wieder die nächste Runde; eine andere Bahn ist nie blockiert. Wenn doch einmal ein Anschlag zu
+viel entstanden ist: langes Drücken nimmt den letzten Anschlag zurück.
 
 ### Die Zeit wirkt um Hundertstel falsch
 
