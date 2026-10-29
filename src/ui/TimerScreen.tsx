@@ -255,42 +255,52 @@ export function TimerScreen() {
           onWaehlen={app.waehleLauf}
           onAnlegen={app.anlegenLauf}
         />
-        <div className="flex-1 overflow-y-auto px-4 pb-4 pt-6">
-          <h1 className="sr-only">Timer</h1>
-          <p className="text-[11px] font-bold uppercase tracking-wider text-muted">Nächster Lauf</p>
-          {/* Die ganze Karte öffnet das Konfigurations-Sheet; „Ändern“ ist
-              der sichtbare Hinweis darauf. */}
-          <button
-            type="button"
-            onClick={() => setSheet(true)}
-            className="mt-2 w-full rounded-2xl border border-line bg-surface p-4 text-left"
-          >
-            <span className="text-lg font-semibold">
-              {beschriftung(
-                einstellungen.konfiguration,
-                einstellungen.bahnen,
-                einstellungen.startversatzMs,
-                plan,
-              )}
-            </span>
-            <span className="mt-1 block text-sm text-accent">Ändern</span>
-          </button>
+        <div className="flex-1 overflow-y-auto px-4 pb-4 pt-6 rail:px-6">
+          <div className="mx-auto w-full max-w-2xl">
+            <h1 className="sr-only">Timer</h1>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-muted">
+              Nächster Lauf
+            </p>
+            {/* Die ganze Karte öffnet das Konfigurations-Sheet; „Ändern“ ist
+                der sichtbare Hinweis darauf. */}
+            <button
+              type="button"
+              onClick={() => setSheet(true)}
+              className="mt-2 w-full rounded-2xl border border-line bg-surface p-4 text-left rail:p-5"
+            >
+              <span className="text-lg font-semibold">
+                {beschriftung(
+                  einstellungen.konfiguration,
+                  einstellungen.bahnen,
+                  einstellungen.startversatzMs,
+                  plan,
+                )}
+              </span>
+              <span className="mt-1 block text-sm text-accent">Ändern</span>
+            </button>
 
-          <div className="mt-10 space-y-3 text-sm leading-relaxed text-muted">
-            <p>Ein Tap startet alle Bahnen. Mit Startversatz läuft Bahn 2 zehn Sekunden später los.</p>
-            <p>Danach tippst du jede Bahn bei jedem Anschlag an. Der letzte Anschlag ist das Ziel.</p>
-            <p>Langes Drücken macht die letzte Aktion einer Bahn rückgängig.</p>
+            <div className="mt-10 space-y-3 text-sm leading-relaxed text-muted">
+              <p>
+                Ein Tap startet alle Bahnen. Mit Startversatz läuft Bahn 2 zehn Sekunden später los.
+              </p>
+              <p>
+                Danach tippst du jede Bahn bei jedem Anschlag an. Der letzte Anschlag ist das Ziel.
+              </p>
+              <p>Langes Drücken macht die letzte Aktion einer Bahn rückgängig.</p>
+            </div>
           </div>
         </div>
 
         <div className="border-t border-line p-4 pb-[max(env(safe-area-inset-bottom),1rem)]">
-          <button
-            type="button"
-            onClick={starte}
-            className="h-20 w-full rounded-2xl bg-accent text-2xl font-bold text-accent-fg shadow-lg active:scale-[0.99]"
-          >
-            Start
-          </button>
+          <div className="mx-auto w-full max-w-2xl">
+            <button
+              type="button"
+              onClick={starte}
+              className="h-20 w-full rounded-2xl bg-accent text-2xl font-bold text-accent-fg shadow-lg active:scale-[0.99]"
+            >
+              Start
+            </button>
+          </div>
         </div>
 
         <KonfigurationSheet open={sheet} onClose={() => setSheet(false)} modus="einstellungen" />
