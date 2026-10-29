@@ -56,6 +56,9 @@ export default tseslint.config(
     // domain/ und export/, aber nie storage/ direkt. Lesen und Prüfen laufen
     // über `app/`; dieser Check verhindert einen Rückfall.
     files: ['src/ui/**/*.{ts,tsx}'],
+    // Tests dürfen Bestände direkt über die Repository-Schicht aufbauen; die
+    // Schichtregel gilt dem Produktionscode.
+    ignores: ['**/*.test.ts', '**/*.test.tsx'],
     rules: {
       'no-restricted-imports': [
         'error',
