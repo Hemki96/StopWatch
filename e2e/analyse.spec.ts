@@ -105,7 +105,7 @@ const SEED = {
 async function seedeAnalyse(page: import('@playwright/test').Page): Promise<void> {
   await page.addInitScript((daten) => {
     return new Promise<void>((resolve, reject) => {
-      const anfrage = indexedDB.open('beckenrand', 3)
+      const anfrage = indexedDB.open('beckenrand.v2', 3)
       anfrage.onupgradeneeded = () => {
         const db = anfrage.result
         const schwimmer = db.createObjectStore('schwimmer', { keyPath: 'id' })
@@ -193,7 +193,7 @@ test('zeigt die Abweichung zur Vorrunde in der Serien-Ansicht erst ab Runde 2', 
   await page.addInitScript(() => {
     try {
       localStorage.setItem(
-        'beckenrand.einstellungen',
+        'beckenrand.v2.einstellungen',
         JSON.stringify({
           konfiguration: { beckenlaengeM: 50, streckeM: 100, schwimmart: 'freistil' },
           bahnen: 1,

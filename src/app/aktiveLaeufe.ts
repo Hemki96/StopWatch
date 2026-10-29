@@ -30,8 +30,10 @@ export interface AktiverEintrag {
   serie: boolean
 }
 
-const ACTIVE_KEY = 'beckenrand.aktiverLauf'
-const ACTIVE_LIST_KEY = 'beckenrand.aktiveLaeufe'
+// Logische Schlüssel; `lokalSpeicher` ergänzt den Namensraum und liest die
+// früheren Schlüssel als Rückfall (siehe `storage/namensraum.ts`).
+const ACTIVE_KEY = 'aktiverLauf'
+const ACTIVE_LIST_KEY = 'aktiveLaeufe'
 
 /**
  * Liest die aktiven Lauf-IDs; die alte Einzel-ID bleibt als Migration lesbar.

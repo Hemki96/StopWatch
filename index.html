@@ -37,8 +37,11 @@
     </style>
     <script>
       // Theme vor dem ersten Paint setzen, sonst blitzt beim PWA-Start das falsche Design auf.
+      // Der Schlüssel trägt den Speicher-Namensraum (`src/storage/namensraum.ts`);
+      // der frühere Schlüssel bleibt für bestehende Installationen lesbar.
       try {
-        const gespeichert = localStorage.getItem('beckenrand.theme')
+        const gespeichert =
+          localStorage.getItem('beckenrand.v2.theme') ?? localStorage.getItem('beckenrand.theme')
         const dunkel =
           gespeichert === 'dark' ||
           (gespeichert !== 'light' && !window.matchMedia('(prefers-color-scheme: light)').matches)

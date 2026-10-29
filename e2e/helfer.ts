@@ -12,6 +12,10 @@
  * Specs selbst über `addInitScript` (etwa die Serien-Einstellungen), nicht
  * diese Helfer.
  *
+ * Datenbank und Schlüssel tragen den Speicher-Namensraum aus
+ * `src/storage/namensraum.ts` (`beckenrand.v2`). Die Literale stehen hier
+ * bewusst, weil `page.evaluate` keine importierten Werte sieht.
+ *
  * Die meisten Helfer bedienen die Oberfläche nicht, sondern schreiben nur den
  * Onboarding-Merker in `localStorage` und lesen IndexedDB. So bleiben sie
  * unabhängig von Layout und Beschriftungen. Eine Ausnahme ist `starteLauf`:
@@ -41,7 +45,7 @@ import { expect, type Page } from '@playwright/test'
 export async function oeffneApp(page: Page): Promise<void> {
   await page.addInitScript(() => {
     try {
-      localStorage.setItem('beckenrand.onboarding', 'fertig')
+      localStorage.setItem('beckenrand.v2.onboarding', 'fertig')
     } catch {
       // Ohne localStorage erscheint das Onboarding; die Tests brauchen es nicht.
     }
@@ -81,7 +85,7 @@ export async function starteLauf(page: Page): Promise<void> {
 export async function warteAufSchwimmerzuordnung(page: Page): Promise<void> {
   await page.waitForFunction(async () => {
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
-      const anfrage = indexedDB.open('beckenrand')
+      const anfrage = indexedDB.open('beckenrand.v2')
       anfrage.onsuccess = () => resolve(anfrage.result)
       anfrage.onerror = () => reject(anfrage.error)
     })
@@ -116,7 +120,7 @@ export async function warteAufSchwimmerzuordnung(page: Page): Promise<void> {
 export async function warteAufZielzeiten(page: Page, anzahl: number): Promise<void> {
   await page.waitForFunction(async (erwartet) => {
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
-      const anfrage = indexedDB.open('beckenrand')
+      const anfrage = indexedDB.open('beckenrand.v2')
       anfrage.onsuccess = () => resolve(anfrage.result)
       anfrage.onerror = () => reject(anfrage.error)
     })
@@ -157,7 +161,7 @@ export async function warteAufZielzeiten(page: Page, anzahl: number): Promise<vo
 export async function warteAufAnschlaege(page: Page, anzahl: number): Promise<void> {
   await page.waitForFunction(async (erwartet) => {
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
-      const anfrage = indexedDB.open('beckenrand')
+      const anfrage = indexedDB.open('beckenrand.v2')
       anfrage.onsuccess = () => resolve(anfrage.result)
       anfrage.onerror = () => reject(anfrage.error)
     })
@@ -199,7 +203,7 @@ export async function oeffneZweitenTab(page: Page): Promise<Page> {
   const zweiter = await page.context().newPage()
   await zweiter.addInitScript(() => {
     try {
-      localStorage.setItem('beckenrand.onboarding', 'fertig')
+      localStorage.setItem('beckenrand.v2.onboarding', 'fertig')
     } catch {
       // siehe oben
     }
@@ -221,7 +225,7 @@ export async function oeffneZweitenTab(page: Page): Promise<Page> {
 export async function warteAufSatzbezeichnung(page: Page, bezeichnung: string): Promise<void> {
   await page.waitForFunction(async (erwartet) => {
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
-      const anfrage = indexedDB.open('beckenrand')
+      const anfrage = indexedDB.open('beckenrand.v2')
       anfrage.onsuccess = () => resolve(anfrage.result)
       anfrage.onerror = () => reject(anfrage.error)
     })
@@ -253,7 +257,7 @@ export async function warteAufSatzbezeichnung(page: Page, bezeichnung: string): 
 export async function warteAufWettkampfStatus(page: Page, anzahl: number): Promise<void> {
   await page.waitForFunction(async (erwartet) => {
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
-      const anfrage = indexedDB.open('beckenrand')
+      const anfrage = indexedDB.open('beckenrand.v2')
       anfrage.onsuccess = () => resolve(anfrage.result)
       anfrage.onerror = () => reject(anfrage.error)
     })

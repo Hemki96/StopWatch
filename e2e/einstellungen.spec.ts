@@ -10,7 +10,7 @@
  *
  * Vorbedingung: frischer Browser-Kontext je Test. Test 1 öffnet die App
  * bewusst ohne `oeffneApp`, weil er das Onboarding sehen will; alle anderen
- * überspringen es über den Merker `beckenrand.onboarding` in `localStorage`.
+ * überspringen es über den Merker `beckenrand.v2.onboarding` in `localStorage`.
  * Theme und Lauf-Vorbereitung liegen ebenfalls in `localStorage` und werden
  * beim Laden erneut gelesen — deshalb prüfen die Tests nach einem Reload.
  */
@@ -87,7 +87,7 @@ test('wechselt das Design und behält die Wahl nach einem Reload', async ({ page
 
   // Zusätzlich der gespeicherte Wert: So fällt auf, wenn nur die Anzeige
   // umschaltet, die Wahl aber nicht gemerkt wird.
-  const gemerkt = await page.evaluate(() => localStorage.getItem('beckenrand.theme'))
+  const gemerkt = await page.evaluate(() => localStorage.getItem('beckenrand.v2.theme'))
   expect(gemerkt).toBe('light')
 
   // Nach dem Reload liest die App das Design aus `localStorage`; der Wechsel
@@ -117,7 +117,7 @@ test('ändert die Vorbereitung des nächsten Laufs dauerhaft', async ({ page }) 
   await expect(page.getByText('50 m · 200 m · Freistil · 5 Bahnen')).toBeVisible()
 
   // Der Reload prüft die Persistenz: Die Vorbereitung liegt in
-  // `localStorage` (`beckenrand.einstellungen`), nicht nur im React-State.
+  // `localStorage` (`beckenrand.v2.einstellungen`), nicht nur im React-State.
   await page.reload()
   await expect(page.getByText('50 m · 200 m · Freistil · 5 Bahnen')).toBeVisible()
 })

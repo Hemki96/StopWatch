@@ -22,6 +22,7 @@
  * Ohne `BroadcastChannel` (ältere oder eingebettete Browser) wird der Tab
  * sofort `aktiv`. Lieber kein Schutz als ein toter Tab.
  */
+import { KANAL_NAME } from '../storage/namensraum'
 
 /** Rolle dieses Tabs im Zusammenspiel. Nur `aktiv` darf schreiben. */
 export type TabRolle = 'startet' | 'aktiv' | 'gesperrt'
@@ -70,12 +71,14 @@ class BroadcastKanal implements TabKanal {
 /**
  * Öffnet den Standardkanal oder liefert `null`, wenn die API fehlt.
  *
- * Ein `BroadcastChannel` wird pro Tab nur einmal geöffnet; der Name
- * `beckenrand.tabs` ist der gemeinsame Bus aller Tabs der App.
+ * Ein `BroadcastChannel` wird pro Tab nur einmal geöffnet; der Name aus
+ * `storage/namensraum.ts` ist der gemeinsame Bus aller Tabs der App. Er bleibt
+ * beim bisherigen Namen, damit ein noch offener Tab der alten App-Version und
+ * die neue Version sich während des Updates weiter koordinieren.
  */
 function standardKanal(): TabKanal | null {
   if (typeof BroadcastChannel === 'undefined') return null
-  return new BroadcastKanal(new BroadcastChannel('beckenrand.tabs'))
+  return new BroadcastKanal(new BroadcastChannel(KANAL_NAME))
 }
 
 /**

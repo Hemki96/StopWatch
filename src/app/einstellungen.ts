@@ -67,9 +67,13 @@ export const STANDARD_EINSTELLUNGEN: Einstellungen = {
   taktSek: 120,
 }
 
-/** `localStorage`-Schlüssel der Einstellungen und der Designwahl. */
-const EINSTELLUNGEN_KEY = 'beckenrand.einstellungen'
-const THEME_KEY = 'beckenrand.theme'
+/**
+ * Logische `localStorage`-Schlüssel der Einstellungen und der Designwahl.
+ * `lokalSpeicher` ergänzt den Namensraum und liest den früheren Schlüssel als
+ * Rückfall (siehe `storage/namensraum.ts`).
+ */
+const EINSTELLUNGEN_KEY = 'einstellungen'
+const THEME_KEY = 'theme'
 
 /**
  * Bringt eine beliebige gespeicherte Bahnbelegung auf genau `anzahl` Plätze.

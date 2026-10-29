@@ -127,7 +127,7 @@ Tests gegen eine fremde App auf demselben Port laufen und grün werden, ohne die
 
 `e2e/helfer.ts`:
 
-- `oeffneApp(page)` — setzt `beckenrand.onboarding=fertig` und wartet auf
+- `oeffneApp(page)` — setzt `beckenrand.v2.onboarding=fertig` und wartet auf
   `[data-tab-status="aktiv"]`.
 - `warteAufSchwimmerzuordnung(page)` — wartet, bis die Zuordnung wirklich in IndexedDB liegt.
 - `warteAufZielzeiten(page, n)` — wartet auf `n` Finish-Anschläge in IndexedDB.

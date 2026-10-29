@@ -81,6 +81,7 @@ Der Zeitkern ist frei von Seiteneffekten: `startAll(lauf, now, wallNow)` bekommt
 - **Korrekturen sind sichtbar.** Anschläge lassen sich im Lauf-Detail nachträglich korrigieren. Korrigierte Zeiten tragen `manuell` (auch im CSV), damit eine Bestzeit nicht unbemerkt von Hand entsteht.
 - **Gestartete Trainingssätze sind fest.** Ein Trainingssatz lässt sich nur ändern, solange er nicht gestartet wurde. Danach zählen die gemessenen Läufe; Änderungen an Aktiven und Reihenfolge gelten nur für die kommenden Sätze. Siehe `docs/adr/0007-training-als-plan.md`.
 - **Wettkampf ohne Splits.** Im Wettkampfmodus ist ein Tap das Ziel. Wer Zwischenzeiten braucht, misst im Timer-Tab. Die Meldeliste ist eine CSV; eine Anbindung an eine bestimmte Wettkampfsoftware gibt es bewusst nicht. Siehe `docs/adr/0006-wettkampfmodus.md`.
+- **Geteilte GitHub-Pages-Origin.** Alle Projektseiten desselben Accounts laufen unter `https://hemki96.github.io`; IndexedDB und `localStorage` sind originweit, nicht pfadgebunden. Die App kapselt ihre Daten deshalb im Namensraum `beckenrand.v2` und übernimmt bestehende Daten nicht destruktiv. Das verhindert Kollisionen, ist aber **keine** Sicherheitsgrenze gegen fremdes JavaScript auf derselben Origin — dafür wäre eine eigene Domain nötig. Siehe `docs/adr/0011-geteilte-origin-und-speicher-namensraum.md`.
 
 ## Meldeliste importieren
 

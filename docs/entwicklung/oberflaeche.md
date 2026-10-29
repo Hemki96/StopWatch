@@ -324,7 +324,7 @@ immer Text und Status.
 | Einstellungen, Theme | `localStorage` + `AppProvider` |
 | aktiver Tab | lokaler State in `App.tsx` |
 | offene Sheets/Dialoge | lokaler Screen-State |
-| Auswahl eines Trainings | `localStorage` (`beckenrand.training`) |
+| Auswahl eines Trainings | `localStorage` (`beckenrand.v2.training`) |
 | Lauf-Auswahl | `localStorage` + `AppProvider` |
 | Timer-Anzeige | `useNow` + abgeleitete Werte |
 

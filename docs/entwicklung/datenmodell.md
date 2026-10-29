@@ -299,7 +299,7 @@ interface BeckenrandDB extends DBSchema {
 
 | Eigenschaft | Wert |
 | --- | --- |
-| Datenbankname | `beckenrand` |
+| Datenbankname | `beckenrand.v2` (Namensraum aus `storage/namensraum.ts`) |
 | Version | 3 |
 | Primärschlüssel | jeweils `id` |
 | Upgrade v1 | `schwimmer`, `satz`, `lauf` |
@@ -309,6 +309,12 @@ interface BeckenrandDB extends DBSchema {
 Das Upgrade läuft in `upgrade(db, alteVersion, …)` schrittweise. Ein alter Tab mit Version 1 oder 2
 kann ein Upgrade blockieren; dann wartet `openDB`, bis der Tab geschlossen ist. `blocked`,
 `blocking` und `terminated` sind mit Konsolenhinweisen belegt.
+
+Der Name `beckenrand.v2` trennt den Bestand auf der geteilten GitHub-Pages-Origin von anderen
+Projekten und von der früheren Datenbank `beckenrand`. Ist die neue Datenbank leer, kopiert `getDb`
+alle vorhandenen Stores einmalig aus `beckenrand`; die alte Datenbank bleibt unverändert und dient
+als Rückfall, falls die Übernahme scheitert. Details:
+[ADR-0011](../adr/0011-geteilte-origin-und-speicher-namensraum.md).
 
 ### Sortierung von `loadAll`
 

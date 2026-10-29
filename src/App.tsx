@@ -13,6 +13,7 @@
  */
 import { useEffect, useState } from 'react'
 import { useApp } from './app/AppProvider'
+import { leseTextMitRueckfall, schreibeText } from './app/lokalSpeicher'
 import { useOnlineStatus, useServiceWorkerUpdate } from './app/pwa'
 import { HistoryScreen } from './ui/HistoryScreen'
 import { Onboarding } from './ui/Onboarding'
@@ -53,20 +54,18 @@ const TABS = [
  * Zeitstempels: Es gibt keine Versionierung der Einführung, und ein fehlender
  * Wert genügt als „noch nicht gesehen“.
  */
-const ONBOARDING_KEY = 'beckenrand.onboarding'
+const ONBOARDING_KEY = 'onboarding'
 
 /**
  * Liest das Onboarding-Merkmal einmalig beim Start.
  *
  * Ohne lesbaren `localStorage` gilt das Onboarding als erledigt: Sonst würde es
  * bei jedem Start erneut erscheinen, weil es sich nicht dauerhaft merken lässt.
+ * `leseTextMitRueckfall` unterscheidet genau diese beiden Fälle: fehlender Wert
+ * (null) zeigt das Onboarding, ein Speicherfehler liefert `fertig`.
  */
 function onboardingGemerkt(): boolean {
-  try {
-    return localStorage.getItem(ONBOARDING_KEY) === 'fertig'
-  } catch {
-    return true
-  }
+  return leseTextMitRueckfall(ONBOARDING_KEY, 'fertig') === 'fertig'
 }
 
 /**
@@ -110,22 +109,15 @@ export default function App() {
   // Merkt den Abschluss für künftige Starts. Der State ist die Wahrheit für
   // diese Sitzung, der Speicher nur die Erinnerung darüber hinaus.
   const merkeOnboarding = () => {
-    try {
-      localStorage.setItem(ONBOARDING_KEY, 'fertig')
-    } catch {
-      // Ohne localStorage erscheint das Onboarding beim nächsten Start erneut.
-    }
+    // Ohne localStorage erscheint das Onboarding beim nächsten Start erneut.
+    schreibeText(ONBOARDING_KEY, 'fertig')
     setOnboardingFertig(true)
   }
 
   // Bestehende Installationen haben schon Daten und brauchen kein Onboarding.
   useEffect(() => {
     if (geladen && !onboardingFertig && (laeufe.length > 0 || schwimmer.length > 0)) {
-      try {
-        localStorage.setItem(ONBOARDING_KEY, 'fertig')
-      } catch {
-        // Siehe oben.
-      }
+      schreibeText(ONBOARDING_KEY, 'fertig')
       setOnboardingFertig(true)
     }
   }, [geladen, onboardingFertig, laeufe.length, schwimmer.length])

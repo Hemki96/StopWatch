@@ -11,9 +11,10 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { leseEinstellungen } from './AppProvider'
+import { speicherSchluessel } from '../storage/namensraum'
 
-/** Muss dem Schlüssel in `AppProvider.tsx` entsprechen; wird dort nicht exportiert. */
-const KEY = 'beckenrand.einstellungen'
+/** Aktueller Schlüssel; der frühere wird in `lokalSpeicher.test.ts` geprüft. */
+const KEY = speicherSchluessel('einstellungen')
 
 // Jeder Fall startet ohne gespeicherte Auswahl und ohne Spies aus dem Vorfall.
 beforeEach(() => {

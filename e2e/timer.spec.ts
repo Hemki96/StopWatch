@@ -24,7 +24,7 @@ async function oeffneMitEinemLauf(page: Page, reihen = 1): Promise<void> {
   await page.addInitScript((anzahlReihen) => {
     try {
       localStorage.setItem(
-        'beckenrand.einstellungen',
+        'beckenrand.v2.einstellungen',
         JSON.stringify({
           konfiguration: { beckenlaengeM: 50, streckeM: 100, schwimmart: 'freistil' },
           bahnen: 1,
