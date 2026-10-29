@@ -23,7 +23,7 @@ interface State {
  * verlässliche Aktion, weil der Speicher außerhalb von React liegt.
  */
 export class ErrorBoundary extends Component<Props, State> {
-  state: State = { fehler: null }
+  override state: State = { fehler: null }
 
   /**
    * Wechselt in den Fehlerzustand. Muss rein und ohne Seiteneffekte sein — React
@@ -38,11 +38,11 @@ export class ErrorBoundary extends Component<Props, State> {
    * Es gibt keinen Server und keine Telemetrie, die Meldung soll aber vor Ort
    * auffindbar sein.
    */
-  componentDidCatch(fehler: Error, info: ErrorInfo): void {
+  override componentDidCatch(fehler: Error, info: ErrorInfo): void {
     console.error('Unerwarteter Fehler in der Oberfläche:', fehler, info.componentStack)
   }
 
-  render() {
+  override render() {
     if (!this.state.fehler) return this.props.children
 
     return (

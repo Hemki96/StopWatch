@@ -110,6 +110,8 @@ export function createWettkampfSatz(
   disziplin: WettkampfDisziplinPlan,
   erstelltAm: number = Date.now(),
 ): Satz {
+  const einheit = disziplin.einheit ?? wettkampf.einheit
+  const einheitKonfiguration = einheit ? { einheit } : undefined
   return {
     id: newId(),
     datum: wettkampf.datum,
@@ -118,13 +120,13 @@ export function createWettkampfSatz(
       disziplinBezeichnung(
         disziplin.streckeM,
         disziplin.schwimmart,
-        einheitVon({ einheit: disziplin.einheit ?? wettkampf.einheit }),
+        einheitVon(einheitKonfiguration),
       ),
     konfiguration: {
       beckenlaengeM: wettkampf.beckenlaengeM,
       streckeM: disziplin.streckeM,
       schwimmart: disziplin.schwimmart,
-      einheit: einheitVon({ einheit: disziplin.einheit ?? wettkampf.einheit }),
+      einheit: einheitVon(einheitKonfiguration),
     },
     plan: null,
     wettkampfId: wettkampf.id,

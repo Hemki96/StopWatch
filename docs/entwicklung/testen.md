@@ -93,11 +93,16 @@ jedes Mal `act` und Container-Aufbau wiederholen.
   - `dev` — alle Tests außer `offline.spec.ts`, gegen `http://localhost:5199`.
   - `produktion` — nur `offline.spec.ts`, gegen `http://localhost:5200`.
 - WebServer:
-  - Dev: `npm run dev -- --port 5199 --strictPort`, bestehender Server wird wiederverwendet.
-  - Produktion: `npm run build && npm run preview -- --port 5200 --strictPort`.
+  - Dev: `npm run dev -- --port 5199 --strictPort`; ein vorhandener Server wird **nicht**
+    wiederverwendet.
+  - Produktion: `npm run build && npm run preview -- --port 5200 --strictPort`; in der CI
+    entfällt der Build über `PLAYWRIGHT_SKIP_BUILD=1`, weil `npm run verify` ihn schon erzeugt hat.
+- Die Ports lassen sich über `PLAYWRIGHT_DEV_PORT` und `PLAYWRIGHT_PROD_PORT` überschreiben, wenn
+  lokal ein anderer Vite-Server auf 5199 läuft.
 
 Der Produktions-Build ist nötig, weil der Service Worker nur dort existiert. Der Dev-Server
-registriert keinen Service Worker.
+registriert keinen Service Worker. `reuseExistingServer: false` ist Absicht: Sonst könnten die
+Tests gegen eine fremde App auf demselben Port laufen und grün werden, ohne diese App zu prüfen.
 
 ### Specs
 
@@ -205,8 +210,12 @@ einem echten Gerät weiterhin nötig.
 
 ### Port belegt
 
-`5199` (Dev) und `5200` (Produktion) müssen frei sein. `reuseExistingServer` gilt nur für Dev. Ein
-alter Preview-Server auf 5200 kann den Lauf blockieren.
+`5199` (Dev) und `5200` (Produktion) müssen frei sein; ein vorhandener Server wird nicht
+wiederverwendet. Entweder den belegenden Prozess beenden oder andere Ports setzen:
+
+```bash
+PLAYWRIGHT_DEV_PORT=5299 PLAYWRIGHT_PROD_PORT=5300 npm run test:e2e
+```
 
 ### Offline-Test schlägt fehl
 
@@ -236,14 +245,13 @@ hoch.
 
 ## Coverage
 
-`@vitest/coverage-v8` ist installiert, aber es gibt kein festes Schwellenskript. Bei Bedarf:
-
-```bash
-npx vitest run --coverage
-```
+`npm run test:coverage` führt die Unit-Tests mit Abdeckung aus. Die Schwellen stehen in
+`vite.config.ts` (Statements 80 %, Branches 74 %, Functions 85 %, Lines 87 %) und werden von
+`npm run verify` geprüft. Die Oberfläche und `App.tsx` sind ausgenommen, weil ihre sichtbaren
+Abläufe in Playwright geprüft werden.
 
 Die Coverage ist ein Hinweis, kein Ziel. Wichtiger ist, dass die kritischen Pfade — Start, Finish,
-Serie, Undo, Backup, Tab-Übergabe — getestet sind.
+Serie, Undo, Backup, Tab-Übergabe, unterbrochene Bahn — getestet sind.
 
 ## Neue Tests schreiben
 

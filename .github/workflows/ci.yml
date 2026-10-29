@@ -22,6 +22,17 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Laufzeit-Abhängigkeiten müssen frei von bekannten Schwachstellen sein.
+      # Entwicklungs-Werkzeuge (Workbox/rollup) werden getrennt bewertet.
+      - run: npm audit --omit=dev
       - run: npm run verify
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+        env:
+          # `verify` hat `dist` bereits gebaut; der Produktions-Webserver soll
+          # nicht ein zweites Mal bauen.
+          PLAYWRIGHT_SKIP_BUILD: '1'
