@@ -24,6 +24,7 @@ import {
   personFuerSatz,
 } from './analyseMemo'
 import { ChevronLeftIcon, ChevronRightIcon } from './icons'
+import { MehrLaden, SAETZE_JE_SEITE } from './MehrLaden'
 
 const datumFormat = new Intl.DateTimeFormat('de-DE', {
   weekday: 'short',
@@ -98,8 +99,22 @@ function Leer() {
   )
 }
 
-/** Satzliste: neuester auswertbarer Satz zuerst, mit Kernzahl. */
-function SatzListe({ onOeffnen }: { onOeffnen: (satzId: string) => void }) {
+/**
+ * Satzliste: neuester auswertbarer Satz zuerst, mit Kernzahl.
+ *
+ * Wie der Verlauf rendert die Liste nur die ersten `SAETZE_JE_SEITE` Sätze.
+ * Die Kennzahlen je Zeile entstehen erst beim Rendern der sichtbaren Seite;
+ * verborgene Sätze werden weder ausgewertet noch ins DOM geschrieben (#52).
+ */
+function SatzListe({
+  seiten,
+  onMehr,
+  onOeffnen,
+}: {
+  seiten: number
+  onMehr: () => void
+  onOeffnen: (satzId: string) => void
+}) {
   const app = useApp()
   // Einmal gruppieren statt für jeden Satz alle Läufe zu filtern (#68). Die
   // Kennzahlen je Zeile kommen memoisiert aus `analyseMemo`.
@@ -110,20 +125,32 @@ function SatzListe({ onOeffnen }: { onOeffnen: (satzId: string) => void }) {
       .sort((a, b) => b.datum.localeCompare(a.datum) || b.erstelltAm - a.erstelltAm)
   }, [app.satze, app.laeufe])
 
-  if (saetze.length === 0) return <Leer />
+  // Erst schneiden, dann gruppieren: `kennzahlenFuerSatz` läuft nur für die
+  // sichtbaren Zeilen. Die Seitengröße wächst monoton, damit bereits gezeigte
+  // Sätze stehen bleiben und keine Lücke entsteht.
+  const sichtbareSaetze = useMemo(
+    () => saetze.slice(0, seiten * SAETZE_JE_SEITE),
+    [saetze, seiten],
+  )
 
   // Wie im Verlauf nach Tag gruppiert; innerhalb des Tages bleibt die
   // Reihenfolge aus der Sortierung (neueste Anlage zuerst).
-  const tage = new Map<string, Satz[]>()
-  for (const satz of saetze) {
-    const liste = tage.get(satz.datum)
-    if (liste) liste.push(satz)
-    else tage.set(satz.datum, [satz])
-  }
+  const tage = useMemo(() => {
+    const gruppen = new Map<string, Satz[]>()
+    for (const satz of sichtbareSaetze) {
+      const liste = gruppen.get(satz.datum)
+      if (liste) liste.push(satz)
+      else gruppen.set(satz.datum, [satz])
+    }
+    return [...gruppen.entries()]
+  }, [sichtbareSaetze])
+
+  if (saetze.length === 0) return <Leer />
 
   return (
-    <div className="space-y-5">
-      {[...tage.entries()].map(([datum, tagesSaetze]) => (
+    <>
+      <div className="space-y-5">
+      {tage.map(([datum, tagesSaetze]) => (
         <section key={datum}>
           <h2 className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-muted">
             {datumText(datum)}
@@ -190,7 +217,13 @@ function SatzListe({ onOeffnen }: { onOeffnen: (satzId: string) => void }) {
           </ul>
         </section>
       ))}
-    </div>
+      </div>
+      <MehrLaden
+        sichtbar={sichtbareSaetze.length}
+        gesamt={saetze.length}
+        onMehr={onMehr}
+      />
+    </>
   )
 }
 
@@ -491,6 +524,9 @@ export function AnalyseScreen() {
   const app = useApp()
   const [satzId, setSatzId] = useState<string | null>(null)
   const [personIndex, setPersonIndex] = useState<number | null>(null)
+  // Wie im Verlauf: „Mehr laden“ erhöht nur die Zahl der Seiten. Der Zustand
+  // liegt über Matrix und Drill-down, damit der Rückweg dieselben Sätze zeigt.
+  const [seiten, setSeiten] = useState(1)
   const satz = satzId ? (app.satze.find((eintrag) => eintrag.id === satzId) ?? null) : null
 
   if (satz && personIndex !== null) {
@@ -515,7 +551,11 @@ export function AnalyseScreen() {
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-3 rail:px-6">
-      <SatzListe onOeffnen={setSatzId} />
+      <SatzListe
+        seiten={seiten}
+        onMehr={() => setSeiten((anzahl) => anzahl + 1)}
+        onOeffnen={setSatzId}
+      />
     </div>
   )
 }

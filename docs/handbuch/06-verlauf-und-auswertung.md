@@ -179,7 +179,9 @@ Wettkampf-Läufe haben keine Splits und erscheinen dort nicht.
 
 Die Liste ist wie der Verlauf nach Tag gruppiert, neueste Sätze zuerst. Jede Zeile nennt
 Bezeichnung, Konfiguration und die durchschnittliche Abweichung je Runde (`R2 +01,20`).
-Unvollständige und manuell korrigierte Sätze tragen ein Kennzeichen.
+Unvollständige und manuell korrigierte Sätze tragen ein Kennzeichen. Wie im Verlauf rendert die
+Liste zunächst die neuesten 50 Sätze; **Mehr laden** ergänzt weitere, ohne Sortierung oder
+Tagesgruppen zu ändern.
 
 ### Matrix Person × Runde
 
