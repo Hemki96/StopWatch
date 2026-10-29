@@ -22,6 +22,7 @@ import {
 } from '../domain/lauf'
 import { formatCountdown, formatTime, formatZwischenzeiten } from '../domain/format'
 import type { Bahn, LaufKonfiguration } from '../domain/types'
+import { useGedaempfteZeit } from './useGedaempfteZeit'
 
 /** Haltedauer in Millisekunden, ab der ein Druck als „zurücknehmen“ gilt. */
 const LANGDRUCK_MS = 450
@@ -118,6 +119,10 @@ export function LaneTile({
   const kannRueckgaengig = status !== 'bereit' || unterbrochen
   // Bei reduzierter Bewegung entfällt nur die Animation des Haltebalkens.
   const reduzierteBewegung = useReducedMotion()
+  // Die laufende Zeit für `aria-describedby` zieht höchstens einmal pro
+  // Sekunde nach. Der sichtbare Frame-Tick bleibt davon unberührt; ohne
+  // Drosselung würde eine Vorlesehilfe bei jedem Render neu lesen.
+  const ansageZeit = useGedaempfteZeit(zeit, status === 'laeuft' || status === 'geplant')
 
   const startPress = (event: React.PointerEvent<HTMLDivElement>) => {
     // Rechts- und Mittelklick sind keine Bedienhandlung am Beckenrand.
@@ -206,6 +211,37 @@ export function LaneTile({
     (status === 'laeuft' || status === 'beendet' || unterbrochen) &&
     (zwischenzeit.gesamt === null || zwischenzeit.gesamt > 0)
   const zwischenzeitId = `zwischenzeiten-${bahn.id}`
+  // Vorlesetext der Kachel: Zeit, Länge und letzter Anschlag. Weil die Zeit
+  // in einem `role="button"` steht, wäre sie sonst im Accessibility-Tree
+  // abgeflacht und nicht abrufbar. Die Beschreibung wird nur vorgelesen, wenn
+  // die Messfläche den Fokus hat — sie ist bewusst keine Live-Region.
+  const beschreibungId = `zeitbeschreibung-${bahn.id}`
+  const zeitbeschreibung = unterbrochen
+    ? letzter
+      ? `Letzter Anschlag ${formatTime(letzter.splitMs)}.`
+      : null
+    : status === 'laeuft'
+      ? [
+          `Zeit ${formatTime(ansageZeit)}.`,
+          gesamt
+            ? `Länge ${Math.min(bahn.anschlaege.length + 1, gesamt)} von ${gesamt}.`
+            : `Länge ${bahn.anschlaege.length + 1}.`,
+          letzter ? `Letzter Anschlag ${formatTime(letzter.splitMs)}.` : null,
+        ]
+          .filter((teil): teil is string => teil !== null)
+          .join(' ')
+      : status === 'beendet'
+        ? `Zielzeit ${formatTime(zeit)}.`
+        : status === 'geplant'
+          ? `Start in ${formatCountdown(ansageZeit)}.`
+          : null
+  const beschriebenVon =
+    [
+      zeitbeschreibung ? beschreibungId : null,
+      zeigtZwischenzeiten ? zwischenzeitId : null,
+    ]
+      .filter((id): id is string => id !== null)
+      .join(' ') || undefined
 
   // Die Messfläche ist ein Knopf, weil Tap, Enter und Leertaste dieselbe
   // Aktion auslösen. Sie liegt in einer nicht-interaktiven Hülle, die den
@@ -229,10 +265,10 @@ export function LaneTile({
         data-unterbrochen={unterbrochen ? 'true' : undefined}
         aria-keyshortcuts={kannRueckgaengig ? 'Backspace Delete' : undefined}
         aria-label={`Reihe ${bahn.reihe}, Bahn ${bahn.nummer}${schwimmerName ? `, ${schwimmerName}` : ''}, ${unterbrochen ? 'unterbrochen' : STATUS_LABEL[status]}`}
-        // Der Vorlesetext nennt den Status; die Zahl der Zwischenzeiten ergänzt
-        // ihn als Beschreibung, ohne den Namen für Tests und Sprachbefehle zu
-        // verändern.
-        aria-describedby={zeigtZwischenzeiten ? zwischenzeitId : undefined}
+        // Der Vorlesetext nennt den Status; Zeit, Länge, letzter Anschlag und
+        // die Zahl der Zwischenzeiten ergänzen ihn als Beschreibung, ohne den
+        // Namen für Tests und Sprachbefehle zu verändern.
+        aria-describedby={beschriebenVon}
         onPointerDown={startPress}
         onPointerUp={endPress}
         onPointerCancel={cancelPress}
@@ -372,6 +408,15 @@ export function LaneTile({
           </span>
         ) : null}
       </div>
+
+      {/* Außerhalb der Messfläche: Ein sr-only-Text in einem `role="button"`
+          wäre im Accessibility-Tree nicht erreichbar. Die Referenz aus
+          `aria-describedby` funktioniert über die DOM-Grenze hinweg. */}
+      {zeitbeschreibung ? (
+        <span id={beschreibungId} className="sr-only">
+          {zeitbeschreibung}
+        </span>
+      ) : null}
 
       {/* Ziel als eigene Fläche unter der Messung: nur bei offener Strecke
           nötig, weil bei fester Strecke der letzte Anschlag das Ziel ist. Der

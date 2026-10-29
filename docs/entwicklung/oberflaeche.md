@@ -269,6 +269,15 @@ verarbeiten ihn als Tap, damit die App auch ohne echte Pointer-Events bedienbar 
 Die Prüfung erfolgt über `klickRef`: Ein Pointer- oder Tastatur-Klick setzt den Ref und wird nicht
 doppelt verarbeitet.
 
+### Screenreader-Ausgabe
+
+Die große Zeit und der Zwischenzeitstand liegen in einer Messfläche mit `role="button"`. Damit sie
+nicht im Accessibility-Tree abgeflacht werden, verweist `aria-describedby` auf einen
+`sr-only`-Text mit Zeit, Länge und letztem Anschlag; er zieht höchstens einmal pro Sekunde nach
+(`useGedaempfteZeit`). Seltene Ereignisse — Start, Anschlag, Ziel und Laufende — teilen sich eine
+polite Live-Region (`Ansage`) im Timer, die auch die Runde einer Serie nennt. Der Frame-Tick aus
+`useNow` ist nie live.
+
 ### Tastatur
 
 - **Enter** und **Leertaste** auf einer Bahn lösen den Tap aus.
