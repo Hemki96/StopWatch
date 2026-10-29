@@ -50,7 +50,6 @@ import {
   createLauf,
   finishLane,
   hasStarted,
-  hatLaufendeBahn,
   isComplete,
   isFinished,
   istVielfacheDerBeckenlaenge,
@@ -122,26 +121,22 @@ import {
   type Theme,
   type ThemeEinstellung,
 } from './einstellungen'
-import { entferneText, leseText, schreibeText } from './lokalSpeicher'
+import {
+  berechneAktiveEintraege,
+  berechneBrauchtTakt,
+  bereinigeAktiveIds,
+  leseAktiveIds,
+  leseAktivenLaufId,
+  speichereAktiveIds,
+  speichereAktivenLaufId,
+  waehleOffenenLauf,
+  type AktiverEintrag,
+} from './aktiveLaeufe'
 
 export { leseEinstellungen } from './einstellungen'
 export type { Einstellungen, Theme, ThemeEinstellung } from './einstellungen'
 
-/**
- * Ein Eintrag der Leiste oben.
- *
- * Bei einer Serie ist `lauf` die Ankerwiederholung (Runde 1), `satz` der Satz
- * mit Plan und `serie` wahr. Auf diese Weise erscheint eine Serie als ein
- * Eintrag, nicht als fünf. `lauf` kann auch der zuletzt gewählte Lauf sein,
- * wenn die Anker-ID nicht mehr in der Leiste steht.
- */
-export interface AktiverEintrag {
-  /** Anker-Lauf in der Leiste; bei einer Serie die erste Wiederholung. */
-  id: string
-  lauf: Lauf
-  satz: Satz | null
-  serie: boolean
-}
+export type { AktiverEintrag } from './aktiveLaeufe'
 
 /**
  * Öffentliche Schnittstelle des Providers. Screens greifen ausschließlich
@@ -284,76 +279,6 @@ export interface AppContextValue {
 // `null` als Startwert ist Absicht: `useApp` erkennt daran einen fehlenden
 // Provider und kann eine klare Meldung werfen, statt `undefined` zu liefern.
 const AppContext = createContext<AppContextValue | null>(null)
-
-/**
- * `localStorage`-Schlüssel der Oberflächenauswahl. Bewusst flach und stabil
- * gehalten, weil sie auch das Onboarding-Gate in `App.tsx` und die E2E-Tests
- * lesen. Sie enthalten nur Verweise (IDs), keine Zeiten.
- */
-const ACTIVE_KEY = 'beckenrand.aktiverLauf'
-const ACTIVE_LIST_KEY = 'beckenrand.aktiveLaeufe'
-
-/**
- * Liest die aktiven Lauf-IDs; die alte Einzel-ID bleibt als Migration lesbar.
- *
- * Reihenfolge: zuerst die Liste, dann der alte Einzelwert. Kaputtes JSON fällt
- * still auf die Einzel-ID zurück, damit ein abgebrochener Schreibvorgang nicht
- * die ganze Leiste kostet.
- */
-function leseAktiveIds(): string[] {
-  const roh = leseText(ACTIVE_LIST_KEY)
-  if (roh) {
-    try {
-      const geparst: unknown = JSON.parse(roh)
-      if (Array.isArray(geparst)) {
-        return geparst.filter((wert): wert is string => typeof wert === 'string' && wert.length > 0)
-      }
-    } catch {
-      // Ohne lesbaren Speicher startet die App ohne aktive Läufe.
-    }
-  }
-  const alt = leseText(ACTIVE_KEY)
-  return alt ? [alt] : []
-}
-
-/**
- * Entfernt verwaiste und vollständig beendete Einträge. Eine Serie bleibt
- * aktiv, solange irgendeine ihrer Wiederholungen offen ist; ihr Anker ist die
- * erste Wiederholung, damit die Leiste nicht fünf Chips für einen Satz zeigt.
- *
- * Regeln im Einzelnen:
- * - Unbekannte IDs (gelöschter Lauf) fallen weg.
- * - Wettkampf-Läufe erscheinen nie in der Trainingsleiste; sie werden im
- *   Wettkampf-Tab bedient.
- * - Vollständig beendete Läufe und Serien werden ausgeblendet, bleiben aber im
- *   Verlauf. Nach einem Neustart ist die Leiste dadurch aufgeräumt.
- * - Doppelte Einträge derselben Serie bzw. desselben Laufs werden über
- *   `gesehen` zusammengefasst.
- */
-function bereinigeAktiveIds(ids: string[], laeufe: Lauf[], satze: Satz[]): string[] {
-  const ergebnis: string[] = []
-  const gesehen = new Set<string>()
-  for (const id of ids) {
-    const lauf = laeufe.find((eintrag) => eintrag.id === id)
-    if (!lauf || lauf.modus === 'wettkampf') continue
-    const satz = satze.find((eintrag) => eintrag.id === lauf.satzId)
-    if (istSerie(satz) && satz) {
-      const runden = rundenVon(laeufe, satz.id)
-      if (runden.length === 0 || runden.every(isComplete)) continue
-      const schluessel = `satz:${satz.id}`
-      if (gesehen.has(schluessel)) continue
-      gesehen.add(schluessel)
-      ergebnis.push(runden[0]!.id)
-      continue
-    }
-    if (isComplete(lauf)) continue
-    const schluessel = `lauf:${lauf.id}`
-    if (gesehen.has(schluessel)) continue
-    gesehen.add(schluessel)
-    ergebnis.push(lauf.id)
-  }
-  return ergebnis
-}
 
 /**
  * Heutiges Datum als `YYYY-MM-DD` in lokaler Zeit.
@@ -554,7 +479,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setAktiveIds = useCallback((ids: string[]) => {
     aktiveIdsRef.current = ids
     setAktiveIdsState(ids)
-    schreibeText(ACTIVE_LIST_KEY, JSON.stringify(ids))
+    speichereAktiveIds(ids)
   }, [])
 
   /**
@@ -565,8 +490,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setAktivenLaufId = useCallback((id: string | null) => {
     aktiverLaufIdRef.current = id
     setAktiverLaufId(id)
-    if (id) schreibeText(ACTIVE_KEY, id)
-    else entferneText(ACTIVE_KEY)
+    speichereAktivenLaufId(id)
   }, [])
 
   /**
@@ -665,21 +589,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // ist das ihr Anker, nicht die zuletzt gestartete Wiederholung.
     let aktive = bereinigeAktiveIds(leseAktiveIds(), laeufe, daten.satze)
     if (aktive.length === 0) {
-      const kandidat = [...laeufe]
-        .sort((a, b) => (b.startWallMs ?? 0) - (a.startWallMs ?? 0))
-        .find((lauf) => !isComplete(lauf) && lauf.modus !== 'wettkampf')
-      if (kandidat) {
-        const satz = daten.satze.find((eintrag) => eintrag.id === kandidat.satzId)
-        const anker =
-          istSerie(satz) && satz ? (rundenVon(laeufe, satz.id)[0] ?? kandidat) : kandidat
-        aktive = [anker.id]
-      }
+      const offen = waehleOffenenLauf(laeufe, daten.satze)
+      if (offen) aktive = [offen]
     }
     setAktiveIds(aktive)
 
     // Sichtbaren Lauf nur übernehmen, wenn er noch in der Leiste steht. Sonst
     // beginnt die App mit dem ersten verfügbaren Eintrag oder ohne Auswahl.
-    const gemerkt = leseText(ACTIVE_KEY)
+    const gemerkt = leseAktivenLaufId()
     const auswahl = gemerkt && aktive.includes(gemerkt) ? gemerkt : (aktive[0] ?? null)
     setAktivenLaufId(auswahl)
 
@@ -888,47 +805,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   )
 
   /**
-   * Die Leiste oben: ein Eintrag je Lauf oder Serie, dedupliziert wie in
-   * `bereinigeAktiveIds`. Verwaiste IDs werden still übersprungen, damit ein
-   * gelöschter Lauf keinen leeren Chip hinterlässt.
+   * Die Leiste oben und ob irgendein aktiver Lauf Takt braucht. Beides ist aus
+   * Bestand und Auswahl abgeleitet; es gibt keinen zweiten Speicherort.
    */
-  const aktiveEintraege = useMemo<AktiverEintrag[]>(() => {
-    const gesehen = new Set<string>()
-    const ergebnis: AktiverEintrag[] = []
-    for (const id of aktiveIds) {
-      const lauf = laeufe.find((eintrag) => eintrag.id === id)
-      if (!lauf) continue
-      const satz = lauf.satzId
-        ? (satze.find((eintrag) => eintrag.id === lauf.satzId) ?? null)
-        : null
-      const serie = istSerie(satz)
-      const schluessel = serie && satz ? `satz:${satz.id}` : `lauf:${lauf.id}`
-      if (gesehen.has(schluessel)) continue
-      gesehen.add(schluessel)
-      ergebnis.push({ id: lauf.id, lauf, satz, serie })
-    }
-    return ergebnis
-  }, [aktiveIds, laeufe, satze])
+  const aktiveEintraege = useMemo<AktiverEintrag[]>(
+    () => berechneAktiveEintraege(aktiveIds, laeufe, satze),
+    [aktiveIds, laeufe, satze],
+  )
 
-  /**
-   * Wahr, solange irgendein aktiver Lauf plant oder läuft. Steuert in den
-   * Screens die Animationsschleife (`useNow`) und den Wake Lock; bei `false`
-   * laufen keine Frames und der Bildschirm darf schlafen.
-   *
-   * Bewusst aus den Daten abgeleitet und nicht als Flag gepflegt: Ein
-   * vergessener Zähler würde den Bildschirm dauerhaft wachhalten.
-   */
   const brauchtTakt = useMemo(
-    () =>
-      aktiveEintraege.some((eintrag) => {
-        if (eintrag.serie && eintrag.satz) {
-          return rundenVon(laeufe, eintrag.satz.id).some(hatLaufendeBahn)
-        }
-        return hatLaufendeBahn(eintrag.lauf)
-      }) ||
-      // Ein laufender Wettkampf-Lauf hält den Takt genauso nötig wie ein
-      // Trainingslauf, auch wenn er nicht in der Trainingsleiste steht.
-      laeufe.some((lauf) => lauf.modus === 'wettkampf' && hatLaufendeBahn(lauf)),
+    () => berechneBrauchtTakt(aktiveEintraege, laeufe),
     [aktiveEintraege, laeufe],
   )
 
