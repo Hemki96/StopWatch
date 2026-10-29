@@ -8,7 +8,6 @@
  * Löschen sind angebunden, aber nur bei bestehenden Sätzen sichtbar.
  */
 import { useState } from 'react'
-import { formatTakt } from '../domain/format'
 import { validateKonfiguration } from '../domain/lauf'
 import { pruefeTrainingsSatz } from '../domain/training'
 import {
@@ -17,20 +16,21 @@ import {
   type LaufKonfiguration,
   type TrainingsSatz,
 } from '../domain/types'
-import { Chip, Feld } from './Felder'
+import { Chip, Feld, TaktWahl } from './Felder'
 import { Sheet } from './Sheet'
 
 // Feste Chip-Werte wie im Konfigurationssheet; der jeweilige Ist-Wert wird
 // bei Bedarf ergänzt, damit importierte Pläne editierbar bleiben.
 const STRECKEN = [50, 100, 200, 400, 800, 1500] as const
 const VERSATZE = [0, 5_000, 10_000, 15_000, 20_000, 30_000] as const
-const TAKTE = [60, 75, 90, 105, 120, 135, 150, 180, 240] as const
 
 interface TrainingsSatzSheetProps {
   /** Der aktuelle Stand; das Sheet arbeitet auf einer Kopie bis zum Speichern. */
   satz: TrainingsSatz
-  /** Bahnzahl des Trainings; nur für den Hinweistext der Bezeichnung. */
+  /** Bahnzahl je Reihe des Trainings; nur für den Hinweistext der Bezeichnung. */
   bahnen: number
+  /** Reihenzahl des Trainings; nur für den Hinweistext der Bezeichnung. */
+  reihen: number
   /** Position in der Satzliste, für Titel und Verschieben. */
   index: number
   /** Neue Sätze lassen sich nicht verschieben oder löschen. */
@@ -54,6 +54,7 @@ interface TrainingsSatzSheetProps {
 export function TrainingsSatzSheet({
   satz,
   bahnen,
+  reihen,
   index,
   istNeu,
   kannNachOben,
@@ -72,10 +73,7 @@ export function TrainingsSatzSheet({
 
   // Fehler blockieren den Speichern-Knopf; die Meldung steht über den Aktionen.
   const fehler = pruefeTrainingsSatz(entwurf)
-  // Ist-Werte außerhalb der festen Liste werden einsortiert ergänzt.
-  const taktOptionen = Array.from(new Set<number>([...TAKTE, entwurf.taktSek])).sort(
-    (a, b) => a - b,
-  )
+  // Versatz-Ist-Werte außerhalb der festen Liste werden einsortiert ergänzt.
   const versatzOptionen = Array.from(
     new Set<number>([...VERSATZE, entwurf.startversatzMs]),
   ).sort((a, b) => a - b)
@@ -110,7 +108,10 @@ export function TrainingsSatzSheet({
       onClose={onClose}
       titel={istNeu ? 'Satz hinzufügen' : `Satz ${index + 1} bearbeiten`}
     >
-      <Feld label="Bezeichnung" hint={`Gilt für ${bahnen} ${bahnen === 1 ? 'Bahn' : 'Bahnen'}.`}>
+      <Feld
+        label="Bezeichnung"
+        hint={`Gilt für ${bahnen * reihen} ${bahnen * reihen === 1 ? 'Person' : 'Personen'}${reihen > 1 ? ` in ${reihen} Reihen` : ''}.`}
+      >
         <input
           value={entwurf.bezeichnung}
           onChange={(event) => aendere({ bezeichnung: event.target.value })}
@@ -202,24 +203,17 @@ export function TrainingsSatzSheet({
           <div className="mt-3">
             {/* Takt = Zeit von Start zu Start, nicht die Schwimmzeit. */}
             <p className="mb-2 text-xs text-muted">Takt (Start zu Start)</p>
-            <div className="flex flex-wrap gap-2">
-              {taktOptionen.map((wert) => (
-                <Chip
-                  key={wert}
-                  aktiv={entwurf.taktSek === wert}
-                  onClick={() => aendere({ taktSek: wert })}
-                >
-                  {formatTakt(wert)}
-                </Chip>
-              ))}
-            </div>
+            <TaktWahl
+              wert={entwurf.taktSek}
+              onWert={(sekunden) => aendere({ taktSek: sekunden })}
+            />
           </div>
         ) : null}
       </Feld>
 
       <Feld
         label="Startversatz"
-        hint="Bahn 1 startet sofort, jede weitere um diesen Abstand später."
+        hint="Reihe 1 startet sofort, jede weitere Reihe um diesen Abstand später."
       >
         <div className="flex flex-wrap gap-2">
           {versatzOptionen.map((wert) => (

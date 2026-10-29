@@ -5,7 +5,8 @@
  * setzt den Anschlag, langes Drücken nimmt die letzte Aktion zurück, der
  * eingebettete „Ziel“-Knopf beendet eine Bahn auf offener Strecke. Die Kachel
  * rechnet nicht selbst: Status und Zeiten kommen aus domain/lauf, die Aktionen
- * reicht TimerScreen aus app/AppProvider herein.
+ * reicht TimerScreen aus app/AppProvider herein. Die Reihe steht im Vorlesetext;
+ * sichtbar wird sie durch den Abschnitt im Timer.
  */
 import { useRef, useState } from 'react'
 import { haptic } from '../app/haptics'
@@ -179,7 +180,7 @@ export function LaneTile({
       tabIndex={0}
       data-anschlaege={bahn.anschlaege.length}
       data-status={status}
-      aria-label={`Bahn ${bahn.nummer}${schwimmerName ? `, ${schwimmerName}` : ''}, ${STATUS_LABEL[status]}`}
+      aria-label={`Reihe ${bahn.reihe}, Bahn ${bahn.nummer}${schwimmerName ? `, ${schwimmerName}` : ''}, ${STATUS_LABEL[status]}`}
       onPointerDown={startPress}
       onPointerUp={endPress}
       onPointerCancel={cancelPress}

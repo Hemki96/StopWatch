@@ -32,8 +32,37 @@ import {
 export const MAX_TRAININGS_SAETZE = 20
 /** Höchstzahl der Wiederholungen eines Trainingssatzes. */
 export const MAX_WIEDERHOLUNGEN = 20
-/** Höchstzahl der Bahnen in einem Lauf und in einem Training. */
+/** Höchstzahl der Bahnen je Reihe in einem Lauf und in einem Training. */
 export const MAX_BAHNEN = 10
+/** Höchstzahl der Reihen (Startgruppen) in einem Lauf und in einem Training. */
+export const MAX_REIHEN = 5
+
+/** Alle Bahnen eines Trainings über alle Reihen hinweg. */
+export function bahnenGesamt(bahnen: number, reihen: number): number {
+  return bahnen * reihen
+}
+
+/**
+ * Ordnet die Aktivenliste nach einer geänderten Aufteilung neu zu.
+ *
+ * Die Liste ist Reihe für Reihe geordnet. Wird die Zahl der Bahnen je Reihe
+ * geändert, darf eine Person nicht in eine andere Reihe rutschen: Ihre Position
+ * bleibt innerhalb ihrer Reihe, neue Plätze werden `null`, entfallende Reihen
+ * oder Bahnen fallen weg. Ohne diese Umordnung würde aus „Reihe 1, Bahn 3“
+ * beim Verkleinern plötzlich „Reihe 2, Bahn 1“.
+ */
+export function ordneAktiveUm(
+  aktive: readonly (string | null)[],
+  alt: { bahnen: number; reihen: number },
+  neu: { bahnen: number; reihen: number },
+): (string | null)[] {
+  return Array.from({ length: bahnenGesamt(neu.bahnen, neu.reihen) }, (_, index) => {
+    const reihe = Math.floor(index / neu.bahnen)
+    const bahn = index % neu.bahnen
+    if (reihe >= alt.reihen || bahn >= alt.bahnen) return null
+    return aktive[reihe * alt.bahnen + bahn] ?? null
+  })
+}
 
 /** Vorgabe für einen neuen Trainingssatz, wenn nichts anderes gewählt wurde. */
 const STANDARD_SAETZ_KONFIGURATION: LaufKonfiguration = {
@@ -63,15 +92,17 @@ export function neuerTrainingsSatz(teil: Partial<TrainingsSatz> = {}): Trainings
 /**
  * Legt ein neues Training an.
  *
- * `bahnen` wird auf 1..10 geklemmt und gerundet, damit die Grenze auch bei
- * freien Eingaben aus einem Formular hält. `aktive` bekommt genau einen Platz
- * pro Bahn (fehlende werden `null`), es gibt immer mindestens einen Satz,
- * `gestartet` startet leer und `erstelltAm` ist die aktuelle Wanduhr.
+ * `bahnen` (je Reihe) wird auf 1..10 und `reihen` auf 1..5 geklemmt und
+ * gerundet, damit die Grenzen auch bei freien Eingaben aus einem Formular
+ * halten. `aktive` bekommt genau einen Platz pro Person (fehlende werden
+ * `null`), es gibt immer mindestens einen Satz, `gestartet` startet leer und
+ * `erstelltAm` ist die aktuelle Wanduhr.
  */
 export function neuesTraining(daten: {
   datum: string
   bezeichnung?: string
   bahnen: number
+  reihen?: number
   aktive?: (string | null)[]
   saetze?: TrainingsSatz[]
 }): Training {
@@ -79,13 +110,18 @@ export function neuesTraining(daten: {
   const bahnen = Number.isFinite(daten.bahnen)
     ? Math.min(MAX_BAHNEN, Math.max(1, Math.round(daten.bahnen)))
     : 1
+  const reihen = Number.isFinite(daten.reihen)
+    ? Math.min(MAX_REIHEN, Math.max(1, Math.round(daten.reihen ?? 1)))
+    : 1
+  const personen = bahnenGesamt(bahnen, reihen)
   return {
     id: newId(),
     datum: daten.datum,
     bezeichnung: daten.bezeichnung?.trim() ?? '',
     bahnen,
+    reihen,
     // Zu lange Listen werden abgeschnitten, zu kurze mit `null` aufgefüllt.
-    aktive: Array.from({ length: bahnen }, (_, index) => daten.aktive?.[index] ?? null),
+    aktive: Array.from({ length: personen }, (_, index) => daten.aktive?.[index] ?? null),
     saetze: daten.saetze?.length ? daten.saetze : [neuerTrainingsSatz()],
     gestartet: {},
     erstelltAm: Date.now(),
@@ -119,7 +155,7 @@ export function trainingsSatzTitel(satz: TrainingsSatz): string {
 export function trainingsSatzMeta(satz: TrainingsSatz): string {
   const teile = [`${satz.konfiguration.beckenlaengeM} m-Becken`]
   if (satz.wiederholungen > 1) teile.push(`Takt ${formatTakt(satz.taktSek)}`)
-  if (satz.startversatzMs > 0) teile.push(`${Math.round(satz.startversatzMs / 1000)} s Versatz`)
+  if (satz.startversatzMs > 0) teile.push(`${Math.round(satz.startversatzMs / 1000)} s Reihenversatz`)
   return teile.join(' · ')
 }
 
@@ -156,8 +192,8 @@ export function pruefeTrainingsSatz(satz: TrainingsSatz): string | null {
 /**
  * Prüft ein ganzes Training vor dem Speichern.
  *
- * Geprüft werden ID, Datumsformat `JJJJ-MM-TT`, Bahnenzahl, genau ein Platz je
- * Bahn in `aktive`, 1..20 Sätze und jeder einzelne Satz. Nicht geprüft werden
+ * Geprüft werden ID, Datumsformat `JJJJ-MM-TT`, Bahnenzahl je Reihe, Reihenzahl,
+ * genau ein Platz je Person in `aktive`, 1..20 Sätze und jeder einzelne Satz. Nicht geprüft werden
  * doppelte Satz-IDs und unbekannte `gestartet`-Werte; eine verwaiste Zuordnung
  * gilt beim Fortschritt bewusst wieder als „offen“.
  */
@@ -171,9 +207,16 @@ export function pruefeTraining(training: Training): string | null {
     training.bahnen < 1 ||
     training.bahnen > MAX_BAHNEN
   ) {
-    return `Ein Training braucht 1 bis ${MAX_BAHNEN} Bahnen.`
+    return `Ein Training braucht 1 bis ${MAX_BAHNEN} Bahnen pro Reihe.`
   }
-  if (training.aktive.length !== training.bahnen) {
+  if (
+    !Number.isInteger(training.reihen) ||
+    training.reihen < 1 ||
+    training.reihen > MAX_REIHEN
+  ) {
+    return `Ein Training braucht 1 bis ${MAX_REIHEN} Reihen.`
+  }
+  if (training.aktive.length !== bahnenGesamt(training.bahnen, training.reihen)) {
     return 'Für jede Bahn muss genau ein Platz in den Aktiven vorgesehen sein.'
   }
   if (training.aktive.some((wert) => wert !== null && typeof wert !== 'string')) {

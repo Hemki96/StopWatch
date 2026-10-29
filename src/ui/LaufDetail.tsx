@@ -11,7 +11,14 @@ import { useEffect, useMemo, useState } from 'react'
 import { useApp } from '../app/AppProvider'
 import { berechnePbs, pacePro100, pbDelta } from '../domain/analyse'
 import { formatDelta, formatStrecke, formatTakt, formatTime, parseTime } from '../domain/format'
-import { finishMs, hatBegonnen, isFinished, laneStatus, pruefeAnschlagKorrektur } from '../domain/lauf'
+import {
+  finishMs,
+  hatBegonnen,
+  isFinished,
+  laneStatus,
+  pruefeAnschlagKorrektur,
+  reihenVon,
+} from '../domain/lauf'
 import { SCHWIMMARTEN } from '../domain/types'
 import { csvDateiname, laeufeAlsCsv } from '../export/csv'
 import { speichereDatei } from '../export/datei'
@@ -132,11 +139,15 @@ export function LaufDetail({ laufId, onClose }: { laufId: string; onClose: () =>
           {lauf.startWallMs ? `${zeitFormat.format(lauf.startWallMs)} Uhr` : 'ohne Startzeit'}
         </p>
         <h1 className="mt-1 text-xl font-semibold">
-          {lauf.bahnen.length} Bahnen · {formatStrecke(lauf.konfiguration.streckeM)}
+          {lauf.bahnen.length} {reihenVon(lauf) > 1 ? 'Personen' : 'Bahnen'} ·{' '}
+          {formatStrecke(lauf.konfiguration.streckeM)}
         </h1>
         <p className="text-sm text-muted">
           {lauf.konfiguration.beckenlaengeM} m-Becken · {art}
-          {lauf.startversatzMs > 0 ? ` · ${lauf.startversatzMs / 1000} s Versatz` : ''}
+          {reihenVon(lauf) > 1 ? ` · ${reihenVon(lauf)} Reihen` : ''}
+          {lauf.startversatzMs > 0 && reihenVon(lauf) > 1
+            ? ` · ${lauf.startversatzMs / 1000} s Reihenversatz`
+            : ''}
         </p>
         {/* Im Wettkampf ist `wiederholung` die Laufnummer (Heat), in einer
             Serie die Runde. Der Text unterscheidet beides. */}
@@ -182,7 +193,7 @@ export function LaufDetail({ laufId, onClose }: { laufId: string; onClose: () =>
                         onChange={(e) =>
                           app.setzeSchwimmerImLauf(lauf.id, bahn.id, e.target.value || null)
                         }
-                        aria-label={`Schwimmer für Bahn ${bahn.nummer}`}
+                        aria-label={`Schwimmer für Reihe ${bahn.reihe}, Bahn ${bahn.nummer}`}
                         className="max-w-[11rem] truncate rounded-lg bg-surface2 px-1 py-1 text-sm font-semibold"
                       >
                         <option value="">Schwimmer wählen</option>

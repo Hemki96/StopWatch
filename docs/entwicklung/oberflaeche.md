@@ -61,7 +61,7 @@ seitlichen Navigation. Das Manifest erlaubt deshalb beide Ausrichtungen (`orient
 | --- | --- | --- |
 | Onboarding | `ui/Onboarding.tsx` | drei Schritte beim Erststart |
 | Timer | `ui/TimerScreen.tsx` | Lauf anlegen, starten, messen, mehrere Läufe |
-| Serie | `ui/SerieAnsicht.tsx` | eine Zeile pro Bahn über mehrere Runden |
+| Serie | `ui/SerieAnsicht.tsx` | eine Zeile pro Bahn über mehrere Runden, nach Reihen gruppiert |
 | Training | `ui/TrainingScreen.tsx` | Pläne, Aktive, Sätze, Fortschritt |
 | Wettkampf | `ui/WettkampfScreen.tsx` | drei Ebenen: Wettkampf, Disziplin, Heat |
 | Verlauf | `ui/HistoryScreen.tsx` | nach Satz gruppierte Messungen |
@@ -77,12 +77,14 @@ Drei Zustände:
 2. **Lauf aktiv** — Lauf-Leiste, Konfigurationskopf, Bahnenraster, Statuszeile, Aktionsleiste.
 3. **Serie aktiv** — statt des Rasters die Serienansicht.
 
-Das Bahnenraster ist ein CSS-Grid mit einer Spaltenzahl, die zur Bahnzahl passt: Eine Bahn nimmt
-die volle Breite, zwei Bahnen stehen nebeneinander, ab drei Bahnen wächst das Raster auf dem
-Tablet bis auf fünf Spalten. Gleich große Reihen bleiben erhalten; reicht die Höhe nicht, scrollt
-das Raster, statt die Kacheln unter die Mindesthöhe zu drücken. Die Zeit in `LaneTile` skaliert
-über eine Container-Abfrage (`cqw`) mit der Kachelbreite, nicht mit dem Viewport — so bleibt sie
-bei zehn Bahnen auf dem Handy und bei einer Bahn auf dem Tablet gleichermaßen lesbar.
+Das Bahnenraster ist ein CSS-Grid mit einer Spaltenzahl, die zur Bahnzahl **je Reihe** passt: Eine
+Bahn nimmt die volle Breite, zwei Bahnen stehen nebeneinander, ab drei Bahnen wächst das Raster auf
+dem Tablet bis auf fünf Spalten. Bei mehreren Reihen bekommt jede Reihe einen Abschnitt mit
+Überschrift und Startzeit („Reihe 2 · +10 s“); die Spaltenzahl richtet sich nach der größten Reihe,
+nicht nach der Gesamtzahl der Personen. Gleich große Reihen bleiben erhalten; reicht die Höhe nicht,
+scrollt der Bereich, statt die Kacheln unter die Mindesthöhe zu drücken. Die Zeit in `LaneTile`
+skaliert über eine Container-Abfrage (`cqw`) mit der Kachelbreite, nicht mit dem Viewport — so bleibt
+sie bei zehn Bahnen auf dem Handy und bei einer Bahn auf dem Tablet gleichermaßen lesbar.
 
 Die Kopfzeile des Laufs ist gleichzeitig ein Knopf zum Öffnen des Konfigurations-Sheets. Rechts
 steht entweder **X** (alle im Ziel) oder der **Papierkorb** (verwerfen).
@@ -197,11 +199,13 @@ Wie `LaneTile`, aber:
 
 ### `Felder.tsx`
 
-`Feld` und `Chip` für Formulare in Sheets:
+`Feld`, `Chip` und `TaktWahl` für Formulare in Sheets:
 
 - `Feld` = Abschnitt mit Label und optionalem Hinweis,
 - `Chip` = große Auswahlfläche mit aktivem Zustand,
-- deaktivierte Chips sind sichtbar, aber nicht bedienbar.
+- deaktivierte Chips sind sichtbar, aber nicht bedienbar,
+- `TaktWahl` = Schnellauswahl plus freie Eingabe in Minuten und Sekunden; der Wert bleibt in
+  Sekunden, die Felder öffnen die Zifferntastatur.
 
 ### Icons
 

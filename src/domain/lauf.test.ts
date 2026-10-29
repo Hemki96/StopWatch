@@ -14,6 +14,8 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
+  bahnenNachReihen,
+  bahnReihe,
   createLauf,
   elapsedMs,
   finishLane,
@@ -26,10 +28,12 @@ import {
   korrigiereAnschlag,
   laneStatus,
   laneStatusAt,
+  normalisiereReihe,
   planeLauf,
   pruefeAnschlagKorrektur,
   lastSplit,
   lengthCount,
+  reihenVon,
   startAll,
   startLane,
   tapLane,
@@ -336,61 +340,72 @@ describe('korrigiereAnschlag', () => {
   })
 })
 
-// Startversatz: Alle Bahnen werden beim Start vorausgeplant; Taps vor dem
-// eigenen Startzeitpunkt werden ignoriert.
+// Startversatz: Alle Bahnen einer Reihe starten gemeinsam, die nächste Reihe
+// versetzt; Taps vor dem eigenen Startzeitpunkt werden ignoriert.
 describe('Startversatz', () => {
-  // 10 s Versatz wie im README: Bahn 1 startet sofort, Bahn 2 nach 10 s,
-  // Bahn 3 nach 20 s.
-  function gestaffelt(anzahl = 3, versatzMs = 10_000): Lauf {
+  // Zwei Reihen à drei Bahnen: Reihe 1 startet sofort, Reihe 2 nach 10 s.
+  function gestaffelt(reihen = 2, proReihe = 3, versatzMs = 10_000): Lauf {
     return createLauf(
       K100,
-      Array.from({ length: anzahl }, (_, i) => ({ nummer: i + 1 })),
+      Array.from({ length: reihen * proReihe }, (_, i) => ({
+        nummer: (i % proReihe) + 1,
+        reihe: Math.floor(i / proReihe) + 1,
+      })),
       null,
       { startversatzMs: versatzMs },
     )
   }
 
-  // Der Versatz wird pro Bahnindex addiert; `startWallMs` bleibt der gemeinsame
-  // Wanduhr-Anker des Laufs.
-  it('startet die Bahnen im festen Abstand', () => {
-    const lauf = startAll(gestaffelt(3), 1000, 5000)
-    expect(lauf.bahnen.map((b) => b.startMs)).toEqual([1000, 11_000, 21_000])
+  // Der Versatz wird pro Reihe addiert, nicht pro Bahnindex; `startWallMs`
+  // bleibt der gemeinsame Wanduhr-Anker des Laufs.
+  it('startet die Reihen im festen Abstand und je Reihe gemeinsam', () => {
+    const lauf = startAll(gestaffelt(), 1000, 5000)
+    expect(lauf.bahnen.map((b) => b.startMs)).toEqual([
+      1000, 1000, 1000, 11_000, 11_000, 11_000,
+    ])
     expect(lauf.startWallMs).toBe(5000)
     expect(lauf.startversatzMs).toBe(10_000)
   })
 
+  // Ohne zweite Reihe gibt es nichts zu staffeln: Der Versatz bleibt wirkungslos
+  // und alle Bahnen starten gemeinsam.
+  it('startet eine einzelne Reihe trotz Versatz gemeinsam', () => {
+    const lauf = startAll(gestaffelt(1, 4), 1000, 5000)
+    expect(lauf.bahnen.map((b) => b.startMs)).toEqual([1000, 1000, 1000, 1000])
+  })
+
   // `laneStatusAt` unterscheidet „geplant“ von „läuft“ anhand von `now`;
   // `laneStatus` ohne Zeitbezug kennt diesen Zustand bewusst nicht.
-  it('meldet eine Bahn vor ihrem Start als geplant', () => {
-    const lauf = startAll(gestaffelt(2), 1000, 5000)
+  it('meldet eine Bahn vor ihrer Reihe als geplant', () => {
+    const lauf = startAll(gestaffelt(), 1000, 5000)
     expect(laneStatusAt(lauf.bahnen[0]!, 500)).toBe('geplant')
     expect(laneStatusAt(lauf.bahnen[0]!, 1000)).toBe('laeuft')
-    expect(laneStatusAt(lauf.bahnen[1]!, 5000)).toBe('geplant')
-    expect(laneStatusAt(lauf.bahnen[1]!, 11_000)).toBe('laeuft')
+    expect(laneStatusAt(lauf.bahnen[3]!, 5000)).toBe('geplant')
+    expect(laneStatusAt(lauf.bahnen[3]!, 11_000)).toBe('laeuft')
   })
 
-  // Der Tap bei 5000 ms liegt vor dem Start der zweiten Bahn (11 s); erst ab
+  // Der Tap bei 5000 ms liegt vor dem Start der zweiten Reihe (11 s); erst ab
   // deren Start entsteht ein Split von 1 s.
-  it('ignoriert Taps, bevor die Bahn startet', () => {
-    const lauf = startAll(gestaffelt(2), 1000, 5000)
-    const unveraendert = tapLane(lauf, lauf.bahnen[1]!.id, 5000, 6000)
+  it('ignoriert Taps, bevor die Reihe startet', () => {
+    const lauf = startAll(gestaffelt(), 1000, 5000)
+    const unveraendert = tapLane(lauf, lauf.bahnen[3]!.id, 5000, 6000)
     expect(unveraendert).toBe(lauf)
 
-    const getippt = tapLane(lauf, lauf.bahnen[1]!.id, 12_000, 13_000)
-    expect(bahn(getippt, 1).anschlaege).toHaveLength(1)
-    expect(bahn(getippt, 1).anschlaege[0]?.splitMs).toBe(1000)
+    const getippt = tapLane(lauf, lauf.bahnen[3]!.id, 12_000, 13_000)
+    expect(bahn(getippt, 3).anschlaege).toHaveLength(1)
+    expect(bahn(getippt, 3).anschlaege[0]?.splitMs).toBe(1000)
   })
 
-  it('hält den Lauf aktiv, solange eine Bahn geplant ist', () => {
-    const lauf = startAll(gestaffelt(2), 1000, 5000)
+  it('hält den Lauf aktiv, solange eine Reihe geplant ist', () => {
+    const lauf = startAll(gestaffelt(2, 2), 1000, 5000)
     expect(hatLaufendeBahn(lauf)).toBe(true)
   })
 
   // `planeLauf` überschreibt vorhandene Startzeiten; hier mit 5 s Versatz,
-  // damit die Staffelung im Ergebnis sichtbar wird.
+  // damit die Staffelung zwischen den Reihen sichtbar wird.
   it('setzt mit planeLauf alle Starts neu', () => {
-    const lauf = planeLauf(gestaffelt(3), 0, 1000, 5000)
-    expect(lauf.bahnen.map((b) => b.startMs)).toEqual([0, 5000, 10_000])
+    const lauf = planeLauf(gestaffelt(2, 2), 0, 1000, 5000)
+    expect(lauf.bahnen.map((b) => b.startMs)).toEqual([0, 0, 5000, 5000])
     expect(lauf.startWallMs).toBe(1000)
     expect(lauf.startversatzMs).toBe(5000)
   })
@@ -398,20 +413,61 @@ describe('Startversatz', () => {
   // Nach dem ersten Start darf der Versatz nicht mehr geändert werden, sonst
   // würden bereits geplante Bahnen nachträglich verschoben.
   it('sperrt den Start nach dem ersten Start', () => {
-    const lauf = gestaffelt(2)
+    const lauf = gestaffelt(2, 2)
     expect(isStartLocked(lauf)).toBe(false)
     expect(isStartLocked(startAll(lauf, 1000, 5000))).toBe(true)
   })
 })
 
+// Reihen sind Startgruppen: Jede Bahn gehört zu genau einer Reihe, die
+// Gruppierung ist zugleich die Startstaffelung.
+describe('Reihen', () => {
+  it('normalisiert fehlende oder unbrauchbare Reihen auf 1', () => {
+    expect(normalisiereReihe(undefined)).toBe(1)
+    expect(normalisiereReihe(Number.NaN)).toBe(1)
+    expect(normalisiereReihe(0)).toBe(1)
+    expect(normalisiereReihe(2.4)).toBe(2)
+  })
+
+  it('legt Bahnen ohne Reihe in Reihe 1 an', () => {
+    const lauf = createLauf(K100, [{ nummer: 1 }, { nummer: 2, reihe: 3 }])
+    expect(lauf.bahnen.map(bahnReihe)).toEqual([1, 3])
+    expect(reihenVon(lauf)).toBe(3)
+  })
+
+  it('gruppiert Bahnen nach Reihe und behält die Reihenfolge darin', () => {
+    const lauf = createLauf(K100, [
+      { nummer: 1, reihe: 2 },
+      { nummer: 2, reihe: 1 },
+      { nummer: 1, reihe: 2 },
+      { nummer: 2, reihe: 1 },
+    ])
+    const gruppen = bahnenNachReihen(lauf.bahnen)
+    expect(gruppen.map((gruppe) => gruppe.reihe)).toEqual([1, 2])
+    expect(gruppen[0]?.bahnen.map((bahn) => bahn.nummer)).toEqual([2, 2])
+    expect(gruppen[1]?.bahnen.map((bahn) => bahn.nummer)).toEqual([1, 1])
+  })
+
+  it('meldet für einen Lauf ohne Bahnen eine Reihe', () => {
+    expect(reihenVon(createLauf(K100, []))).toBe(1)
+  })
+})
+
 // `hatBegonnen` entscheidet über den Eintrag im Verlauf und richtet sich nach
 // der Wanduhr, nicht nach `performance.now()`.
-describe('hatBegonnen', () => {
-  // Der Wanduhr-Anker liegt bei 1000; erst ab diesem Wert gilt der Lauf als
-  // begonnen, obwohl der Startversatz einzelne Bahnen in die Zukunft legt.
+describe('hatBegonnen', () => {  // Der Wanduhr-Anker liegt bei 1000; erst ab diesem Wert gilt der Lauf als
+  // begonnen, auch wenn die zweite Reihe erst später startet.
   it('zählt eine noch in der Zukunft liegende Runde nicht', () => {
     const lauf = startAll(
-      createLauf(K100, [{ nummer: 1 }, { nummer: 2 }], null, { startversatzMs: 10_000 }),
+      createLauf(
+        K100,
+        [
+          { nummer: 1 },
+          { nummer: 1, reihe: 2 },
+        ],
+        null,
+        { startversatzMs: 10_000 },
+      ),
       0,
       1000,
     )

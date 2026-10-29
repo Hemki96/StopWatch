@@ -2,24 +2,23 @@
  * Konfiguration von Lauf und nächstem Lauf.
  *
  * Dasselbe Sheet dient zwei Zwecken: Im Modus „lauf“ ändert es den sichtbaren
- * Lauf (Beckenlänge, Strecke, Schwimmart und die Schwimmer je Bahn), im Modus
- * „einstellungen“ die Vorgaben für den nächsten Lauf samt Bahnzahl, Serie und
+ * Lauf (Beckenlänge, Strecke, Schwimmart und die Schwimmer je Bahn und Reihe), im Modus
+ * „einstellungen“ die Vorgaben für den nächsten Lauf samt Bahnen je Reihe, Reihen, Serie und
  * Schwimmerzuordnung. Die Werte werden direkt in `app/AppProvider` gespeichert;
  * Sperren und Prüfungen kommen aus domain/lauf und domain/serie.
  */
 import { useApp } from '../app/AppProvider'
-import { formatTakt } from '../domain/format'
-import { isStreckeLocked, validateKonfiguration } from '../domain/lauf'
+import { bahnenNachReihen, isStreckeLocked, reihenVon, validateKonfiguration } from '../domain/lauf'
 import { istSerie, warnungSeriePlan } from '../domain/serie'
+import { MAX_BAHNEN, MAX_REIHEN, bahnenGesamt, ordneAktiveUm } from '../domain/training'
 import { SCHWIMMARTEN, type Beckenlaenge, type LaufKonfiguration, type Schwimmart } from '../domain/types'
-import { Chip, Feld } from './Felder'
+import { Chip, Feld, TaktWahl } from './Felder'
 import { Sheet } from './Sheet'
 
 // Feste Auswahlwerte der Chips. Ein bereits gesetzter, hier nicht enthaltener
 // Wert (z. B. aus einem Backup) wird später ergänzt, damit er sichtbar bleibt.
 const STRECKEN = [50, 100, 200, 400, 800, 1500] as const
 const VERSATZE = [0, 5_000, 10_000, 15_000, 20_000, 30_000] as const
-const TAKTE = [60, 75, 90, 105, 120, 135, 150, 180, 240] as const
 
 interface KonfigurationSheetProps {
   open: boolean
@@ -60,21 +59,28 @@ export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetP
     modus === 'lauf' ? (serie ? (plan?.wiederholungen ?? 1) : 1) : app.einstellungen.wiederholungen
   const taktSek =
     modus === 'lauf' ? (serie ? (plan?.taktSek ?? 120) : 120) : app.einstellungen.taktSek
-  // Der aktuelle Wert kann außerhalb der festen Liste liegen; er wird ergänzt
-  // und einsortiert, statt stillschweigend auf einen anderen Wert zu springen.
-  const taktOptionen = Array.from(new Set<number>([...TAKTE, taktSek])).sort((a, b) => a - b)
+  // Der aktuelle Wert kann außerhalb der festen Liste liegen; die Anzeige
+  // ergänzt ihn, statt stillschweigend auf einen anderen Wert zu springen.
   const versatzOptionen = Array.from(new Set<number>([...VERSATZE, startversatzMs])).sort(
     (a, b) => a - b,
   )
   // Warnung nur bei einer geplanten Serie: Der Takt ist kürzer als der
-  // Startversatz der letzten Bahn, die nächste Runde überlappt also.
+  // Reihenversatz, die nächste Runde überlappt also.
   const warnung =
     modus === 'einstellungen' && wiederholungen > 1
       ? warnungSeriePlan(
           { wiederholungen, taktSek, startversatzMs },
-          app.einstellungen.bahnen,
+          app.einstellungen.reihen,
         )
       : null
+  // Konkrete Startzeiten der geplanten Reihen; macht den Versatz begreifbar,
+  // bevor der Lauf angelegt ist.
+  const reihenStartplan = Array.from(
+    { length: app.einstellungen.reihen },
+    (_, index) => (index === 0 ? '0 s' : `+${(app.einstellungen.startversatzMs / 1000) * index} s`),
+  ).join(' · ')
+  const reihenGemeinsam =
+    modus === 'einstellungen' && app.einstellungen.reihen > 1 && startversatzMs === 0
 
   /** Übernimmt eine Änderung nur, wenn die Kombination gültig bleibt. */
   const aendere = (teil: Partial<LaufKonfiguration>) => {
@@ -88,6 +94,25 @@ export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetP
   const setzeEinstellung = (teil: Partial<typeof app.einstellungen>) => {
     if (modus === 'lauf') return
     app.setzeEinstellungen({ ...app.einstellungen, ...teil })
+  }
+
+  /**
+   * Ändert Bahnen je Reihe und Reihenzahl gemeinsam. Die Schwimmer bleiben in
+   * ihrer Reihe an ihrer Bahn; nur neue Plätze werden leer. Sonst würde beim
+   * Verkleinern eine Person unbemerkt die Reihe wechseln.
+   */
+  const setzeAufteilung = (bahnen: number, reihen: number) => {
+    const naechsteBahnen = Math.min(MAX_BAHNEN, Math.max(1, bahnen))
+    const naechsteReihen = Math.min(MAX_REIHEN, Math.max(1, reihen))
+    setzeEinstellung({
+      bahnen: naechsteBahnen,
+      reihen: naechsteReihen,
+      schwimmerProBahn: ordneAktiveUm(
+        app.einstellungen.schwimmerProBahn,
+        { bahnen: app.einstellungen.bahnen, reihen: app.einstellungen.reihen },
+        { bahnen: naechsteBahnen, reihen: naechsteReihen },
+      ),
+    })
   }
 
   /**
@@ -166,12 +191,91 @@ export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetP
         </div>
       </Feld>
 
+      {modus === 'einstellungen' ? (
+        <>
+          <Feld
+            label="Bahnen pro Reihe"
+            hint="Wie viele Personen gleichzeitig starten. Zusammen mit den Reihen ergibt das die Personenzahl."
+          >
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                aria-label="Weniger Bahnen pro Reihe"
+                disabled={app.einstellungen.bahnen <= 1}
+                onClick={() =>
+                  setzeAufteilung(app.einstellungen.bahnen - 1, app.einstellungen.reihen)
+                }
+                className="h-12 w-12 rounded-xl border border-line bg-surface2 text-xl font-bold disabled:opacity-40"
+              >
+                −
+              </button>
+              <span className="tabular w-10 text-center text-2xl font-semibold">
+                {app.einstellungen.bahnen}
+              </span>
+              <button
+                type="button"
+                aria-label="Mehr Bahnen pro Reihe"
+                disabled={app.einstellungen.bahnen >= MAX_BAHNEN}
+                onClick={() =>
+                  setzeAufteilung(app.einstellungen.bahnen + 1, app.einstellungen.reihen)
+                }
+                className="h-12 w-12 rounded-xl border border-line bg-surface2 text-xl font-bold disabled:opacity-40"
+              >
+                +
+              </button>
+            </div>
+          </Feld>
+
+          <Feld
+            label="Reihen"
+            hint="Jede Reihe startet gemeinsam; die nächste Reihe nach dem Reihenversatz."
+          >
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                aria-label="Weniger Reihen"
+                disabled={app.einstellungen.reihen <= 1}
+                onClick={() =>
+                  setzeAufteilung(app.einstellungen.bahnen, app.einstellungen.reihen - 1)
+                }
+                className="h-12 w-12 rounded-xl border border-line bg-surface2 text-xl font-bold disabled:opacity-40"
+              >
+                −
+              </button>
+              <span className="tabular w-10 text-center text-2xl font-semibold">
+                {app.einstellungen.reihen}
+              </span>
+              <button
+                type="button"
+                aria-label="Mehr Reihen"
+                disabled={app.einstellungen.reihen >= MAX_REIHEN}
+                onClick={() =>
+                  setzeAufteilung(app.einstellungen.bahnen, app.einstellungen.reihen + 1)
+                }
+                className="h-12 w-12 rounded-xl border border-line bg-surface2 text-xl font-bold disabled:opacity-40"
+              >
+                +
+              </button>
+              <span className="text-sm text-muted">
+                {bahnenGesamt(app.einstellungen.bahnen, app.einstellungen.reihen)} Personen
+              </span>
+            </div>
+            <p className="mt-2 text-xs text-muted">Startzeiten: {reihenStartplan}</p>
+            {reihenGemeinsam ? (
+              <p className="mt-1 text-xs text-warn">
+                Alle Reihen starten gemeinsam. Für einen Versatz oben einen Wert wählen.
+              </p>
+            ) : null}
+          </Feld>
+        </>
+      ) : null}
+
       <Feld
         label="Startversatz"
         hint={
           modus === 'lauf'
             ? 'Fest beim Anlegen. Ändern unter „Nächster Lauf“.'
-            : 'Bahn 1 startet sofort, jede weitere um diesen Abstand später.'
+            : 'Wirkt zwischen den Reihen; innerhalb einer Reihe starten alle gemeinsam.'
         }
       >
         {/* Im Laufmodus nur lesend: Der Versatz ist beim Anlegen festgelegt. */}
@@ -220,85 +324,54 @@ export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetP
         {wiederholungen > 1 ? (
           <div className="mt-3">
             <p className="mb-2 text-xs text-muted">Takt (Start zu Start)</p>
-            <div className="flex flex-wrap gap-2">
-              {taktOptionen.map((wert) => (
-                <Chip
-                  key={wert}
-                  aktiv={taktSek === wert}
-                  disabled={modus === 'lauf'}
-                  onClick={() => setzeEinstellung({ taktSek: wert })}
-                >
-                  {formatTakt(wert)}
-                </Chip>
-              ))}
-            </div>
+            <TaktWahl
+              wert={taktSek}
+              disabled={modus === 'lauf'}
+              onWert={(sekunden) => setzeEinstellung({ taktSek: sekunden })}
+            />
           </div>
         ) : null}
 
         {warnung ? <p className="mt-2 text-xs text-warn">{warnung}</p> : null}
       </Feld>
 
-      {modus === 'einstellungen' ? (
-        <Feld label="Bahnen">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              aria-label="Weniger Bahnen"
-              onClick={() =>
-                app.setzeEinstellungen({
-                  ...app.einstellungen,
-                  bahnen: Math.max(1, app.einstellungen.bahnen - 1),
-                })
-              }
-              className="h-12 w-12 rounded-xl border border-line bg-surface2 text-xl font-bold"
-            >
-              −
-            </button>
-            <span className="tabular w-10 text-center text-2xl font-semibold">
-              {app.einstellungen.bahnen}
-            </span>
-            <button
-              type="button"
-              aria-label="Mehr Bahnen"
-              onClick={() =>
-                app.setzeEinstellungen({
-                  ...app.einstellungen,
-                  bahnen: Math.min(10, app.einstellungen.bahnen + 1),
-                })
-              }
-              className="h-12 w-12 rounded-xl border border-line bg-surface2 text-xl font-bold"
-            >
-              +
-            </button>
-          </div>
-        </Feld>
-      ) : null}
-
       {modus === 'lauf' && lauf ? (
         <Feld label="Schwimmer">
           {/* Bei einer Serie gilt die Zuordnung zeilenweise für alle Runden;
               darum schreibt die Auswahl über `setzeSchwimmerSerie`. */}
-          <div className="space-y-2">
-            {lauf.bahnen.map((bahn, index) => (
-              <div key={bahn.id} className="flex items-center gap-3">
-                <span className="tabular w-6 text-sm text-muted">{bahn.nummer}</span>
-                <select
-                  value={bahn.schwimmerId ?? ''}
-                  onChange={(e) =>
-                    serie
-                      ? app.setzeSchwimmerSerie(index, e.target.value || null)
-                      : app.setzeSchwimmer(bahn.id, e.target.value || null)
-                  }
-                  aria-label={`Schwimmer für Bahn ${bahn.nummer}`}
-                  className="h-11 flex-1 rounded-xl border border-line bg-surface2 px-3 text-sm"
-                >
-                  <option value="">— kein Schwimmer —</option>
-                  {app.schwimmer.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
+          <div className="space-y-3">
+            {bahnenNachReihen(lauf.bahnen).map((gruppe) => (
+              <div key={gruppe.reihe} className="space-y-2">
+                {reihenVon(lauf) > 1 ? (
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-muted">
+                    Reihe {gruppe.reihe}
+                  </p>
+                ) : null}
+                {gruppe.bahnen.map((bahn) => {
+                  const index = lauf.bahnen.indexOf(bahn)
+                  return (
+                    <div key={bahn.id} className="flex items-center gap-3">
+                      <span className="tabular w-6 text-sm text-muted">{bahn.nummer}</span>
+                      <select
+                        value={bahn.schwimmerId ?? ''}
+                        onChange={(e) =>
+                          serie
+                            ? app.setzeSchwimmerSerie(index, e.target.value || null)
+                            : app.setzeSchwimmer(bahn.id, e.target.value || null)
+                        }
+                        aria-label={`Schwimmer für Reihe ${bahn.reihe}, Bahn ${bahn.nummer}`}
+                        className="h-11 flex-1 rounded-xl border border-line bg-surface2 px-3 text-sm"
+                      >
+                        <option value="">— kein Schwimmer —</option>
+                        {app.schwimmer.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )
+                })}
               </div>
             ))}
           </div>
@@ -310,29 +383,41 @@ export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetP
         </Feld>
       ) : (
         <Feld label="Schwimmer für den nächsten Lauf">
-          {/* Die Vorgabenliste gehört zu den Einstellungen und wird nur in
-              der Länge der eingestellten Bahnzahl angezeigt. */}
-          <div className="space-y-2">
-            {Array.from({ length: app.einstellungen.bahnen }, (_, index) => (
-              <div key={index} className="flex items-center gap-3">
-                <span className="tabular w-6 text-sm text-muted">{index + 1}</span>
-                <select
-                  value={app.einstellungen.schwimmerProBahn[index] ?? ''}
-                  onChange={(e) => {
-                    const liste = [...app.einstellungen.schwimmerProBahn]
-                    liste[index] = e.target.value || null
-                    app.setzeEinstellungen({ ...app.einstellungen, schwimmerProBahn: liste })
-                  }}
-                  aria-label={`Schwimmer für Bahn ${index + 1}`}
-                  className="h-11 flex-1 rounded-xl border border-line bg-surface2 px-3 text-sm"
-                >
-                  <option value="">— kein Schwimmer —</option>
-                  {app.schwimmer.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
+          {/* Die Vorgabenliste gehört zu den Einstellungen und wird in der
+              Länge von Bahnen × Reihen angezeigt, Reihe für Reihe. */}
+          <div className="space-y-3">
+            {Array.from({ length: app.einstellungen.reihen }, (_, reiheIndex) => (
+              <div key={reiheIndex} className="space-y-2">
+                {app.einstellungen.reihen > 1 ? (
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-muted">
+                    Reihe {reiheIndex + 1}
+                  </p>
+                ) : null}
+                {Array.from({ length: app.einstellungen.bahnen }, (_, bahnIndex) => {
+                  const index = reiheIndex * app.einstellungen.bahnen + bahnIndex
+                  return (
+                    <div key={index} className="flex items-center gap-3">
+                      <span className="tabular w-6 text-sm text-muted">{bahnIndex + 1}</span>
+                      <select
+                        value={app.einstellungen.schwimmerProBahn[index] ?? ''}
+                        onChange={(e) => {
+                          const liste = [...app.einstellungen.schwimmerProBahn]
+                          liste[index] = e.target.value || null
+                          app.setzeEinstellungen({ ...app.einstellungen, schwimmerProBahn: liste })
+                        }}
+                        aria-label={`Schwimmer für Reihe ${reiheIndex + 1}, Bahn ${bahnIndex + 1}`}
+                        className="h-11 flex-1 rounded-xl border border-line bg-surface2 px-3 text-sm"
+                      >
+                        <option value="">— kein Schwimmer —</option>
+                        {app.schwimmer.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )
+                })}
               </div>
             ))}
           </div>

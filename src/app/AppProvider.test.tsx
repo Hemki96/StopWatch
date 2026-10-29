@@ -221,9 +221,28 @@ describe('AppProvider', () => {
     expect(app.wert().laeufe[0]?.bahnen).toHaveLength(10)
   })
 
+  // Reihen erzeugen mehrere Startgruppen: Alle Bahnen einer Reihe starten
+  // gemeinsam, die nächste Reihe um den Startversatz später.
+  it('legt Reihen an und startet sie gestaffelt', async () => {
+    const app = await geladeneApp()
+    act(() => {
+      app.wert().neuerLauf(K100, 2, [], { reihen: 3, startversatzMs: 10_000 })
+    })
+    const lauf = app.wert().laeufe[0]!
+    expect(lauf.bahnen).toHaveLength(6)
+    expect(lauf.bahnen.map((bahn) => bahn.reihe)).toEqual([1, 1, 2, 2, 3, 3])
+    expect(lauf.bahnen.map((bahn) => bahn.nummer)).toEqual([1, 2, 1, 2, 1, 2])
+
+    act(() => app.wert().startAlle(1000, 5000))
+    expect(app.wert().laeufe[0]?.bahnen.map((bahn) => bahn.startMs)).toEqual([
+      1000, 1000, 11_000, 11_000, 21_000, 21_000,
+    ])
+  })
+
   // Eine Serie plant alle Runden beim Start voraus (kein Nachhol-Timer); der
-  // Startversatz addiert sich auf den Takt. `tippeSerie` adressiert die Zeile
-  // per Index, nicht per Bahn-ID, weil sich die sichtbare Runde verschiebt.
+  // Startversatz staffelt innerhalb einer Runde nur die Reihen.
+  // `tippeSerie` adressiert die Zeile per Index, nicht per Bahn-ID, weil sich
+  // die sichtbare Runde verschiebt.
   it('plant eine Serie mit Takt und bedient sie zeilenweise', async () => {
     const app = await geladeneApp()
     act(() => {

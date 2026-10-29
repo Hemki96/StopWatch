@@ -323,10 +323,27 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
             <span className="text-xs font-medium text-accent">Ändern</span>
           </span>
           <span className="mt-1 block text-sm font-semibold">
-            {training.bahnen} {training.bahnen === 1 ? 'Bahn' : 'Bahnen'}
+            {training.reihen > 1
+              ? `${training.bahnen * training.reihen} Personen in ${training.reihen} Reihen`
+              : `${training.bahnen} ${training.bahnen === 1 ? 'Bahn' : 'Bahnen'}`}
           </span>
           <span className="mt-0.5 block truncate text-xs text-muted">
-            {namen.length > 0 ? namen.join(', ') : 'Noch keine Aktiven gewählt'}
+            {training.reihen > 1
+              ? Array.from({ length: training.reihen }, (_, reiheIndex) => {
+                  const namenDerReihe = training.aktive
+                    .slice(
+                      reiheIndex * training.bahnen,
+                      (reiheIndex + 1) * training.bahnen,
+                    )
+                    .map((id) =>
+                      id ? app.schwimmer.find((eintrag) => eintrag.id === id)?.name : null,
+                    )
+                    .filter((name): name is string => Boolean(name))
+                  return `R${reiheIndex + 1}: ${namenDerReihe.join(', ') || '—'}`
+                }).join(' · ')
+              : namen.length > 0
+                ? namen.join(', ')
+                : 'Noch keine Aktiven gewählt'}
           </span>
         </button>
 
@@ -461,6 +478,7 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
         <TrainingsSatzSheet
           satz={bearbeiteterSatz}
           bahnen={training.bahnen}
+          reihen={training.reihen}
           index={training.saetze.findIndex((eintrag) => eintrag.id === bearbeiteterSatz.id)}
           istNeu={false}
           kannNachOben={
@@ -481,6 +499,7 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
         <TrainingsSatzSheet
           satz={neuerSatz}
           bahnen={training.bahnen}
+          reihen={training.reihen}
           index={training.saetze.length}
           istNeu
           kannNachOben={false}
@@ -497,10 +516,10 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
           training={training}
           schwimmer={app.schwimmer}
           onClose={() => setAktiveOffen(false)}
-          onSpeichern={(bahnen, aktive) => {
+          onSpeichern={(bahnen, reihen, aktive) => {
             // Die Zuordnung gilt nur für noch nicht gestartete Sätze; bereits
             // gestartete Sätze behalten ihre kopierten Bahnen.
-            speichere({ ...training, bahnen, aktive })
+            speichere({ ...training, bahnen, reihen, aktive })
             setAktiveOffen(false)
           }}
         />

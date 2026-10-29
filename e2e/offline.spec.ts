@@ -39,13 +39,13 @@ test('App lädt offline aus dem Service-Worker-Cache, der Lauf bleibt sichtbar',
   expect(cachesGefuellt).toBeGreaterThan(0)
 
   await page.getByRole('button', { name: 'Start', exact: true }).tap()
-  await page.getByRole('button', { name: /^Bahn 1, läuft$/ }).tap()
+  await page.getByRole('button', { name: /Bahn 1, läuft$/ }).tap()
   await expect(page.locator('[data-anschlaege="1"]')).toBeVisible()
 
   await context.setOffline(true)
   await page.reload()
 
   // Die App rendert aus dem Cache; der angelegte Lauf ist weiterhin da.
-  await expect(page.getByRole('button', { name: /^Bahn 1, bereit$/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Bahn 1, bereit$/ })).toBeVisible()
   await expect(page.getByText('Nächster Lauf')).toHaveCount(0)
 })

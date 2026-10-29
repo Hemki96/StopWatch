@@ -44,6 +44,7 @@ import {
   type Wettkampf,
 } from '../domain/types'
 import {
+  bahnReihe,
   createLauf,
   finishLane,
   hasStarted,
@@ -75,6 +76,8 @@ import {
 } from '../domain/serie'
 import {
   MAX_BAHNEN,
+  MAX_REIHEN,
+  bahnenGesamt,
   beschreibeTrainingsSatz,
   neuerTrainingsSatz,
   neuesTraining,
@@ -116,10 +119,16 @@ export type ThemeEinstellung = Theme | 'system'
  */
 export interface Einstellungen {
   konfiguration: LaufKonfiguration
+  /** Bahnen je Reihe; zusammen mit `reihen` ergibt das die Personenzahl. */
   bahnen: number
-  /** Vorbelegung der Bahnen für den nächsten Lauf. */
+  /** Reihen (Startgruppen); Reihe 1 startet sofort, jede weitere versetzt. */
+  reihen: number
+  /**
+   * Vorbelegung der Bahnen für den nächsten Lauf, Reihe für Reihe: erst alle
+   * Bahnen der Reihe 1, dann Reihe 2. Die Länge ist `bahnen × reihen`.
+   */
   schwimmerProBahn: (string | null)[]
-  /** Abstand zwischen den Starts der Bahnen in ms. 0 = gemeinsam. */
+  /** Abstand zwischen den Starts der Reihen in ms. 0 = gemeinsam. */
   startversatzMs: number
   /** Wiederholungen der nächsten Serie; 1 = einzelner Lauf. */
   wiederholungen: number
@@ -150,6 +159,7 @@ const STANDARD_BAHNEN = 6
 const STANDARD_EINSTELLUNGEN: Einstellungen = {
   konfiguration: { beckenlaengeM: 50, streckeM: 100, schwimmart: 'freistil' },
   bahnen: STANDARD_BAHNEN,
+  reihen: 1,
   schwimmerProBahn: Array.from({ length: STANDARD_BAHNEN }, () => null),
   startversatzMs: 0,
   wiederholungen: 1,
@@ -157,15 +167,15 @@ const STANDARD_EINSTELLUNGEN: Einstellungen = {
 }
 
 /**
- * Bringt eine beliebige gespeicherte Bahnbelegung auf genau `bahnen` Plätze.
+ * Bringt eine beliebige gespeicherte Bahnbelegung auf genau `anzahl` Plätze.
  *
  * Zu kurze Listen werden mit `null` aufgefüllt, zu lange abgeschnitten, leere
  * Zeichenketten gelten als „keine Zuordnung“. So kann eine geänderte
- * Bahnenzahl nie zu einer verschobenen Zuordnung führen.
+ * Bahnenzahl oder Reihenzahl nie zu einer verschobenen Zuordnung führen.
  */
-function normalisiereSchwimmerProBahn(liste: unknown, bahnen: number): (string | null)[] {
+function normalisiereSchwimmerProBahn(liste: unknown, anzahl: number): (string | null)[] {
   const werte = Array.isArray(liste) ? liste : []
-  return Array.from({ length: bahnen }, (_, i) => {
+  return Array.from({ length: anzahl }, (_, i) => {
     const wert = werte[i]
     return typeof wert === 'string' && wert.length > 0 ? wert : null
   })
@@ -222,7 +232,7 @@ export interface AppContextValue {
     konfiguration: LaufKonfiguration,
     bahnen: number,
     schwimmerProBahn?: (string | null)[],
-    optionen?: { startversatzMs?: number; wiederholungen?: number; taktSek?: number },
+    optionen?: { startversatzMs?: number; wiederholungen?: number; taktSek?: number; reihen?: number },
   ) => string | null
   anlegenLauf: () => void
   waehleLauf: (id: string) => void
@@ -359,6 +369,15 @@ function begrenzeVersatz(wert: unknown): number {
 }
 
 /**
+ * Begrenzt die Reihen auf 1 … `MAX_REIHEN`. Fehlende oder unbrauchbare Werte
+ * gelten als eine Reihe, damit ältere Einstellungen unverändert weiterlaufen.
+ */
+function begrenzeReihen(wert: unknown): number {
+  if (typeof wert !== 'number' || !Number.isFinite(wert)) return 1
+  return Math.min(MAX_REIHEN, Math.max(1, Math.round(wert)))
+}
+
+/**
  * Begrenzt die Wiederholungen einer Serie auf 1 … 20 (wie `MAX_WIEDERHOLUNGEN`
  * im Trainingsmodell). 1 bedeutet „kein Plan“, also einen einzelnen Lauf.
  */
@@ -479,10 +498,15 @@ export function leseEinstellungen(): Einstellungen {
         ? parsed.bahnen
         : STANDARD_EINSTELLUNGEN.bahnen
     const begrenzt = Math.min(MAX_BAHNEN, Math.max(1, Math.round(bahnen)))
+    const reihen = begrenzeReihen(parsed.reihen)
     return {
       konfiguration: { beckenlaengeM, streckeM, schwimmart },
       bahnen: begrenzt,
-      schwimmerProBahn: normalisiereSchwimmerProBahn(parsed.schwimmerProBahn, begrenzt),
+      reihen,
+      schwimmerProBahn: normalisiereSchwimmerProBahn(
+        parsed.schwimmerProBahn,
+        bahnenGesamt(begrenzt, reihen),
+      ),
       startversatzMs: begrenzeVersatz(parsed.startversatzMs),
       wiederholungen: begrenzeWiederholungen(parsed.wiederholungen),
       taktSek: begrenzeTakt(parsed.taktSek),
@@ -928,10 +952,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       typeof naechste.bahnen === 'number' && Number.isFinite(naechste.bahnen)
         ? Math.min(MAX_BAHNEN, Math.max(1, Math.round(naechste.bahnen)))
         : STANDARD_EINSTELLUNGEN.bahnen
+    const reihen = begrenzeReihen(naechste.reihen)
     const bereinigt: Einstellungen = {
       ...naechste,
       bahnen,
-      schwimmerProBahn: normalisiereSchwimmerProBahn(naechste.schwimmerProBahn, bahnen),
+      reihen,
+      schwimmerProBahn: normalisiereSchwimmerProBahn(
+        naechste.schwimmerProBahn,
+        bahnenGesamt(bahnen, reihen),
+      ),
       startversatzMs: begrenzeVersatz(naechste.startversatzMs),
       wiederholungen: begrenzeWiederholungen(naechste.wiederholungen),
       taktSek: begrenzeTakt(naechste.taktSek),
@@ -1129,9 +1158,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const ergaenzt: Lauf = {
             ...eintrag,
             startWallMs: eintrag.startWallMs ?? wallNow,
-            bahnen: eintrag.bahnen.map((bahn, index) =>
+            bahnen: eintrag.bahnen.map((bahn) =>
               bahn.startMs === null && !isFinished(bahn)
-                ? { ...bahn, startMs: now + index * satz.plan!.startversatzMs }
+                ? { ...bahn, startMs: now + (bahnReihe(bahn) - 1) * satz.plan!.startversatzMs }
                 : bahn,
             ),
           }
@@ -1363,13 +1392,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       konfiguration: LaufKonfiguration,
       bahnen: number,
       schwimmerProBahn: (string | null)[] = [],
-      optionen: { startversatzMs?: number; wiederholungen?: number; taktSek?: number } = {},
+      optionen: { startversatzMs?: number; wiederholungen?: number; taktSek?: number; reihen?: number } = {},
     ): string | null => {
       if (!tabAktivRef.current) return null
       if (validateKonfiguration(konfiguration) !== null) return null
       const anzahlBahnen = Number.isFinite(bahnen)
         ? Math.min(MAX_BAHNEN, Math.max(1, Math.round(bahnen)))
         : STANDARD_EINSTELLUNGEN.bahnen
+      const anzahlReihen = begrenzeReihen(optionen.reihen ?? einstellungen.reihen)
       const datum = heute()
       const startversatzMs = begrenzeVersatz(
         optionen.startversatzMs ?? einstellungen.startversatzMs,
@@ -1423,8 +1453,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      const bahnenInit = Array.from({ length: anzahlBahnen }, (_, i) => ({
-        nummer: i + 1,
+      // Personen werden Reihe für Reihe angelegt: erst alle Bahnen der Reihe 1,
+      // dann Reihe 2. `nummer` ist die Bahn innerhalb ihrer Reihe.
+      const gesamt = bahnenGesamt(anzahlBahnen, anzahlReihen)
+      const bahnenInit = Array.from({ length: gesamt }, (_, i) => ({
+        nummer: (i % anzahlBahnen) + 1,
+        reihe: Math.floor(i / anzahlBahnen) + 1,
         schwimmerId: schwimmerProBahn[i] ?? null,
       }))
       // Bei einer Serie entstehen alle Wiederholungen sofort, aber noch ohne
@@ -1475,6 +1509,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       startversatzMs: werte.startversatzMs,
       wiederholungen: werte.wiederholungen,
       taktSek: werte.taktSek,
+      reihen: werte.reihen,
     })
   }, [einstellungen, neuerLauf])
 
@@ -2081,6 +2116,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const training = neuesTraining({
       datum: heute(),
       bahnen: werte.bahnen,
+      reihen: werte.reihen,
       aktive: werte.schwimmerProBahn,
       saetze: [
         neuerTrainingsSatz({
@@ -2190,11 +2226,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         erstelltAm: Date.now(),
       }
       // Aktive und Bahnenzahl werden kopiert, nicht referenziert: Änderungen am
-      // Training gelten nur für noch nicht gestartete Sätze.
-      const bahnenInit = Array.from({ length: training.bahnen }, (_, index) => ({
-        nummer: index + 1,
-        schwimmerId: training.aktive[index] ?? null,
-      }))
+      // Training gelten nur für noch nicht gestartete Sätze. Die Personen sind
+      // Reihe für Reihe abgelegt; `nummer` zählt innerhalb der Reihe.
+      const bahnenInit = Array.from(
+        { length: bahnenGesamt(training.bahnen, training.reihen) },
+        (_, index) => ({
+          nummer: (index % training.bahnen) + 1,
+          reihe: Math.floor(index / training.bahnen) + 1,
+          schwimmerId: training.aktive[index] ?? null,
+        }),
+      )
       const neueLaeufe = Array.from({ length: eintrag.wiederholungen }, (_, index) =>
         createLauf(eintrag.konfiguration, bahnenInit, satz.id, {
           startversatzMs: eintrag.startversatzMs,

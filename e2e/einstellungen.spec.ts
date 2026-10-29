@@ -122,13 +122,72 @@ test('ändert die Vorbereitung des nächsten Laufs dauerhaft', async ({ page }) 
   await expect(page.getByText('50 m · 200 m · Freistil · 5 Bahnen')).toBeVisible()
 })
 
+// Nutzerreise: Zwei Reihen à drei Personen. Die Einstellung zeigt die
+// Startzeiten vorab, der Timer gruppiert die sechs Kacheln und startet nur die
+// erste Reihe sofort.
+test('teilt den nächsten Lauf in Reihen und startet sie versetzt', async ({ page }) => {
+  await oeffneApp(page)
+  await page
+    .getByRole('button', { name: /50 m · 100 m · Freistil · 6 Bahnen/ })
+    .tap()
+
+  const sheet = page.getByRole('dialog')
+  // Von sechs auf drei Bahnen je Reihe; daraus werden mit zwei Reihen sechs
+  // Personen.
+  for (let i = 0; i < 3; i += 1) {
+    await sheet.getByRole('button', { name: 'Weniger Bahnen pro Reihe' }).tap()
+  }
+  await sheet.getByRole('button', { name: 'Mehr Reihen' }).tap()
+  await sheet.getByRole('button', { name: '10 s', exact: true }).tap()
+  await expect(sheet.getByText('Startzeiten: 0 s · +10 s')).toBeVisible()
+  await sheet.getByRole('button', { name: 'Schließen' }).tap()
+
+  await expect(page.getByText('6 Personen in 2 Reihen')).toBeVisible()
+  await page.getByRole('button', { name: 'Start', exact: true }).tap()
+
+  // Beide Reihen sind sichtbar, aber nur Reihe 1 läuft; Reihe 2 wartet auf
+  // ihren Startzeitpunkt.
+  await expect(page.getByRole('heading', { name: /Reihe 1/ })).toBeVisible()
+  await expect(page.getByRole('heading', { name: /Reihe 2/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Reihe 1, Bahn 1, läuft$/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Reihe 2, Bahn 1, geplant$/ })).toBeVisible()
+})
+
+// Nutzerreise: Der Takt ist nicht auf die Schnellauswahl beschränkt. Ein
+// eigenes Intervall aus Minuten und Sekunden bleibt nach dem Neustart erhalten.
+test('stellt einen eigenen Takt frei ein', async ({ page }) => {
+  await oeffneApp(page)
+  await page
+    .getByRole('button', { name: /50 m · 100 m · Freistil · 6 Bahnen/ })
+    .tap()
+  const sheet = page.getByRole('dialog')
+  // Erst ab zwei Wiederholungen ist der Takt sichtbar.
+  await sheet.getByRole('button', { name: 'Mehr Wiederholungen' }).tap()
+  await sheet.getByLabel('Takt Minuten').fill('1')
+  await sheet.getByLabel('Takt Sekunden').fill('40')
+  await sheet.getByRole('button', { name: 'Schließen' }).tap()
+
+  // Der Reload prüft, dass 100 s gespeichert wurden und nicht nur die Anzeige
+  // umgeschaltet ist. Der freie Wert erscheint zusätzlich als eigener Chip.
+  await page.reload()
+  // Nach dem Reload ist die Vorbereitung eine Serie: Die Kopfzeile nennt
+  // Wiederholungen und Takt.
+  await page
+    .getByRole('button', { name: /50 m · 2×100 m · Freistil · 6 Bahnen · Takt 01:40/ })
+    .tap()
+  const erneut = page.getByRole('dialog')
+  await expect(erneut.getByLabel('Takt Minuten')).toHaveValue('1')
+  await expect(erneut.getByLabel('Takt Sekunden')).toHaveValue('40')
+  await expect(erneut.getByRole('button', { name: '01:40' })).toBeVisible()
+})
+
 // Nutzerreise: Nach dem ersten Anschlag lässt sich die Strecke nicht mehr
 // ändern — sonst wären bereits erfasste Splits ungültig.
 test('sperrt die Strecke nach dem ersten Anschlag auch in der Oberfläche', async ({ page }) => {
   await oeffneApp(page)
   await page.getByRole('button', { name: 'Start', exact: true }).tap()
   // Ein Anschlag genügt, um die Strecke zu sperren.
-  await page.getByRole('button', { name: /^Bahn 1, läuft$/ }).tap()
+  await page.getByRole('button', { name: /Bahn 1, läuft$/ }).tap()
 
   await page
     .getByRole('button', { name: /50 m · 100 m · Freistil · 6 Bahnen/ })

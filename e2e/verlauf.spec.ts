@@ -35,13 +35,13 @@ async function starteUndStoppe(page: import('@playwright/test').Page) {
 
   // Klick statt Tap: Ein unter Last verzögerter Pointer-Up würde sonst als
   // Long-Press gelten und den Start wieder zurücknehmen.
-  const bahn = () => page.getByRole('button', { name: /^Bahn 1, läuft$/ })
+  const bahn = () => page.getByRole('button', { name: /Bahn 1, läuft$/ })
   await expect(bahn()).toBeVisible()
   await bahn().dispatchEvent('click')
   await expect(bahn()).toHaveAttribute('data-anschlaege', '1')
   await page.waitForTimeout(120)
   await bahn().dispatchEvent('click')
-  await expect(page.getByRole('button', { name: /^Bahn 1, im Ziel$/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Bahn 1, im Ziel$/ })).toBeVisible()
 }
 
 // Nutzerreise: Eine falsche Zielzeit wird im Lauf-Detail korrigiert und bleibt

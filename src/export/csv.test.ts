@@ -60,7 +60,7 @@ describe('laeufeAlsCsv', () => {
 
     expect(zeilen).toHaveLength(3)
     expect(zeilen[0]).toBe(
-      'satz;datum;beckenlaenge_m;strecke_m;schwimmart;bahn;schwimmer;laenge_nr;split_ms;split_formatiert;ist_finish;manuell;wiederholung;wiederholungen;takt_s;startversatz_ms',
+      'satz;datum;beckenlaenge_m;strecke_m;schwimmart;reihe;bahn;schwimmer;laenge_nr;split_ms;split_formatiert;ist_finish;manuell;wiederholung;wiederholungen;takt_s;startversatz_ms',
     )
     expect(zeilen[1]).toContain('1;31250;00:31,25;0;0')
     expect(zeilen[2]).toContain('2;64000;01:04,00;1;0')

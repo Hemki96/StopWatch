@@ -1,5 +1,7 @@
 # Serie mit festem Takt und vorausberechneten Starts
 
+> Hinweis: Seit [ADR 0008](0008-reihen-als-startgruppen.md) staffelt der Startversatz **Reihen** statt einzelner Bahnen. Die Aussagen zu Takt und vorausberechneten Starts gelten unverändert.
+
 Ein Lauf kann einen **Startversatz** haben: Bahn 1 startet sofort, Bahn 2 nach 10 s, Bahn 3 nach 20 s. Ein **Satz mit Plan** ist eine Serie aus mehreren Wiederholungen im festen Takt. Beim Start werden alle Wiederholungen sofort angelegt und ihre Startzeitpunkte vorausberechnet. Die App zählt keine Timer; sie leitet den Zustand jeder Bahn aus `now` ab.
 
 ## Considered Options

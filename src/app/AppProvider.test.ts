@@ -28,6 +28,7 @@ describe('leseEinstellungen', () => {
     expect(leseEinstellungen()).toEqual({
       konfiguration: { beckenlaengeM: 50, streckeM: 100, schwimmart: 'freistil' },
       bahnen: 6,
+      reihen: 1,
       schwimmerProBahn: [null, null, null, null, null, null],
       startversatzMs: 0,
       wiederholungen: 1,
@@ -69,6 +70,15 @@ describe('leseEinstellungen', () => {
   it('fällt bei kaputtem JSON auf die Standards zurück', () => {
     localStorage.setItem(KEY, '{kaputt')
     expect(leseEinstellungen().bahnen).toBe(6)
+  })
+
+  // Die Reihen kommen mit derselben Grenze wie in der Domäne; die
+  // Schwimmerliste wächst auf Bahnen × Reihen.
+  it('begrenzt die Reihen und füllt die Schwimmerliste entsprechend', () => {
+    localStorage.setItem(KEY, JSON.stringify({ bahnen: 2, reihen: 99 }))
+    const werte = leseEinstellungen()
+    expect(werte.reihen).toBe(5)
+    expect(werte.schwimmerProBahn).toHaveLength(10)
   })
 
   // Safari im privaten Modus und blockierte Cookies lassen `localStorage`

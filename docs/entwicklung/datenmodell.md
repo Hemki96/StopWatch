@@ -43,7 +43,8 @@ Eintrag.
 ```ts
 interface Bahn {
   id: string
-  nummer: number                 // 1..10
+  nummer: number                 // 1..10, innerhalb der Reihe eindeutig
+  reihe: number                  // 1..5, Startgruppe; fehlt = 1
   schwimmerId: string | null
   startMs: number | null         // performance.now, null = nicht gestartet
   anschlaege: Anschlag[]
@@ -58,7 +59,7 @@ interface Lauf {
   satzId: string | null
   konfiguration: LaufKonfiguration
   startWallMs: number | null     // Date.now-Anker
-  startversatzMs: number         // 0..120000
+  startversatzMs: number         // 0..120000, Abstand zwischen Reihen
   wiederholung: number | null    // 1-basiert bei Serie/Heat
   modus?: LaufModus              // fehlt = 'training'
   bahnen: Bahn[]
@@ -129,8 +130,9 @@ interface Training {
   id: string
   datum: string
   bezeichnung: string
-  bahnen: number                 // 1..10
-  aktive: (string | null)[]      // Länge = bahnen
+  bahnen: number                 // 1..10, je Reihe
+  reihen: number                 // 1..5
+  aktive: (string | null)[]      // Länge = bahnen × reihen, Reihe für Reihe
   saetze: TrainingsSatz[]        // 1..20
   gestartet: Record<string, string> // TrainingsSatz.id -> Satz.id
   erstelltAm: number
@@ -172,7 +174,8 @@ nicht; das Backup validiert einen Teil davon.
 
 ### Bahn und Anschlag
 
-- `bahn.nummer` liegt zwischen 1 und 10 und ist innerhalb eines Laufs eindeutig.
+- `bahn.nummer` liegt zwischen 1 und 10 und ist innerhalb ihrer Reihe eindeutig.
+- `bahn.reihe` liegt zwischen 1 und 5; eine fehlende Reihe gilt als 1.
 - `startMs` ist entweder `null` oder eine monotone Zeit derselben Seitensitzung.
 - `anschlaege` sind nach `laengeNr` aufsteigend.
 - `splitMs` ist monoton steigend; ein Anschlag liegt zeitlich nach dem vorherigen.
@@ -182,8 +185,9 @@ nicht; das Backup validiert einen Teil davon.
 
 ### Lauf
 
-- 1 bis 10 Bahnen.
-- `startversatzMs` ist eine ganze Zahl zwischen 0 und 120.000.
+- 1 bis 50 Bahnen (10 Bahnen × 5 Reihen).
+- `startversatzMs` ist eine ganze Zahl zwischen 0 und 120.000. Er staffelt die Reihen, nicht die
+  einzelnen Bahnen: Alle Bahnen einer Reihe starten gemeinsam.
 - `wiederholung` ist `null` oder eine ganze Zahl ab 1.
 - `modus` ist `training` oder `wettkampf`; fehlt es, gilt `training`.
 - `startWallMs` ist der Wanduhr-Anker des Laufs. Er wird beim ersten Start gesetzt.
@@ -200,8 +204,8 @@ nicht; das Backup validiert einen Teil davon.
 
 ### Training
 
-- 1 bis 10 Bahnen.
-- `aktive.length === bahnen`.
+- 1 bis 10 Bahnen je Reihe und 1 bis 5 Reihen.
+- `aktive.length === bahnen × reihen`; die Liste ist Reihe für Reihe geordnet.
 - 1 bis 20 Trainingssätze.
 - Jeder Trainingssatz hat gültige Konfiguration, 1 bis 20 Wiederholungen und gültigen Takt.
 - `gestartet` enthält nur `TrainingsSatz.id -> Satz.id`-Paare.
@@ -244,6 +248,7 @@ Zusammenführung und kein Ersetzen.
 
 - `startversatzMs`: fehlt/ungültig → 0; sonst gerundet, nicht negativ.
 - `wiederholung`: nur positive ganze Zahl, sonst `null`.
+- `bahnen[].reihe`: fehlt/ungültig → 1; sonst gerundet, nicht kleiner als 1.
 - `modus`: nur `wettkampf` bleibt, sonst `training`.
 - Laufende oder geplante Bahnen ohne Finish: `startMs = null`.
   Das ist die Reload-Regel; bereits erfasste Anschläge bleiben.
@@ -260,8 +265,8 @@ Zusammenführung und kein Ersetzen.
 ### `normalizeTrainingOnLoad(training)`
 
 - `bezeichnung` fehlt → leer.
-- `bahnen` auf 1..10 begrenzt.
-- `aktive` auf genau `bahnen` Plätze aufgefüllt/gekürzt.
+- `bahnen` auf 1..10 je Reihe begrenzt, `reihen` auf 1..5; fehlende Reihen → 1.
+- `aktive` auf genau `bahnen × reihen` Plätze aufgefüllt/gekürzt.
 - `saetze` fehlt → leeres Array; `gestartet` fehlt → leeres Objekt.
 
 ## IndexedDB
@@ -332,9 +337,9 @@ interface Backup {
 - jeden Schwimmer, Satz, Lauf, Wettkampf und jedes Training,
 - Konfiguration, Datumsformat, IDs,
 - Anschläge inklusive `laengeNr`, `splitMs`, `erfasstAt`, `istFinish`, `manuell`,
-- Bahnnummern 1..10,
+- Bahnnummern 1..10 und Reihen 1..5,
 - Satzpläne 2..20 Wiederholungen,
-- Trainingsgrenzen.
+- Trainingsgrenzen inklusive `bahnen × reihen`.
 
 Bei einem Fehler wird das erste Problem mit Pfad zurückgegeben, z. B.
 `Training 2, Satz 3: Feld "wiederholungen" muss ...`.
@@ -357,7 +362,7 @@ Ein Fehler bricht die Transaktion ab; es wird nichts teilweise geschrieben.
 Der Trainings-CSV-Export ist eine **Denormalisierung** des Modells:
 
 - eine Zeile pro `Anschlag`,
-- `satz`, `bahn`, `schwimmer` und die Konfiguration werden aufgelöst,
+- `satz`, `reihe`, `bahn`, `schwimmer` und die Konfiguration werden aufgelöst,
 - die Runde steckt in `wiederholung`,
 - Serienmetadaten (`wiederholung`, `wiederholungen`, `takt_s`, `startversatz_ms`) werden pro Zeile
   wiederholt.

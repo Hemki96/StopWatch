@@ -115,8 +115,11 @@ export function SettingsScreen() {
       ? `${app.einstellungen.wiederholungen}×${formatStrecke(konfiguration.streckeM)}`
       : formatStrecke(konfiguration.streckeM),
     art,
-    app.einstellungen.startversatzMs > 0
-      ? `${app.einstellungen.startversatzMs / 1000} s Versatz`
+    app.einstellungen.reihen > 1
+      ? `${app.einstellungen.bahnen * app.einstellungen.reihen} Personen in ${app.einstellungen.reihen} Reihen`
+      : `${app.einstellungen.bahnen} Bahnen`,
+    app.einstellungen.startversatzMs > 0 && app.einstellungen.reihen > 1
+      ? `${app.einstellungen.startversatzMs / 1000} s Reihenversatz`
       : null,
     app.einstellungen.wiederholungen > 1
       ? `Takt ${formatTakt(app.einstellungen.taktSek)}`

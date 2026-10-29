@@ -19,8 +19,9 @@ Serien werden über die Standardwerte für den nächsten Lauf angelegt:
 1. Tab **Timer** öffnen.
 2. Auf die Karte **„Nächster Lauf“** tippen.
 3. Im Abschnitt **Serie** die Anzahl der Wiederholungen einstellen (`+` / `−`, 1 bis 20).
-4. Bei mehr als einer Wiederholung erscheint die Auswahl **Takt (Start zu Start)**.
-5. Optional **Startversatz** für die Bahnen innerhalb einer Runde wählen.
+4. Bei mehr als einer Wiederholung erscheint die Auswahl **Takt (Start zu Start)**: gängige Werte
+   als Chip, jeder andere Takt über die Felder **Minuten** und **Sekunden**.
+5. Optional **Startversatz** zwischen den Reihen innerhalb einer Runde wählen.
 6. Das Sheet schließen und **Start** tippen.
 
 **1×** bedeutet einzelner Lauf. Erst ab **2×** entsteht eine Serie.
@@ -32,15 +33,16 @@ die Runden also bei 0:00, 2:00, 4:00, 6:00 und 8:00 — auch dann, wenn jemand f
 
 ### Startzeiten im Detail
 
-Beim Start werden **alle** Wiederholungen sofort angelegt. Für Runde `k` und Bahn `i` gilt:
+Beim Start werden **alle** Wiederholungen sofort angelegt. Für Runde `k` und Reihe `r` gilt:
 
 ```
-Startzeit = Startknopf + (k − 1) × Takt + (i − 1) × Startversatz
+Startzeit = Startknopf + (k − 1) × Takt + (r − 1) × Startversatz
 ```
 
-Beispiel: 3×100 m, Takt 2:00, 2 Bahnen, Startversatz 10 s:
+Alle Bahnen einer Reihe starten gemeinsam. Beispiel: 3×100 m, Takt 2:00, 2 Reihen, Startversatz
+10 s:
 
-| Runde | Bahn 1 | Bahn 2 |
+| Runde | Reihe 1 (ab 0:00) | Reihe 2 (ab 0:10) |
 | --- | --- | --- |
 | 1 | 0:00 | 0:10 |
 | 2 | 2:00 | 2:10 |
@@ -52,11 +54,11 @@ verschiebt deshalb keinen Start.
 
 ### Warnung bei zu kurzem Takt
 
-Ist der Takt kürzer als der Startversatz der letzten Bahn, startet die nächste Runde, bevor alle
-Bahnen der vorigen gestartet sind. Die App zeigt dann einen Hinweis:
+Ist der Takt kürzer als der Startversatz bis zur letzten Reihe, startet die nächste Runde, bevor alle
+Reihen der vorigen gestartet sind. Die App zeigt dann einen Hinweis:
 
-> Der Takt ist kürzer als der Startversatz der letzten Bahn. Die nächste Runde beginnt, bevor alle
-> gestartet sind.
+> Der Takt ist kürzer als der Startversatz der letzten Reihe. Die nächste Runde beginnt, bevor alle
+> Reihen gestartet sind.
 
 Das ist kein Fehler, aber meistens ein Zeichen für eine ungeeignete Kombination.
 
@@ -177,9 +179,9 @@ Serie sinnvoll.
 | Regel | Wert |
 | --- | --- |
 | Wiederholungen | 2 bis 20 für eine Serie; 1 ergibt einen einzelnen Lauf |
-| Takt | größer 0 s, höchstens 60 min; die Auswahl bietet 1:00 bis 4:00 und weitere gespeicherte Werte |
-| Startversatz | 0 bis 120 s |
-| Bahnen | 1 bis 10 |
+| Takt | größer 0 s, höchstens 60 min; gängige Werte als Chip, jeder andere über Minuten und Sekunden |
+| Startversatz | 0 bis 120 s zwischen zwei Reihen |
+| Bahnen | 1 bis 10 je Reihe, 1 bis 5 Reihen |
 | Strecke | Vielfaches der Beckenlänge; offen erlaubt |
 | Startzeiten | werden beim Start vorausberechnet, nicht später nachgeholt |
 

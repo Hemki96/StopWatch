@@ -48,13 +48,17 @@ Erzeugt einen neuen Lauf mit neuen IDs:
 ```ts
 const lauf = createLauf(
   { beckenlaengeM: 50, streckeM: 100, schwimmart: 'freistil' },
-  [{ nummer: 1 }, { nummer: 2 }],
+  [
+    { nummer: 1, reihe: 1 },
+    { nummer: 1, reihe: 2 },
+  ],
   satzId,
   { startversatzMs: 10_000, wiederholung: 1, modus: 'training' },
 )
 ```
 
 - `startversatzMs` wird auf ≥ 0 gerundet.
+- `reihe` fehlt oder ist unbrauchbar → 1.
 - `wiederholung` ist `null`, wenn nicht angegeben.
 - `modus` ist `training`, wenn nicht angegeben.
 - Alle Bahnen starten mit `startMs: null` und leeren Anschlägen.
@@ -97,16 +101,16 @@ keinen Anker hat. Eine bereits gestartete oder beendete Bahn bleibt unverändert
 Setzt **allen** Bahnen eine Startzeit:
 
 ```ts
-startMs = startMs + index * versatzMs
+startMs = startMs + (reihe - 1) * versatzMs
 ```
 
-Setzt zusätzlich `startWallMs` und `startversatzMs`. Wird für unberührte Serienrunden verwendet;
-bereits gestartete Bahnen werden dabei überschrieben. Aufrufer müssen sicherstellen, dass die Bahnen
-unberührt sind.
+Alle Bahnen einer Reihe starten gemeinsam; jede weitere Reihe folgt um den Versatz. Setzt zusätzlich
+`startWallMs` und `startversatzMs`. Wird für unberührte Serienrunden verwendet; bereits gestartete
+Bahnen werden dabei überschrieben. Aufrufer müssen sicherstellen, dass die Bahnen unberührt sind.
 
 #### `startAll(lauf, now, wallNow): Lauf`
 
-Startet alle Bahnen, die weder gestartet noch beendet sind, gestaffelt um `startversatzMs`. Setzt
+Startet alle Bahnen, die weder gestartet noch beendet sind, gestaffelt nach ihrer Reihe. Setzt
 `startWallMs` nur, wenn noch keiner existiert. Ist nichts zu tun, wird dasselbe Objekt
 zurückgegeben.
 
@@ -278,15 +282,15 @@ Höchste vorhandene Rundennummer + 1. Wird beim Anlegen weiterer Runden verwende
 | Versatz endlich, ≥ 0, ≤ 120.000 | „Der Startversatz darf nicht negativ sein.“ / „… höchstens 120 s“ |
 | Bahnen ≥ 1 | „Eine Serie braucht mindestens eine Bahn.“ |
 
-### `warnungSeriePlan(plan, bahnen): string | null`
+### `warnungSeriePlan(plan, reihen): string | null`
 
 Kein Fehler, sondern ein Hinweis, wenn:
 
 ```ts
-plan.taktSek * 1000 <= (bahnen - 1) * plan.startversatzMs
+plan.taktSek * 1000 <= (reihen - 1) * plan.startversatzMs
 ```
 
-Dann beginnt die nächste Runde, bevor alle Bahnen der vorigen gestartet sind.
+Dann beginnt die nächste Runde, bevor alle Reihen der vorigen gestartet sind.
 
 ## `training.ts`
 
@@ -295,7 +299,8 @@ Dann beginnt die nächste Runde, bevor alle Bahnen der vorigen gestartet sind.
 ```ts
 MAX_TRAININGS_SAETZE = 20
 MAX_WIEDERHOLUNGEN = 20
-MAX_BAHNEN = 10
+MAX_BAHNEN = 10   // je Reihe
+MAX_REIHEN = 5
 ```
 
 ### `neuerTrainingsSatz(teil?: Partial<TrainingsSatz>): TrainingsSatz`
@@ -311,11 +316,17 @@ Erzeugt einen Plan mit Defaults:
 
 ### `neuesTraining(daten): Training`
 
-- klemmt `bahnen` auf 1..10,
-- füllt `aktive` auf genau `bahnen` Plätze,
+- klemmt `bahnen` auf 1..10 je Reihe und `reihen` auf 1..5,
+- füllt `aktive` auf genau `bahnen × reihen` Plätze,
 - legt mindestens einen Trainingssatz an,
 - `gestartet` ist leer,
 - `erstelltAm` ist `Date.now()`.
+
+### `ordneAktiveUm(aktive, alt, neu): (string | null)[]`
+
+Ordnet die reihenweise Aktivenliste nach einer geänderten Aufteilung neu. Eine Person bleibt in
+ihrer Reihe an ihrer Bahn; neue Plätze werden `null`, entfallende Reihen und Bahnen fallen weg.
+Verhindert, dass „Reihe 1, Bahn 3“ beim Verkleinern zu „Reihe 2, Bahn 1“ wird.
 
 ### Beschreibungen
 
@@ -333,7 +344,7 @@ Eigene Bezeichnung, getrimmt; sonst `beschreibeTrainingsSatz`.
 
 #### `trainingsSatzMeta(satz): string`
 
-`"50 m-Becken"` plus optional `"Takt 02:00"` und `"10 s Versatz"`, getrennt durch ` · `.
+`"50 m-Becken"` plus optional `"Takt 02:00"` und `"10 s Reihenversatz"`, getrennt durch ` · `.
 
 ### `pruefeTrainingsSatz(satz): string | null`
 
@@ -348,8 +359,8 @@ Zusätzlich:
 
 - ID vorhanden,
 - Datum `YYYY-MM-DD`,
-- Bahnen 1..10,
-- `aktive.length === bahnen`, Einträge `string | null`,
+- Bahnen 1..10 je Reihe und Reihen 1..5,
+- `aktive.length === bahnen × reihen`, Einträge `string | null`,
 - 1..20 Sätze,
 - jeder Satz gültig.
 

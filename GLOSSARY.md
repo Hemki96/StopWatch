@@ -29,12 +29,16 @@ Ein geplanter Satz innerhalb eines Trainings, z. B. „4×100 m Freistil im 2:00
 _Avoid_: Vorlage, Satz (sobald gemessen)
 
 **Aktive**:
-Die Schwimmer, die an einem Training teilnehmen, je **Bahn** zugeordnet. Die Zuordnung gilt für alle noch nicht gestarteten Sätze.
+Die Schwimmer, die an einem Training teilnehmen, je **Bahn** und **Reihe** zugeordnet. Die Zuordnung gilt für alle noch nicht gestarteten Sätze.
 _Avoid_: Teilnehmer, Kader
 
 **Startversatz**:
-Der feste Zeitabstand zwischen den Starts der Bahnen eines Laufs. Bei 10 s startet Bahn 1 sofort, Bahn 2 nach 10 s, Bahn 3 nach 20 s.
-_Avoid_: Verzögerung, Offset, Abstand
+Der feste Zeitabstand zwischen den Starts zweier **Reihen** eines Laufs. Bei 10 s startet Reihe 1 sofort, Reihe 2 nach 10 s, Reihe 3 nach 20 s. Innerhalb einer Reihe starten alle Bahnen gemeinsam.
+_Avoid_: Verzögerung, Offset, Abstand, Bahnversatz
+
+**Reihe**:
+Eine Startgruppe innerhalb eines Laufs oder einer Wiederholung. Alle Bahnen einer Reihe starten gemeinsam; die nächste Reihe folgt um den Startversatz. Mehrere Reihen erlauben mehr Schwimmer als Bahnen, z. B. 3 Personen sofort und 3 weitere nach 10 s.
+_Avoid_: Welle, Runde, Durchgang, Heat
 
 **Takt**:
 Die Zeit von einem Start einer Wiederholung bis zum Start der nächsten, z. B. 2:00 bei 5×100. Der Takt ist unabhängig davon, wann die Schwimmer tatsächlich im Ziel sind.

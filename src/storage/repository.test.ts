@@ -140,6 +140,7 @@ describe('normalizeTrainingOnLoad', () => {
       datum: '2026-10-29',
       bezeichnung: '',
       bahnen: 42,
+      reihen: 1,
       aktive: [],
       saetze: [],
       gestartet: {},

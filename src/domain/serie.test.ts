@@ -193,8 +193,8 @@ describe('pruefeSeriePlan', () => {
     expect(pruefeSeriePlan({ ...gueltig, taktSek: 0 }, 5)).not.toBeNull()
   })
 
-  // 30 s Takt sind kürzer als der Startversatz der letzten Bahn (4 × 10 s);
-  // das ist kein Fehler, aber ein Hinweis für den Trainer.
+  // 30 s Takt sind kürzer als der Startversatz bis zur letzten Reihe
+  // (4 × 10 s); das ist kein Fehler, aber ein Hinweis für den Trainer.
   it('warnt, wenn der Takt kürzer als der Versatz ist', () => {
     expect(warnungSeriePlan({ ...gueltig, taktSek: 30 }, 5)).not.toBeNull()
   })

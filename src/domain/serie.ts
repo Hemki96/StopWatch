@@ -227,16 +227,17 @@ export function pruefeSeriePlan(plan: SatzPlan, bahnen: number): string | null {
 }
 
 /**
- * Kein Fehler, aber ein Hinweis: Wenn der Takt kürzer ist als der Versatz der
- * letzten Bahn, startet die nächste Runde, bevor alle gestartet sind.
+ * Kein Fehler, aber ein Hinweis: Wenn der Takt kürzer ist als der Versatz bis
+ * zur letzten Reihe, startet die nächste Runde, bevor alle Reihen gestartet
+ * sind.
  *
- * Geprüft wird `taktSek * 1000 <= (bahnen - 1) * startversatzMs`. Bei nur einer
+ * Geprüft wird `taktSek * 1000 <= (reihen - 1) * startversatzMs`. Bei nur einer
  * Wiederholung gibt es keine nächste Runde und damit keinen Hinweis.
  */
-export function warnungSeriePlan(plan: SatzPlan, bahnen: number): string | null {
+export function warnungSeriePlan(plan: SatzPlan, reihen: number): string | null {
   if (plan.wiederholungen < 2) return null
-  if (plan.taktSek * 1000 <= (bahnen - 1) * plan.startversatzMs) {
-    return 'Der Takt ist kürzer als der Startversatz der letzten Bahn. Die nächste Runde beginnt, bevor alle gestartet sind.'
+  if (plan.taktSek * 1000 <= (Math.max(1, reihen) - 1) * plan.startversatzMs) {
+    return 'Der Takt ist kürzer als der Startversatz der letzten Reihe. Die nächste Runde beginnt, bevor alle Reihen gestartet sind.'
   }
   return null
 }

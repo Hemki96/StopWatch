@@ -19,14 +19,14 @@ test('startet einen Lauf, stoppt eine Bahn und behält den Verlauf nach Reload',
   await expect(page.getByText('Nächster Lauf')).toBeVisible()
   await page.getByRole('button', { name: 'Start', exact: true }).tap()
 
-  const bahn1 = page.getByRole('button', { name: /^Bahn 1, läuft$/ })
+  const bahn1 = page.getByRole('button', { name: /Bahn 1, läuft$/ })
   await expect(bahn1).toBeVisible()
 
   await bahn1.tap()
-  await expect(page.getByRole('button', { name: /^Bahn 1, läuft$/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Bahn 1, läuft$/ })).toBeVisible()
 
-  await page.getByRole('button', { name: /^Bahn 1, läuft$/ }).tap()
-  await expect(page.getByRole('button', { name: /^Bahn 1, im Ziel$/ })).toBeVisible()
+  await page.getByRole('button', { name: /Bahn 1, läuft$/ }).tap()
+  await expect(page.getByRole('button', { name: /Bahn 1, im Ziel$/ })).toBeVisible()
 
   await page.getByRole('button', { name: 'Verlauf' }).tap()
   await expect(page.getByText('1 Lauf')).toBeVisible()

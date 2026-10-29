@@ -75,6 +75,7 @@ function lauf(id: string, satzId: string | null = 's1', nummer = 1): Lauf {
       {
         id: `${id}-bahn-1`,
         nummer,
+        reihe: 1,
         schwimmerId: 'sw1',
         startMs: null,
         anschlaege: [],
@@ -97,6 +98,7 @@ function training(id: string, datum = '2026-10-29'): Training {
     datum,
     bezeichnung: '',
     bahnen: 2,
+    reihen: 1,
     aktive: [null, null],
     saetze: [
       {

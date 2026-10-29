@@ -13,10 +13,18 @@ import { useState } from 'react'
 import { useApp, type AktiverEintrag } from '../app/AppProvider'
 import { useNow } from '../app/useNow'
 import { useWakeLock } from '../app/useWakeLock'
-import { formatStrecke, formatTakt } from '../domain/format'
-import { hasStarted, isComplete, isFinished, laneStatusAt, lengthCount } from '../domain/lauf'
+import { formatCountdown, formatStrecke, formatTakt } from '../domain/format'
+import {
+  bahnenNachReihen,
+  hasStarted,
+  isComplete,
+  isFinished,
+  laneStatusAt,
+  lengthCount,
+  reihenVon,
+} from '../domain/lauf'
 import { istSerie, aktuelleRunde, runden as rundenVon, serieFortschritt } from '../domain/serie'
-import { SCHWIMMARTEN, type Lauf, type Satz, type SatzPlan } from '../domain/types'
+import { SCHWIMMARTEN, type Bahn, type Lauf, type Satz, type SatzPlan } from '../domain/types'
 import { Bestaetigung } from './Bestaetigung'
 import { KonfigurationSheet } from './KonfigurationSheet'
 import { LaneTile } from './LaneTile'
@@ -31,11 +39,12 @@ function artLabel(schwimmart: string): string {
 /**
  * Einzeilige Beschreibung eines Laufs für Kopfzeile und Vorschau:
  * Beckenlänge, Strecke (bei Serien mit Wiederholungszahl), Schwimmart,
- * Bahnzahl und – falls gesetzt – Startversatz und Takt.
+ * Personenzahl samt Reihen und – falls gesetzt – Reihenversatz und Takt.
  */
 function beschriftung(
   konfiguration: { beckenlaengeM: number; streckeM: number | null; schwimmart: string },
-  bahnen: number,
+  personen: number,
+  reihen: number,
   startversatzMs: number,
   plan: SatzPlan | null,
 ): string {
@@ -44,9 +53,13 @@ function beschriftung(
     `${konfiguration.beckenlaengeM} m`,
     plan && plan.wiederholungen > 1 ? `${plan.wiederholungen}×${strecke}` : strecke,
     artLabel(konfiguration.schwimmart),
-    `${bahnen} Bahnen`,
+    reihen > 1
+      ? `${personen} Personen in ${reihen} Reihen`
+      : `${personen} ${personen === 1 ? 'Bahn' : 'Bahnen'}`,
   ]
-  if (startversatzMs > 0) teile.push(`${startversatzMs / 1000} s Versatz`)
+  if (reihen > 1 && startversatzMs > 0) {
+    teile.push(`${startversatzMs / 1000} s Reihenversatz`)
+  }
   if (plan && plan.wiederholungen > 1) {
     teile.push(`Takt ${formatTakt(plan.taktSek)}`)
   }
@@ -78,6 +91,31 @@ function eintragStatus(eintrag: AktiverEintrag, laeufe: Lauf[]): 'bereit' | 'lae
   if (isComplete(eintrag.lauf)) return 'fertig'
   if (hasStarted(eintrag.lauf)) return 'laeuft'
   return 'bereit'
+}
+
+/**
+ * Kurztext rechts an der Reihen-Überschrift. Vor dem Start zeigt er den
+ * geplanten Abstand, danach den echten Zustand: Countdown bis zum Start,
+ * „läuft“ oder „Ziel“. So bleibt die Reihe auch dann erkennbar, wenn die
+ * einzelnen Kacheln weiter unten aus dem Bild gescrollt sind.
+ */
+function reihenAnzeige(
+  bahnen: Bahn[],
+  reihe: number,
+  versatzMs: number,
+  now: number,
+): string {
+  const starts = bahnen
+    .map((bahn) => bahn.startMs)
+    .filter((start): start is number => start !== null)
+  if (starts.length === 0) {
+    if (versatzMs === 0) return reihe === 1 ? 'Start' : 'gemeinsam'
+    return reihe === 1 ? 'Start' : `+${((reihe - 1) * versatzMs) / 1000} s`
+  }
+  const beginn = Math.min(...starts)
+  if (now < beginn) return `Start in ${formatCountdown(beginn - now)}`
+  if (bahnen.every(isFinished)) return 'Ziel'
+  return 'läuft'
 }
 
 /**
@@ -225,6 +263,7 @@ export function TimerScreen() {
         startversatzMs: app.einstellungen.startversatzMs,
         wiederholungen: app.einstellungen.wiederholungen,
         taktSek: app.einstellungen.taktSek,
+        reihen: app.einstellungen.reihen,
       },
     )
     // Ohne Lauf (etwa bei ungültiger Konfiguration) bleibt der Start aus.
@@ -271,7 +310,8 @@ export function TimerScreen() {
               <span className="text-lg font-semibold">
                 {beschriftung(
                   einstellungen.konfiguration,
-                  einstellungen.bahnen,
+                  einstellungen.bahnen * einstellungen.reihen,
+                  einstellungen.reihen,
                   einstellungen.startversatzMs,
                   plan,
                 )}
@@ -281,7 +321,8 @@ export function TimerScreen() {
 
             <div className="mt-10 space-y-3 text-sm leading-relaxed text-muted">
               <p>
-                Ein Tap startet alle Bahnen. Mit Startversatz läuft Bahn 2 zehn Sekunden später los.
+                Ein Tap startet alle Bahnen. Mit Reihen startet die nächste Gruppe nach dem
+                eingestellten Versatz.
               </p>
               <p>
                 Danach tippst du jede Bahn bei jedem Anschlag an. Der letzte Anschlag ist das Ziel.
@@ -325,22 +366,26 @@ export function TimerScreen() {
   const rundeJetzt = serie ? Math.max(1, aktuelleRunde(runden, now)) : 0
   // Bei Serien gilt der Versatz des Plans, sonst der des Laufs.
   const startversatzMs = serie && plan ? plan.startversatzMs : lauf.startversatzMs
-  // Spaltenzahl passend zur Bahnzahl: Eine einzelne Bahn bleibt groß, vier
-  // Bahnen bilden kein 3+1, sechs kein 4+2. So sind die Reihen auf dem Tablet
-  // ausgeglichen, ohne dass die Kacheln zu Streifen werden.
-  const bahnAnzahl = lauf.bahnen.length
+  // Reihen als Startgruppen: Jede Reihe startet gemeinsam, die nächste nach dem
+  // Versatz. Bei einer Reihe bleibt die Ansicht eine einzige Kachelfläche.
+  const reihenGruppen = bahnenNachReihen(lauf.bahnen)
+  const mehrereReihen = reihenGruppen.length > 1 || reihenVon(lauf) > 1
+  const bahnProReihe = Math.max(1, ...reihenGruppen.map((gruppe) => gruppe.bahnen.length))
+  // Spaltenzahl passend zur Bahnzahl je Reihe: Eine einzelne Bahn bleibt groß,
+  // vier Bahnen bilden kein 3+1, sechs kein 4+2. So sind die Reihen auf dem
+  // Tablet ausgeglichen, ohne dass die Kacheln zu Streifen werden.
   const bahnSpalten =
-    bahnAnzahl === 1
+    bahnProReihe === 1
       ? 'grid-cols-1'
-      : bahnAnzahl === 2
+      : bahnProReihe === 2
         ? 'grid-cols-2'
-        : bahnAnzahl === 3
+        : bahnProReihe === 3
           ? 'grid-cols-2 min-[560px]:grid-cols-3'
-          : bahnAnzahl === 4
+          : bahnProReihe === 4
             ? 'grid-cols-2 short:grid-cols-4 lg:grid-cols-4'
-            : bahnAnzahl <= 6
+            : bahnProReihe <= 6
               ? 'grid-cols-2 min-[560px]:grid-cols-3'
-              : bahnAnzahl <= 8
+              : bahnProReihe <= 8
                 ? 'grid-cols-2 min-[560px]:grid-cols-3 lg:grid-cols-4'
                 : 'grid-cols-2 min-[560px]:grid-cols-3 lg:grid-cols-5'
 
@@ -408,8 +453,14 @@ export function TimerScreen() {
                 ? 'Lauf'
                 : 'Bereit'}
           </span>
-          <span className="block truncate text-sm font-medium">
-            {beschriftung(lauf.konfiguration, lauf.bahnen.length, startversatzMs, plan)}
+          <span className="line-clamp-2 text-sm font-medium">
+            {beschriftung(
+              lauf.konfiguration,
+              lauf.bahnen.length,
+              reihenVon(lauf),
+              startversatzMs,
+              plan,
+            )}
           </span>
         </button>
         {/* Fertige Läufe werden geschlossen (X), laufende verworfen (Papierkorb
@@ -451,20 +502,37 @@ export function TimerScreen() {
         <div
           // Ab drei Bahnen wächst die Spaltenzahl mit dem Gerät; die Kacheln
           // behalten eine Mindesthöhe und scrollen, statt auf schmalen Displays
-          // zusammenzuschrumpfen.
-          className={`grid min-h-0 flex-1 auto-rows-[minmax(7.5rem,1fr)] gap-2 overflow-y-auto p-2 rail:gap-3 rail:p-4 ${bahnSpalten}`}
+          // zusammenzuschrumpfen. Jede Reihe ist ein eigener Block, damit zwei
+          // Startgruppen nicht als eine lange Kachelwand erscheinen.
+          className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2 rail:gap-3 rail:p-4"
         >
-          {lauf.bahnen.map((bahn) => (
-            <LaneTile
-              key={bahn.id}
-              bahn={bahn}
-              konfiguration={lauf.konfiguration}
-              now={now}
-              schwimmerName={schwimmerName(bahn.schwimmerId)}
-              onTap={app.tippe}
-              onUndo={app.rueckgaengig}
-              onFinish={app.beende}
-            />
+          {reihenGruppen.map((gruppe) => (
+            <section key={gruppe.reihe} className="flex flex-col gap-1.5">
+              {mehrereReihen ? (
+                <h2 className="sticky top-0 z-10 flex items-baseline justify-between gap-2 rounded-md bg-bg px-1 py-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted">
+                    Reihe {gruppe.reihe}
+                  </span>
+                  <span className="tabular text-[10px] text-muted">
+                    {reihenAnzeige(gruppe.bahnen, gruppe.reihe, startversatzMs, now)}
+                  </span>
+                </h2>
+              ) : null}
+              <div className={`grid auto-rows-[minmax(7.5rem,1fr)] gap-2 rail:gap-3 ${bahnSpalten}`}>
+                {gruppe.bahnen.map((bahn) => (
+                  <LaneTile
+                    key={bahn.id}
+                    bahn={bahn}
+                    konfiguration={lauf.konfiguration}
+                    now={now}
+                    schwimmerName={schwimmerName(bahn.schwimmerId)}
+                    onTap={app.tippe}
+                    onUndo={app.rueckgaengig}
+                    onFinish={app.beende}
+                  />
+                ))}
+              </div>
+            </section>
           ))}
         </div>
       )}
@@ -488,7 +556,7 @@ export function TimerScreen() {
             <p className="text-center text-xs font-semibold text-ok">
               {serie && fortschritt
                 ? `Serie beendet · ${fortschritt.gesamt} Runden`
-                : `Alle ${lauf.bahnen.length} Bahnen im Ziel`}
+                : `Alle ${lauf.bahnen.length} im Ziel`}
             </p>
             <button
               type="button"

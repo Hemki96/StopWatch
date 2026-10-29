@@ -6,6 +6,7 @@
  * Gültigkeit bleiben beim aufrufenden Sheet.
  */
 import type { ReactNode } from 'react'
+import { formatTakt } from '../domain/format'
 
 /**
  * Überschrift plus Inhalt eines Abschnitts in einem Sheet.
@@ -63,5 +64,96 @@ export function Chip({
     >
       {children}
     </button>
+  )
+}
+
+// Gängige Taktzeiten als Schnellauswahl. Der jeweils aktuelle Wert wird bei
+// Bedarf ergänzt, damit auch ein frei eingegebener Takt als Chip sichtbar
+// bleibt.
+const TAKTE = [60, 75, 90, 105, 120, 135, 150, 180, 240] as const
+
+/** Obergrenze aus der Domäne: ein Takt von höchstens 60 Minuten. */
+const MAX_TAKT_SEK = 3600
+
+/**
+ * Auswahl des Takts: gängige Werte als Chip, jeder andere Wert über Minuten und
+ * Sekunden.
+ *
+ * Die beiden Zahlenfelder sind bewusst getrennt: Auf dem Handy öffnet sich so
+ * die Zifferntastatur, und ein Doppelpunkt muss nicht getippt werden. Überlauf
+ * wird umgerechnet (90 s ergibt 1:30), erst oberhalb von 60 Minuten gekappt.
+ * Der Aufrufer prüft die Grenzen erneut über die Domäne.
+ */
+export function TaktWahl({
+  wert,
+  onWert,
+  disabled = false,
+}: {
+  /** Takt in Sekunden. */
+  wert: number
+  onWert: (sekunden: number) => void
+  disabled?: boolean
+}) {
+  // Der aktuelle Wert kann außerhalb der Schnellauswahl liegen; er wird
+  // einsortiert ergänzt, statt auf einen anderen Chip zu springen.
+  const optionen = Array.from(new Set<number>([...TAKTE, wert])).sort((a, b) => a - b)
+  const minuten = Math.floor(wert / 60)
+  const sekunden = wert % 60
+
+  /** Liest ein Zahlenfeld; leere oder unlesbare Eingaben zählen als 0. */
+  const zahl = (roh: string) => {
+    const n = Number(roh)
+    return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0
+  }
+
+  /** Setzt den Takt aus beiden Feldern und kappt nur an der Obergrenze. */
+  const setze = (m: number, s: number) => {
+    onWert(Math.min(MAX_TAKT_SEK, m * 60 + s))
+  }
+
+  return (
+    <div>
+      <div className="flex flex-wrap gap-2">
+        {optionen.map((option) => (
+          <Chip
+            key={option}
+            aktiv={wert === option}
+            disabled={disabled}
+            onClick={() => onWert(option)}
+          >
+            {formatTakt(option)}
+          </Chip>
+        ))}
+      </div>
+      <div className="mt-3 flex items-center gap-2">
+        <span className="text-xs text-muted">Eigener Takt</span>
+        <input
+          type="number"
+          inputMode="numeric"
+          min={0}
+          max={60}
+          step={1}
+          value={minuten}
+          disabled={disabled}
+          onChange={(event) => setze(zahl(event.target.value), sekunden)}
+          aria-label="Takt Minuten"
+          className="tabular h-11 w-16 rounded-xl border border-line bg-surface2 px-2 text-center text-sm disabled:opacity-40"
+        />
+        <span className="text-sm font-semibold text-muted">:</span>
+        <input
+          type="number"
+          inputMode="numeric"
+          min={0}
+          max={59}
+          step={1}
+          value={sekunden}
+          disabled={disabled}
+          onChange={(event) => setze(minuten, zahl(event.target.value))}
+          aria-label="Takt Sekunden"
+          className="tabular h-11 w-16 rounded-xl border border-line bg-surface2 px-2 text-center text-sm disabled:opacity-40"
+        />
+        <span className="text-xs text-muted">min:s</span>
+      </div>
+    </div>
   )
 }

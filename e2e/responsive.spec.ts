@@ -42,7 +42,7 @@ test.describe('Tablet', () => {
     await page.keyboard.press('Escape')
 
     await page.getByRole('button', { name: 'Start', exact: true }).tap()
-    const bahnBox = await page.getByRole('button', { name: /^Bahn 1, läuft$/ }).boundingBox()
+    const bahnBox = await page.getByRole('button', { name: /Bahn 1, läuft$/ }).boundingBox()
     expect(bahnBox).not.toBeNull()
     // Drei Spalten auf dem Tablet; die Kachel bleibt groß genug zum Treffen.
     expect(bahnBox!.width).toBeGreaterThan(200)

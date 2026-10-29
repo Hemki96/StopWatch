@@ -35,6 +35,8 @@ async function oeffneMitEinstellungen(
   page: Page,
   einstellungen: {
     bahnen: number
+    /** Reihen; fehlt sie, startet alles in einer Reihe. */
+    reihen?: number
     streckeM: number | null
     startversatzMs: number
     wiederholungen: number
@@ -52,6 +54,7 @@ async function oeffneMitEinstellungen(
             schwimmart: 'freistil',
           },
           bahnen: werte.bahnen,
+          reihen: werte.reihen ?? 1,
           schwimmerProBahn: [],
           startversatzMs: werte.startversatzMs,
           wiederholungen: werte.wiederholungen,
@@ -85,14 +88,15 @@ async function langdruck(page: Page, ziel: Locator): Promise<void> {
   await page.mouse.up()
 }
 
-// Nutzerreise: Drei Bahnen starten mit 30 s Versatz. Bahn 1 läuft sofort,
-// Bahn 2 zählt sichtbar herunter. Währenddessen wird ein zweiter Lauf
-// vorbereitet; der erste läuft im Hintergrund weiter und bleibt erreichbar.
-test('Startversatz hält spätere Bahnen im Countdown und mehrere Läufe bleiben erreichbar', async ({
+// Nutzerreise: Zwei Reihen à drei Bahnen starten mit 30 s Versatz. Reihe 1
+// läuft sofort, Reihe 2 zählt sichtbar herunter. Währenddessen wird ein zweiter
+// Lauf vorbereitet; der erste läuft im Hintergrund weiter und bleibt erreichbar.
+test('Startversatz hält spätere Reihen im Countdown und mehrere Läufe bleiben erreichbar', async ({
   page,
 }) => {
   await oeffneMitEinstellungen(page, {
     bahnen: 3,
+    reihen: 2,
     streckeM: 100,
     startversatzMs: 30_000,
     wiederholungen: 1,
@@ -101,15 +105,14 @@ test('Startversatz hält spätere Bahnen im Countdown und mehrere Läufe bleiben
 
   await page.getByRole('button', { name: 'Start', exact: true }).tap()
 
-  // Bei 30 s Versatz startet nur Bahn 1; die späteren Bahnen sind „geplant“
-  // und zeigen statt der laufenden Zeit einen Countdown („Start in“).
+  // Bei 30 s Versatz startet nur Reihe 1; die zweite Reihe ist „geplant“
+  // und zeigt statt der laufenden Zeit einen Countdown („Start in“).
   // Bewusst ohne Warten auf den Countdown: 30 s wären im Test unvertretbar
   // lang, geprüft wird der Zustand, den der Versatz erzeugt.
-  await expect(page.getByRole('button', { name: /^Bahn 1, läuft$/ })).toHaveAttribute(
-    'data-status',
-    'laeuft',
-  )
-  const wartend = page.getByRole('button', { name: /^Bahn 2, geplant$/ })
+  await expect(
+    page.getByRole('button', { name: /Reihe 1, Bahn 1, läuft$/ }),
+  ).toHaveAttribute('data-status', 'laeuft')
+  const wartend = page.getByRole('button', { name: /Reihe 2, Bahn 1, geplant$/ })
   await expect(wartend).toHaveAttribute('data-status', 'geplant')
   await expect(wartend).toContainText('Start in')
 
@@ -119,14 +122,13 @@ test('Startversatz hält spätere Bahnen im Countdown und mehrere Läufe bleiben
 
   // Der neue Lauf ist vorbereitet; der alte läuft im Hintergrund weiter. Die
   // Leiste stellt den zuletzt angelegten Lauf nach vorn, deshalb ist `nth(1)`
-  // der zuvor gestartete Lauf — mit laufender Bahn 1 und geplanter Bahn 2.
+  // der zuvor gestartete Lauf — mit laufender Reihe 1 und geplanter Reihe 2.
   await expect(page.getByRole('button', { name: 'Start alle', exact: true })).toBeVisible()
   await chips.nth(1).tap()
-  await expect(page.getByRole('button', { name: /^Bahn 1, läuft$/ })).toHaveAttribute(
-    'data-status',
-    'laeuft',
-  )
-  await expect(page.getByRole('button', { name: /^Bahn 2, geplant$/ })).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: /Reihe 1, Bahn 1, läuft$/ }),
+  ).toHaveAttribute('data-status', 'laeuft')
+  await expect(page.getByRole('button', { name: /Reihe 2, Bahn 1, geplant$/ })).toBeVisible()
 })
 
 // Nutzerreise: Mitten in einer Serie wird die Seite neu geladen. Die
@@ -144,14 +146,14 @@ test('nimmt nach einem Reload fehlende Starts einer angefangenen Runde wieder au
   })
 
   await page.getByRole('button', { name: 'Start', exact: true }).tap()
-  const bahn1 = page.getByRole('button', { name: /^Bahn 1, Runde 1 von 2, läuft$/ })
+  const bahn1 = page.getByRole('button', { name: /Bahn 1, Runde 1 von 2, läuft$/ })
   // Klick statt Tap: Zwei sehr schnelle Taps können unter Last als Geste
   // abgebrochen werden und dann keine Anschläge erzeugen. Zwei Anschläge
   // schließen Runde 1 ab (100 m im 50-m-Becken).
   await bahn1.dispatchEvent('click')
   await bahn1.dispatchEvent('click')
   await expect(
-    page.getByRole('button', { name: /^Bahn 2, Runde 1 von 2, läuft$/ }),
+    page.getByRole('button', { name: /Bahn 2, Runde 1 von 2, läuft$/ }),
   ).toBeVisible()
 
   // Beim Neuladen verliert Bahn 2 ihre Startzeit, Runde 1 bleibt teilweise
@@ -163,7 +165,7 @@ test('nimmt nach einem Reload fehlende Starts einer angefangenen Runde wieder au
   await page.getByRole('button', { name: 'Weiter', exact: true }).tap()
 
   await expect(
-    page.getByRole('button', { name: /^Bahn 2, Runde 1 von 2, läuft$/ }),
+    page.getByRole('button', { name: /Bahn 2, Runde 1 von 2, läuft$/ }),
   ).toBeVisible()
 })
 
@@ -185,18 +187,18 @@ test('Serie zeigt Runden pro Schwimmer, zählt sie und nimmt den letzten Anschla
 
   // Zwei Taps pro Bahn schließen Runde 1 ab; der Tap bezieht sich immer auf
   // die älteste offene Runde, nicht auf die zuletzt gestartete.
-  const bahn1 = page.getByRole('button', { name: /^Bahn 1, Runde 1 von 3, läuft$/ })
+  const bahn1 = page.getByRole('button', { name: /Bahn 1, Runde 1 von 3, läuft$/ })
   await expect(bahn1).toBeVisible()
   await bahn1.tap()
   await bahn1.tap()
 
-  const bahn2 = page.getByRole('button', { name: /^Bahn 2, Runde 1 von 3, läuft$/ })
+  const bahn2 = page.getByRole('button', { name: /Bahn 2, Runde 1 von 3, läuft$/ })
   await bahn2.tap()
   await bahn2.tap()
 
   // Runde 2 ist beim Start der Serie schon vorgemerkt, beginnt aber erst nach
   // dem Takt von 60 s; bis dahin steht sie als „wartet auf Start“.
-  const wartet = page.getByRole('button', { name: /^Bahn 1, Runde 2 von 3, wartet auf Start$/ })
+  const wartet = page.getByRole('button', { name: /Bahn 1, Runde 2 von 3, wartet auf Start$/ })
   await expect(wartet).toBeVisible()
   await expect(page.getByText('1 von 3 Runden vollständig')).toBeVisible()
 
@@ -204,7 +206,7 @@ test('Serie zeigt Runden pro Schwimmer, zählt sie und nimmt den letzten Anschla
   // Zielanschlag von Runde 1. Die Zeile zeigt danach wieder Runde 1 als
   // laufend, der Fortschritt fällt auf 0 zurück.
   await langdruck(page, wartet)
-  await expect(page.getByRole('button', { name: /^Bahn 1, Runde 1 von 3, läuft$/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Bahn 1, Runde 1 von 3, läuft$/ })).toBeVisible()
   await expect(page.getByText('0 von 3 Runden vollständig')).toBeVisible()
 
   // Geplante Wiederholungen bleiben aus dem Verlauf, bis sie Daten haben:

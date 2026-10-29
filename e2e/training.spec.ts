@@ -37,7 +37,7 @@ test('bereitet Sätze und Aktive vor, startet den ersten Satz und passt den Plan
   // Der erste Satz startet sofort im Timer: Erst beim Start entstehen aus dem
   // Trainingssatz ein Satz und seine Läufe, deshalb wechselt die App dorthin.
   await page.getByRole('button', { name: 'Satz 1 starten' }).tap()
-  await expect(page.getByRole('button', { name: /^Bahn 1, läuft$/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Bahn 1, läuft$/ })).toBeVisible()
 
   // Zurück im Training ist der Satz als laufend markiert. Ein gestarteter
   // Satz ist fest; der Plan ändert nur noch die kommenden Sätze.
@@ -73,8 +73,8 @@ test('bereitet Sätze und Aktive vor, startet den ersten Satz und passt den Plan
   // ergibt vier, die Änderung wird mit „Aktive übernehmen“ gespeichert.
   await page.getByRole('button', { name: /^Aktive/ }).tap()
   const aktive = page.getByRole('dialog')
-  await aktive.getByRole('button', { name: 'Weniger Bahnen' }).tap()
-  await aktive.getByRole('button', { name: 'Weniger Bahnen' }).tap()
+  await aktive.getByRole('button', { name: 'Weniger Bahnen pro Reihe' }).tap()
+  await aktive.getByRole('button', { name: 'Weniger Bahnen pro Reihe' }).tap()
   await aktive.getByRole('button', { name: 'Aktive übernehmen' }).tap()
   await expect(page.getByRole('button', { name: /^Aktive/ })).toContainText('4 Bahnen')
 })

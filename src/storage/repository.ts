@@ -18,8 +18,8 @@
  */
 import { getDb } from './db'
 import type { Lauf, Satz, Schwimmer, Training, Wettkampf } from '../domain/types'
-import { MAX_BAHNEN } from '../domain/training'
-import { isFinished } from '../domain/lauf'
+import { MAX_BAHNEN, MAX_REIHEN, bahnenGesamt } from '../domain/training'
+import { bahnReihe, isFinished } from '../domain/lauf'
 import { BACKUP_FORMAT, BACKUP_VERSION, pruefeBackup, type Backup } from './backup'
 
 /**
@@ -54,8 +54,11 @@ export function normalizeOnLoad(lauf: Lauf): Lauf {
       : null
   // Eine Bahn mit Start, aber ohne Finish-Anschlag gilt als abgebrochen bzw.
   // durch den Reload ungültig. Die Anschläge selbst bleiben erhalten.
+  // Ältere Läufe kennen keine Reihen; ihre Bahnen gehören zu Reihe 1.
   const bahnen = lauf.bahnen.map((bahn) =>
-    bahn.startMs !== null && !isFinished(bahn) ? { ...bahn, startMs: null } : bahn,
+    bahn.startMs !== null && !isFinished(bahn)
+      ? { ...bahn, reihe: bahnReihe(bahn), startMs: null }
+      : { ...bahn, reihe: bahnReihe(bahn) },
   )
   return {
     ...lauf,
@@ -93,25 +96,34 @@ export function normalizeWettkampfOnLoad(wettkampf: Wettkampf): Wettkampf {
  * Trainings sind neuer als der Bestand. Fehlende Felder werden so ergänzt, dass
  * ein Training aus einem älteren oder unvollständigen Backup nutzbar bleibt.
  *
- * Die Bahnenzahl wird auf 1 bis `MAX_BAHNEN` begrenzt. Die Aktivenliste wird
- * auf genau diese Länge gebracht: vorhandene Einträge bleiben, fehlende werden
- * mit null („ohne Zuordnung“) aufgefüllt, überzählige abgeschnitten. `saetze`
- * und `gestartet` werden zu leeren Containern, wenn sie fehlen oder falsch
- * typisiert sind.
+ * Die Bahnenzahl wird auf 1 bis `MAX_BAHNEN` je Reihe und die Reihenzahl auf
+ * 1 bis `MAX_REIHEN` begrenzt. Ältere Trainings kennen keine Reihen und gelten
+ * als eine Reihe. Die Aktivenliste wird auf genau `bahnen × reihen` gebracht:
+ * vorhandene Einträge bleiben, fehlende werden mit null („ohne Zuordnung“)
+ * aufgefüllt, überzählige abgeschnitten. `saetze` und `gestartet` werden zu
+ * leeren Containern, wenn sie fehlen oder falsch typisiert sind.
  */
 export function normalizeTrainingOnLoad(training: Training): Training {
-  // Unbekannte oder fehlende Bahnenzahl auf den gültigen Bereich 1..MAX_BAHNEN
+  // Unbekannte oder fehlende Bahnen- bzw. Reihenzahl auf den gültigen Bereich
   // begrenzen, damit die Aktivenliste darunter eine feste Länge hat.
   const bahnen = Math.min(
     MAX_BAHNEN,
     Math.max(1, Number.isInteger(training.bahnen) ? training.bahnen : 1),
   )
+  const reihen = Math.min(
+    MAX_REIHEN,
+    Math.max(1, Number.isInteger(training.reihen) ? training.reihen : 1),
+  )
   return {
     ...training,
     bezeichnung: training.bezeichnung ?? '',
     bahnen,
-    // Genau ein Eintrag je Bahn; fehlende Zuordnungen werden null.
-    aktive: Array.from({ length: bahnen }, (_, index) => training.aktive?.[index] ?? null),
+    reihen,
+    // Genau ein Eintrag je Person; fehlende Zuordnungen werden null.
+    aktive: Array.from(
+      { length: bahnenGesamt(bahnen, reihen) },
+      (_, index) => training.aktive?.[index] ?? null,
+    ),
     saetze: Array.isArray(training.saetze) ? training.saetze : [],
     // `gestartet` ist die Zuordnung TrainingsSatz.id → Satz.id. Ein fehlender
     // oder falscher Wert wird zu einem leeren Objekt.

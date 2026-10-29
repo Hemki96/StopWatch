@@ -26,10 +26,10 @@ test('Backup exportieren, alles löschen und wieder einlesen', async ({ page }) 
   // Zwei Taps reichen für einen vollständigen Lauf: Standard sind 100 m im
   // 50-m-Becken, also zwei Längen; der zweite Anschlag ist das Ziel.
   await page.getByRole('button', { name: 'Start', exact: true }).tap()
-  const bahn = page.getByRole('button', { name: /^Bahn 1, läuft$/ })
+  const bahn = page.getByRole('button', { name: /Bahn 1, läuft$/ })
   await bahn.tap()
   await bahn.tap()
-  await expect(page.getByRole('button', { name: /^Bahn 1, im Ziel$/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Bahn 1, im Ziel$/ })).toBeVisible()
 
   await page.getByRole('button', { name: 'Mehr' }).tap()
   // Das Download-Ereignis vor dem Klick abonnieren: Der Download startet

@@ -77,16 +77,19 @@ Ein `Lauf` ist keine Uhr mit vielen Zwischenzeiten, sondern eine Menge von `Bahn
 hat ihren eigenen `startMs`. „Start alle“ ist nur ein Schreibvorgang über alle Bahnen. Siehe
 [ADR-0003](../adr/0003-lauf-aus-unabhaengigen-bahnen.md).
 
-### Start und Startversatz
+### Start, Reihen und Startversatz
 
 ```ts
 // domain/lauf.ts
 startAll(lauf, now, wallNow)
-// Bahn i startet bei now + i * startversatzMs
+// Alle Bahnen einer Reihe starten gemeinsam:
+// startMs = now + (reihe - 1) * startversatzMs
 ```
 
-`planeLauf` setzt Startzeiten für eine unberührte Bahnfolge. Der Versatz wird am Lauf gespeichert,
-damit ein Neustart derselben Bahnen dieselbe Staffelung ergibt.
+`planeLauf` setzt Startzeiten für eine unberührte Bahnfolge. Der Versatz staffelt **Reihen**, nicht
+einzelne Bahnen; innerhalb einer Reihe starten alle mit demselben Zeitstempel. Der Versatz wird am
+Lauf gespeichert, damit ein Neustart derselben Bahnen dieselbe Staffelung ergibt. Siehe
+[ADR-0008](../adr/0008-reihen-als-startgruppen.md).
 
 Eine Bahn mit `startMs > now` ist **geplant**. `tapLane` ignoriert Tipps, bis der Startzeitpunkt
 erreicht ist. Der Countdown wird aus derselben Differenz gerendert, nicht aus einem Timer.
@@ -323,7 +326,7 @@ Details: [Oberfläche](oberflaeche.md).
 | Keine Splits im Wettkampf | ein Tap pro Bahn ist am Beckenrand robuster |
 | Gestartete Trainingssätze sind fest | gemessene Zeiten dürfen nicht umgeschrieben werden |
 | Kein Fortsetzen nach Reload | `performance.now()` ist seitenspezifisch |
-| Maximal 10 Bahnen, 20 Runden, 20 Sätze | lesbare Oberfläche und beherrschbare Datenmengen |
+| Maximal 10 Bahnen je Reihe, 5 Reihen, 20 Runden, 20 Sätze | lesbare Oberfläche und beherrschbare Datenmengen |
 
 ## Weiterlesen
 

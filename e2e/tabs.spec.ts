@@ -17,7 +17,7 @@ test('zweiter Tab ist lesend, übernimmt auf Wunsch und gibt nach dem Schließen
 }) => {
   await oeffneApp(page)
   await page.getByRole('button', { name: 'Start', exact: true }).tap()
-  await page.getByRole('button', { name: /^Bahn 1, läuft$/ }).tap()
+  await page.getByRole('button', { name: /Bahn 1, läuft$/ }).tap()
   await expect(page.locator('[data-anschlaege="1"]')).toBeVisible()
 
   const zweiter = await oeffneZweitenTab(page)

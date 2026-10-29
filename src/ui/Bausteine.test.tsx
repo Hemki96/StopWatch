@@ -14,11 +14,11 @@
  * `MouseEvent` gesendet, da jsdom keine `PointerEvent`-Konstruktion anbietet.
  */
 // @vitest-environment jsdom
-import { act } from 'react'
+import { act, useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { render } from '../test/render'
 import { Bestaetigung } from './Bestaetigung'
-import { Chip, Feld } from './Felder'
+import { Chip, Feld, TaktWahl } from './Felder'
 import { Sheet } from './Sheet'
 import { SpeicherBanner } from './SpeicherBanner'
 import {
@@ -129,6 +129,88 @@ describe('Feld und Chip', () => {
     expect(knopf.disabled).toBe(true)
     act(() => knopf.click())
     expect(klick).not.toHaveBeenCalled()
+    ergebnis.unmount()
+  })
+})
+
+// Takt: Schnellauswahl plus freie Eingabe in Minuten und Sekunden. Die
+// Zahlenfelder umgehen die Zifferntastatur nicht, deshalb werden sie einzeln
+// geprüft. Freie Werte bleiben als eigener Chip sichtbar.
+describe('TaktWahl', () => {
+  /** Setzt den Feldwert so, wie es ein Tippen im Browser täte. */
+  const tippe = (feld: HTMLInputElement, wert: string) => {
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      'value',
+    )?.set
+    act(() => {
+      setter?.call(feld, wert)
+      feld.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+  }
+
+  it('zeigt einen freien Wert in Minuten und Sekunden und als Chip', () => {
+    const aendere = vi.fn()
+    const ergebnis = render(<TaktWahl wert={100} onWert={aendere} />)
+    const minuten = ergebnis.container.querySelector<HTMLInputElement>(
+      'input[aria-label="Takt Minuten"]',
+    )!
+    const sekunden = ergebnis.container.querySelector<HTMLInputElement>(
+      'input[aria-label="Takt Sekunden"]',
+    )!
+    expect(minuten.value).toBe('1')
+    expect(sekunden.value).toBe('40')
+
+    const freierChip = [...ergebnis.container.querySelectorAll('button')].find(
+      (knopf) => knopf.textContent === '01:40',
+    )!
+    act(() => freierChip.click())
+    expect(aendere).toHaveBeenCalledWith(100)
+    ergebnis.unmount()
+  })
+
+  it('rechnet die Eingabe in Sekunden um und kappt bei 60 Minuten', () => {
+    // Der Zustand liegt wie im Sheet beim Aufrufer; nur so wirken mehrere
+    // Eingaben hintereinander aufeinander.
+    function Harness() {
+      const [wert, setWert] = useState(120)
+      return <TaktWahl wert={wert} onWert={setWert} />
+    }
+
+    const ergebnis = render(<Harness />)
+    const minuten = ergebnis.container.querySelector<HTMLInputElement>(
+      'input[aria-label="Takt Minuten"]',
+    )!
+    const sekunden = ergebnis.container.querySelector<HTMLInputElement>(
+      'input[aria-label="Takt Sekunden"]',
+    )!
+
+    // 1:30 ist kein Chip-Wert, sondern nur über die Felder erreichbar.
+    tippe(minuten, '1')
+    tippe(sekunden, '30')
+    expect(minuten.value).toBe('1')
+    expect(sekunden.value).toBe('30')
+
+    // 90 s im Sekundenfeld werden zu 2:30 weitergerechnet, 70 Minuten auf
+    // die Obergrenze von 60:00 gekappt.
+    tippe(sekunden, '90')
+    expect(minuten.value).toBe('2')
+    expect(sekunden.value).toBe('30')
+    tippe(minuten, '70')
+    expect(minuten.value).toBe('60')
+    expect(sekunden.value).toBe('0')
+    ergebnis.unmount()
+  })
+
+  it('sperrt Chips und Felder zusammen', () => {
+    const aendere = vi.fn()
+    const ergebnis = render(<TaktWahl wert={120} onWert={aendere} disabled />)
+    for (const feld of ergebnis.container.querySelectorAll('input')) {
+      expect(feld.disabled).toBe(true)
+    }
+    for (const knopf of ergebnis.container.querySelectorAll('button')) {
+      expect(knopf.disabled).toBe(true)
+    }
     ergebnis.unmount()
   })
 })

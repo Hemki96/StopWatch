@@ -1,9 +1,9 @@
 # Training
 
 Ein **Training** ist die Vorbereitung einer ganzen Einheit. Vorab werden die **Aktiven** je Bahn und
-mehrere **Trainingssätze** in fester Reihenfolge festgelegt. Am Beckenrand wird dann Satz für Satz
-gestartet. Noch offene Sätze — also solche, aus denen noch keine Läufe entstanden sind — lassen sich
-während des Trainings ändern, ergänzen, löschen oder verschieben.
+**Reihe** sowie mehrere **Trainingssätze** in fester Reihenfolge festgelegt. Am Beckenrand wird dann
+Satz für Satz gestartet. Noch offene Sätze — also solche, aus denen noch keine Läufe entstanden sind —
+lassen sich während des Trainings ändern, ergänzen, löschen oder verschieben.
 
 Das Training ist damit mehr als eine Serie: Es bündelt mehrere Sätze, eine gemeinsame Aktivenliste
 und den Fortschritt über die gesamte Einheit.
@@ -27,7 +27,7 @@ lange Planung als viele unvollständige Läufe erscheint.
 1. Tab **Training** öffnen.
 2. Auf **Neues Training** tippen.
 3. Die App legt ein Training für heute an. Es übernimmt aus den aktuellen Einstellungen:
-   - die Anzahl der Bahnen,
+   - die Anzahl der Bahnen je Reihe und die Reihenzahl,
    - die Schwimmerzuordnung,
    - den ersten Satz mit Strecke, Schwimmart, Wiederholungen, Takt und Startversatz.
 4. Das Training öffnet sich direkt. Name, Aktive und Sätze lassen sich jetzt anpassen.
@@ -53,18 +53,21 @@ Ein Tipp öffnet das Training. Der leere Zustand erklärt, wofür ein Training g
 
 ## Aktive festlegen
 
-Die Karte **Aktive** zeigt die Bahnenzahl und die zugeordneten Namen. Ein Tipp öffnet das Sheet:
+Die Karte **Aktive** zeigt die Aufteilung in Reihen und die zugeordneten Namen. Ein Tipp öffnet das
+Sheet:
 
 | Feld | Bedeutung |
 | --- | --- |
-| **Bahnen** | 1 bis 10. Gilt für alle noch nicht gestarteten Sätze. |
-| **Wer schwimmt mit?** | Ein Schwimmer pro Bahn aus dem Tab **Schwimmer**; leer bedeutet ohne Zuordnung. |
+| **Bahnen pro Reihe** | 1 bis 10. Gilt für alle noch nicht gestarteten Sätze. |
+| **Reihen** | 1 bis 5 Startgruppen; jede startet gemeinsam, die nächste nach dem Reihenversatz. |
+| **Wer schwimmt mit?** | Ein Schwimmer pro Person aus dem Tab **Schwimmer**; leer bedeutet ohne Zuordnung. |
 
 Die Aktiven gelten für alle Sätze, die noch **nicht angelegt** sind. Ein Satz wird beim ersten Start
 angelegt. Bereits angelegte Sätze — auch solche, die nach einem Reload nur „bereit“ sind — behalten
 ihre Bahnen und Zuordnungen, damit gemessene Zeiten nicht nachträglich einer anderen Person
-zugeordnet werden. Eine Änderung der Bahnenzahl schneidet überzählige Plätze ab bzw. ergänzt leere
-Plätze.
+zugeordnet werden. Eine Änderung der Aufteilung schneidet überzählige Plätze ab bzw. ergänzt leere
+Plätze; eine Person bleibt dabei in ihrer Reihe und an ihrer Bahn. Wird eine Reihe entfernt, fallen
+ihre Plätze weg.
 
 Wer noch keine Schwimmer angelegt hat, kann das im Tab **Schwimmer** tun. Namen sind optional; die
 Messung funktioniert auch mit „Ohne Namen“.
@@ -106,7 +109,7 @@ Ein Tipp auf einen **offenen** Satz öffnet „Satz N bearbeiten“:
 | **Schwimmart** | Freistil, Brust, Rücken, Schmetterling, Lagen, Beliebig |
 | **Wiederholungen** | 1 bis 20; 1 = einzelner Lauf |
 | **Takt** | nur bei mehreren Wiederholungen; Start zu Start |
-| **Startversatz** | 0 bis 120 s zwischen den Bahnen |
+| **Startversatz** | 0 bis 120 s zwischen den Reihen |
 
 Unten stehen **Nach oben**, **Nach unten** und **Satz löschen**. Die Reihenfolge lässt sich nur so
 ändern; Drag-and-drop gibt es nicht. Ein Training braucht mindestens einen Satz — der letzte Satz
@@ -144,7 +147,8 @@ Beim ersten Start eines Satzes passiert Folgendes:
 1. Die App legt den Satz und alle Wiederholungen an.
 2. Die Aktiven werden in die Bahnen kopiert.
 3. Die Startzeiten werden — wie bei einer Serie — vorausberechnet.
-4. Die erste Runde startet sofort — bei Startversatz gestaffelt um den eingestellten Abstand.
+4. Die erste Runde startet sofort — bei Startversatz startet jede weitere Reihe um den eingestellten
+   Abstand später.
 5. Die App wechselt in den **Timer**, wo der Satz wie ein normaler Lauf bzw. eine Serie bedient wird.
 
 Bei einem bereits angelegten Satz wird nur zum Timer gewechselt. Ein nach einem Reload
@@ -155,7 +159,7 @@ zurückgesetzter Satz muss dort mit **Start alle** bzw. **Weiter** fortgesetzt w
 Das Training ist ein Plan, kein starres Formular. Während der Einheit gilt:
 
 - Noch nicht gestartete Sätze lassen sich öffnen, ändern, ergänzen, löschen und verschieben.
-- Die Aktiven und die Bahnenzahl lassen sich für kommende Sätze anpassen.
+- Die Aktiven, die Aufteilung in Reihen und die Bahnenzahl lassen sich für kommende Sätze anpassen.
 - Gestartete und bereits angelegte Sätze bleiben unverändert und werden im Timer bedient.
 - Der Fortschritt oben zählt nur **vollständig** beendete Sätze.
 - Nach jedem Satz zurück zum Tab **Training** wechseln und den nächsten starten.
@@ -191,9 +195,9 @@ Messdaten zu verlieren. Zum Löschen von Messdaten den Verlauf verwenden.
 | --- | --- |
 | Sätze pro Training | 1 bis 20 |
 | Wiederholungen pro Satz | 1 bis 20 |
-| Bahnen | 1 bis 10 |
-| Takt | 1 s bis 60 min (die Auswahl bietet gängige Werte) |
-| Startversatz | 0 bis 120 s |
+| Bahnen | 1 bis 10 je Reihe, 1 bis 5 Reihen |
+| Takt | 1 s bis 60 min (gängige Werte als Chip, jeder andere über Minuten und Sekunden) |
+| Startversatz | 0 bis 120 s zwischen zwei Reihen |
 | Strecke | Vielfaches der Beckenlänge oder offen |
 | Bearbeitbar | nur Sätze im Status `offen` (noch kein Satz/Läufe angelegt) |
 

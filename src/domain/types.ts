@@ -90,8 +90,14 @@ export interface Anschlag {
  */
 export interface Bahn {
   id: string
-  /** Bahnnummer, 1-basiert und innerhalb eines Laufs eindeutig. */
+  /** Bahnnummer, 1-basiert und innerhalb ihrer Reihe eindeutig. */
   nummer: number
+  /**
+   * Startgruppe innerhalb des Laufs, 1-basiert. Alle Bahnen derselben Reihe
+   * starten gemeinsam; die nächste Reihe versetzt um den Startversatz.
+   * Ältere Datensätze ohne Feld gelten als Reihe 1.
+   */
+  reihe: number
   /** Schwimmer-ID oder `null`; ein unbekannter Verweis wird als „Ohne Namen“ angezeigt. */
   schwimmerId: string | null
   /** Monotone Startzeit der Bahn (`performance.now`), null solange nicht gestartet. */
@@ -110,7 +116,10 @@ export interface Lauf {
   konfiguration: LaufKonfiguration
   /** Wanduhr-Anker des Starts dieser Wiederholung (`Date.now`). */
   startWallMs: number | null
-  /** Fester Abstand zwischen den Starts der Bahnen in ms. 0 = gemeinsamer Start. */
+  /**
+   * Fester Abstand zwischen den Starts zweier Reihen in ms. 0 = gemeinsamer
+   * Start aller Reihen. Innerhalb einer Reihe starten alle Bahnen gemeinsam.
+   */
   startversatzMs: number
   /** 1-basierte Wiederholung innerhalb einer geplanten Serie, sonst null. */
   wiederholung: number | null
@@ -158,7 +167,10 @@ export interface SatzPlan {
   wiederholungen: number
   /** Zeit zwischen zwei Wiederholungen in Sekunden. */
   taktSek: number
-  /** Abstand zwischen den Starts der Bahnen innerhalb einer Wiederholung in ms. */
+  /**
+   * Abstand zwischen den Starts der Reihen innerhalb einer Wiederholung in ms.
+   * Innerhalb einer Reihe starten alle Bahnen gemeinsam.
+   */
   startversatzMs: number
 }
 
@@ -196,7 +208,10 @@ export interface TrainingsSatz {
   wiederholungen: number
   /** Zeit zwischen zwei Wiederholungen in Sekunden. */
   taktSek: number
-  /** Abstand zwischen den Starts der Bahnen innerhalb einer Wiederholung in ms. */
+  /**
+   * Abstand zwischen den Starts der Reihen innerhalb einer Wiederholung in ms.
+   * Innerhalb einer Reihe starten alle Bahnen gemeinsam.
+   */
   startversatzMs: number
 }
 
@@ -211,9 +226,14 @@ export interface Training {
   datum: string
   /** Freie Bezeichnung der Einheit, z. B. „Montagabend“; leer ist erlaubt. */
   bezeichnung: string
-  /** Anzahl der Bahnen für alle noch nicht gestarteten Sätze. */
+  /** Anzahl der Bahnen je Reihe für alle noch nicht gestarteten Sätze. */
   bahnen: number
-  /** Schwimmer je Bahn; `null` heißt ohne Zuordnung. */
+  /** Anzahl der Reihen (Startgruppen) für alle noch nicht gestarteten Sätze. */
+  reihen: number
+  /**
+   * Schwimmer je Bahn, Reihe für Reihe: erst alle Bahnen der Reihe 1, dann
+   * Reihe 2. Die Länge ist `bahnen × reihen`; `null` heißt ohne Zuordnung.
+   */
   aktive: (string | null)[]
   saetze: TrainingsSatz[]
   /** Zuordnung `TrainingsSatz.id` → `Satz.id` der bereits angelegten Läufe. */

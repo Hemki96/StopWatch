@@ -51,6 +51,7 @@ const lauf: Lauf = {
     {
       id: 'b1',
       nummer: 1,
+      reihe: 1,
       schwimmerId: 's1',
       startMs: 1,
       anschlaege: [
@@ -68,6 +69,7 @@ const training: Training = {
   datum: '2026-10-29',
   bezeichnung: 'Kader A',
   bahnen: 2,
+  reihen: 1,
   aktive: ['s1', null],
   saetze: [
     {
@@ -404,14 +406,15 @@ describe('Trainings im Backup', () => {
     expect(ergebnis.fehler).toContain('saetze')
   })
 
-  // Elf Bahnen überschreiten `MAX_BAHNEN`; der Lauf wäre in der App nicht
-  // darstellbar.
+  // 51 Bahnen überschreiten die Obergrenze aus 10 Bahnen × 5 Reihen; der Lauf
+  // wäre in der App nicht darstellbar.
   it('lehnt einen Lauf mit zu vielen Bahnen ab', () => {
     const roh = kopie()
     const laufRoh = (roh.laeufe as Record<string, unknown>[])[0]!
-    laufRoh.bahnen = Array.from({ length: 11 }, (_, index) => ({
+    laufRoh.bahnen = Array.from({ length: 51 }, (_, index) => ({
       id: `b${index}`,
-      nummer: index + 1,
+      nummer: 1,
+      reihe: 1,
       schwimmerId: null,
       startMs: null,
       anschlaege: [],

@@ -11,10 +11,10 @@
 import { useRef, useState } from 'react'
 import { haptic } from '../app/haptics'
 import { useReducedMotion } from '../app/useReducedMotion'
-import { finishMs, lengthCount } from '../domain/lauf'
+import { finishMs, lengthCount, bahnenNachReihen } from '../domain/lauf'
 import { formatCountdown, formatTakt, formatTime } from '../domain/format'
 import { bahnZeile, zeilenZeit, type BahnZeile, type ZeilenStatus } from '../domain/serie'
-import type { Lauf, SatzPlan } from '../domain/types'
+import type { Bahn, Lauf, SatzPlan } from '../domain/types'
 
 /** Haltedauer in Millisekunden, ab der ein Druck als „zurücknehmen“ gilt. */
 const LANGDRUCK_MS = 450
@@ -51,6 +51,7 @@ interface SerieAnsichtProps {
  */
 function Zeile({
   zeile,
+  basis,
   gesamt,
   name,
   now,
@@ -60,6 +61,8 @@ function Zeile({
   onFinish,
 }: {
   zeile: BahnZeile
+  /** Bahn aus der ersten Runde: liefert Nummer und Reihe für die Anzeige. */
+  basis: Bahn
   gesamt: number
   name: string | null
   now: number
@@ -197,7 +200,7 @@ function Zeile({
       role="button"
       tabIndex={0}
       data-status={zeile.status}
-      aria-label={`${name ?? `Bahn ${zeile.index + 1}`}, Runde ${angezeigteRunde} von ${gesamt}, ${STATUS_LABEL[zeile.status]}`}
+      aria-label={`Reihe ${basis.reihe}, Bahn ${basis.nummer}${name ? `, ${name}` : ''}, Runde ${angezeigteRunde} von ${gesamt}, ${STATUS_LABEL[zeile.status]}`}
       onPointerDown={startPress}
       onPointerUp={endPress}
       onPointerCancel={cancelPress}
@@ -234,7 +237,7 @@ function Zeile({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="rounded-md bg-surface2 px-1.5 py-0.5 text-[11px] font-bold tracking-wide text-muted">
-            {zeile.index + 1}
+            {basis.nummer}
           </span>
           <span className="truncate text-sm font-semibold">{name ?? 'Ohne Namen'}</span>
           <span className="ml-auto shrink-0 rounded-md bg-surface2 px-1.5 py-0.5 text-[10px] font-bold text-muted">
@@ -344,33 +347,64 @@ export function SerieAnsicht({
   // Fortschrittsleiste und „R x/y“ richten sich nach dem Plan. Fehlen Runden
   // (etwa nach einem Reload), bleibt die geplante Gesamtzahl maßgeblich.
   const gesamt = Math.max(runden.length, plan.wiederholungen)
+  // Zeilen werden nach Reihe gruppiert; der Index bleibt der der Bahn in der
+  // Runde, weil `bahnZeile` und die Aktionen damit arbeiten.
+  const gruppen = bahnenNachReihen(erste?.bahnen ?? []).map((gruppe) => ({
+    reihe: gruppe.reihe,
+    eintraege: gruppe.bahnen.map((bahn) => ({
+      bahn,
+      index: erste ? erste.bahnen.indexOf(bahn) : -1,
+    })),
+  }))
+  const mehrereReihen = gruppen.length > 1
 
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-1 content-start gap-2 overflow-y-auto p-2 rail:grid-cols-2 rail:gap-3 rail:p-4">
-      <div className="col-span-full flex shrink-0 items-center justify-between gap-2 px-1 text-[11px] text-muted">
+    <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2 rail:gap-3 rail:p-4">
+      <div className="flex shrink-0 items-center justify-between gap-2 px-1 text-[11px] text-muted">
         <span>
           {plan.wiederholungen}× · Takt {formatTakt(plan.taktSek)}
         </span>
         <span>
-          {plan.startversatzMs > 0
-            ? `${plan.startversatzMs / 1000} s Versatz`
+          {plan.startversatzMs > 0 && mehrereReihen
+            ? `${plan.startversatzMs / 1000} s Reihenversatz`
             : 'gemeinsamer Start'}
         </span>
       </div>
-      {erste?.bahnen.map((bahn, index) => (
-        // Eine Zeile pro Bahn der ersten Runde; alle weiteren Runden stecken in
-        // derselben Zeile, verdichtet durch `bahnZeile`.
-        <Zeile
-          key={bahn.id}
-          zeile={bahnZeile(runden, index, now)}
-          gesamt={gesamt}
-          name={schwimmerName(bahn.schwimmerId)}
-          now={now}
-          offeneStrecke={offeneStrecke}
-          onTap={onTap}
-          onUndo={onUndo}
-          onFinish={onFinish}
-        />
+      {gruppen.map((gruppe) => (
+        <section key={gruppe.reihe} className="flex flex-col gap-1.5">
+          {mehrereReihen ? (
+            <h2 className="sticky top-0 z-10 flex items-baseline justify-between gap-2 rounded-md bg-bg px-1 py-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-muted">
+                Reihe {gruppe.reihe}
+              </span>
+              <span className="tabular text-[10px] text-muted">
+                {gruppe.reihe === 1
+                  ? 'Start'
+                  : plan.startversatzMs > 0
+                    ? `+${((gruppe.reihe - 1) * plan.startversatzMs) / 1000} s`
+                    : 'gemeinsam'}
+              </span>
+            </h2>
+          ) : null}
+          <div className="grid grid-cols-1 gap-2 rail:grid-cols-2 rail:gap-3">
+            {gruppe.eintraege.map(({ bahn, index }) => (
+              // Eine Zeile pro Bahn der ersten Runde; alle weiteren Runden
+              // stecken in derselben Zeile, verdichtet durch `bahnZeile`.
+              <Zeile
+                key={bahn.id}
+                zeile={bahnZeile(runden, index, now)}
+                basis={bahn}
+                gesamt={gesamt}
+                name={schwimmerName(bahn.schwimmerId)}
+                now={now}
+                offeneStrecke={offeneStrecke}
+                onTap={onTap}
+                onUndo={onUndo}
+                onFinish={onFinish}
+              />
+            ))}
+          </div>
+        </section>
       ))}
     </div>
   )

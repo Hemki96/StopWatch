@@ -6,7 +6,7 @@ Zeitmessung für Schwimmtrainer am Beckenrand. Mobile-first PWA, offline, ohne K
 
 ## Was die App tut
 
-Ein **Lauf** besteht aus bis zu zehn **Bahnen**. „Start alle“ gibt allen Bahnen denselben Startzeitstempel; mit einem **Startversatz** startet Bahn 2 z. B. 10 s nach Bahn 1, Bahn 3 nach 20 s. Danach tippt der Trainer jede Bahn bei jedem **Anschlag** an. Bei konfigurierter Strecke ist der letzte Anschlag das Ziel und erzeugt einen **Split** pro **Länge**.
+Ein **Lauf** besteht aus bis zu zehn **Bahnen** je **Reihe** und bis zu fünf Reihen. Alle Bahnen einer Reihe starten gemeinsam; mit einem **Startversatz** startet Reihe 2 z. B. 10 s nach Reihe 1, Reihe 3 nach 20 s. So messen drei Personen sofort und drei weitere nach 10 s. Danach tippt der Trainer jede Bahn bei jedem **Anschlag** an. Bei konfigurierter Strecke ist der letzte Anschlag das Ziel und erzeugt einen **Split** pro **Länge**.
 
 Mehrere Läufe können **gleichzeitig aktiv** sein. Oben in der Leiste wird zwischen ihnen gewechselt; die anderen laufen im Hintergrund weiter.
 
@@ -19,7 +19,7 @@ Der **Wettkampfmodus** ist ein eigener Tab: Ein **Wettkampf** bündelt **Diszipl
 - Zeiten auf Hundertstel, abgeschnitten statt gerundet
 - Messung aus Zeitstempeln (`performance.now()`), unabhängig von Rendering
 - Splits, Bestzeiten je Schwimmer/Strecke/Schwimmart/Beckenlänge, Pace pro 100 m
-- Startversatz, mehrere aktive Läufe, Serien mit festem Takt
+- Startversatz zwischen Reihen, mehrere aktive Läufe, Serien mit festem Takt
 - Trainingsplan mit Aktiven, mehreren Sätzen in fester Reihenfolge und Anpassung während des Trainings
 - Wettkampfmodus mit Disziplinen, Heats, Platzierung und Zielzeit pro Tap
 - Meldelisten-Import als CSV (Vorlage in der App), Ergebnisse als CSV
@@ -96,5 +96,5 @@ Erkannt werden auch englische Spaltennamen (`lane`, `heat`, `distance`, `stroke`
 - [`docs/handbuch/`](docs/handbuch/README.md) — Bedienung für Trainer:innen: Timer, Serien, Training, Wettkampf, Verlauf, Backup und FAQ
 - [`docs/entwicklung/`](docs/entwicklung/README.md) — Architektur, Datenmodell, Domänenreferenz, Oberfläche, Tests und Deployment
 - [`ROADMAP.md`](ROADMAP.md) — Funktionsumfang je Major-Version und bewusste Nicht-Ziele
-- [`GLOSSARY.md`](GLOSSARY.md) — die Begriffe der Domäne (Lauf, Bahn, Länge, Split, Anschlag, Satz, Serie, Training, Aktive, Startversatz, Takt, PB, Wettkampf, Disziplin, Meldeliste)
+- [`GLOSSARY.md`](GLOSSARY.md) — die Begriffe der Domäne (Lauf, Bahn, Reihe, Länge, Split, Anschlag, Satz, Serie, Training, Aktive, Startversatz, Takt, PB, Wettkampf, Disziplin, Meldeliste)
 - [`docs/adr/`](docs/adr/) — getroffene Entscheidungen und ihre Alternativen

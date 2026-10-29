@@ -17,7 +17,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import { oeffneApp, warteAufSchwimmerzuordnung } from './helfer'
 
-const BAHN1 = /^Bahn 1, läuft$/
+const BAHN1 = /Bahn 1, läuft$/
 
 /**
  * Hält eine Kachel per Maus länger als die Undo-Schwelle gedrückt.
@@ -107,7 +107,7 @@ test('Offene Strecke: Ziel beendet die Bahn, weitere Taps ändern nichts', async
   await bahn.getByRole('button', { name: 'Ziel', exact: true }).click()
   // Der Locator richtet sich nach dem `aria-label`; nach dem Ziel heißt die
   // Kachel anders, deshalb ein eigener Locator statt Wiederverwendung.
-  const beendet = page.getByRole('button', { name: /^Bahn 1, im Ziel$/ })
+  const beendet = page.getByRole('button', { name: /Bahn 1, im Ziel$/ })
   await expect(beendet).toHaveAttribute('data-anschlaege', '2')
 
   // Ein weiterer Tap auf die beendete Bahn ist wirkungslos: Anschlagzahl und
@@ -135,11 +135,11 @@ test('Schwimmer anlegen, Bahn zuordnen und Reload überstehen', async ({ page })
   await page.getByRole('button', { name: 'Timer' }).tap()
   await page.getByRole('button', { name: /m ·/ }).first().click()
   const dialog = page.getByRole('dialog')
-  await dialog.getByLabel('Schwimmer für Bahn 1').selectOption({ label: 'Mia' })
+  await dialog.getByLabel('Schwimmer für Reihe 1, Bahn 1').selectOption({ label: 'Mia' })
   await dialog.getByRole('button', { name: 'Schließen', exact: true }).click()
 
   await page.getByRole('button', { name: 'Start', exact: true }).tap()
-  await expect(page.getByRole('button', { name: /^Bahn 1, Mia, läuft$/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Bahn 1, Mia, läuft$/ })).toBeVisible()
   // Erst wenn die Zuordnung in IndexedDB liegt, ist der Reload verlustfrei:
   // Die Anzeige ist sofort da, das Schreiben läuft asynchron.
   await warteAufSchwimmerzuordnung(page)
@@ -149,7 +149,7 @@ test('Schwimmer anlegen, Bahn zuordnen und Reload überstehen', async ({ page })
   // nach jedem Laden neu läuft.
   await page.reload()
   await expect(page.locator('[data-tab-status="aktiv"]')).toBeVisible()
-  await expect(page.getByRole('button', { name: /^Bahn 1, Mia, bereit$/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Bahn 1, Mia, bereit$/ })).toBeVisible()
 })
 
 // Nutzerreise: Ein versehentlich gestarteter Lauf wird im Verlauf über seinen

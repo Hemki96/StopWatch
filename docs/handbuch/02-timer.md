@@ -57,21 +57,23 @@ Das Schließen ist kein Löschen. Ein geschlossener Lauf verschwindet nur aus de
 **Start alle** setzt allen noch unberührten Bahnen denselben Startzeitstempel. Danach läuft jede Bahn
 für sich.
 
-### Startversatz
+### Startversatz und Reihen
 
-Mit **Startversatz** startet Bahn 1 sofort, Bahn 2 nach dem eingestellten Abstand, Bahn 3 nach dem
-doppelten Abstand und so weiter. Bei 10 s und vier Bahnen:
+Ein Lauf kann in **Reihen** (Startgruppen) geteilt werden. Alle Bahnen einer Reihe starten gemeinsam;
+die nächste Reihe startet um den **Startversatz** später. Bei 10 s, 3 Bahnen je Reihe und 2 Reihen:
 
-| Bahn | Startzeit relativ zum Startknopf |
+| Reihe | Startzeit relativ zum Startknopf |
 | --- | --- |
 | 1 | 0 s |
 | 2 | 10 s |
-| 3 | 20 s |
-| 4 | 30 s |
 
-Die Bahnen zeigen vor ihrem Start einen Countdown, z. B. **„Start in 7,4“**. In dieser Zeit ignoriert
+So messen sechs Personen mit nur drei Bahnen: drei starten sofort, drei weitere nach 10 s. Jede
+Person hat ihre eigene Kachel; die Ansicht gruppiert sie mit einer Überschrift je Reihe.
+
+Die Kacheln zeigen vor ihrem Start einen Countdown, z. B. **„Start in 7,4“**. In dieser Zeit ignoriert
 die Bahn Tipps; ein Tipp darf den Countdown nicht vorziehen. Langes Drücken auf einer geplanten Bahn
-bricht ihren Start ab („Halten: Start abbrechen“).
+bricht ihren Start ab („Halten: Start abbrechen“). Die Überschrift jeder Reihe zeigt denselben
+Zustand kompakt (Countdown, „läuft“ oder „Ziel“) und bleibt beim Scrollen oben stehen.
 
 Der Startversatz wird beim Anlegen des Laufs festgeschrieben. Im laufenden Lauf lässt er sich nicht
 mehr ändern; dafür unter **Mehr → Nächster Lauf** einen neuen Wert wählen und einen neuen Lauf
@@ -218,10 +220,11 @@ die noch völlig unberührt sind. Vollständige Runden bleiben erhalten. Siehe
 
 ## Grenzen
 
-- **1 bis 10 Bahnen** pro Lauf.
+- **1 bis 10 Bahnen je Reihe** und **1 bis 5 Reihen** pro Lauf.
 - **1 bis 20 Wiederholungen** pro Serie.
-- **Startversatz** von 0 bis 120 s.
-- **Takt** von 10 s bis 60 min in den Einstellungen; die Auswahl im Sheet bietet gängige Werte.
+- **Startversatz** von 0 bis 120 s zwischen zwei Reihen.
+- **Takt** von 10 s bis 60 min in den Einstellungen; gängige Werte stehen als Chip bereit, jeder
+  andere lässt sich über Minuten und Sekunden eingeben.
 - **Strecken** 50, 100, 200, 400, 800, 1.500 m oder offen. Die Strecke muss ein Vielfaches der
   Beckenlänge sein.
 - Ein Lauf gehört zu genau einem **Satz**. Ein einzelner Lauf aus dem Timer mit gleicher

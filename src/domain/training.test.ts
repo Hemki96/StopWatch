@@ -21,6 +21,7 @@ import {
   neuerTrainingsSatz,
   neuesTraining,
   ohneTrainingsSatz,
+  ordneAktiveUm,
   pruefeTraining,
   pruefeTrainingsSatz,
   trainingsFortschritt,
@@ -113,6 +114,55 @@ describe('neuesTraining', () => {
     expect(neuesTraining({ datum: '2026-10-29', bahnen: 99 }).bahnen).toBe(10)
     expect(neuesTraining({ datum: '2026-10-29', bahnen: 0 }).bahnen).toBe(1)
   })
+
+  // Reihen vervielfachen die Plätze: 3 Bahnen × 2 Reihen ergeben sechs
+  // Aktive, Reihe für Reihe.
+  it('legt je Reihe dieselbe Bahnzahl an', () => {
+    const training = neuesTraining({
+      datum: '2026-10-29',
+      bahnen: 3,
+      reihen: 2,
+      aktive: ['s1', 's2', 's3', 's4'],
+    })
+    expect(training.bahnen).toBe(3)
+    expect(training.reihen).toBe(2)
+    expect(training.aktive).toEqual(['s1', 's2', 's3', 's4', null, null])
+  })
+
+  // Fehlende oder zu große Reihenzahlen werden geklemmt; ältere Pläne ohne
+  // Reihen bleiben eine Reihe.
+  it('begrenzt die Reihenzahl und ergänzt sie für ältere Pläne', () => {
+    expect(neuesTraining({ datum: '2026-10-29', bahnen: 2 }).reihen).toBe(1)
+    expect(neuesTraining({ datum: '2026-10-29', bahnen: 2, reihen: 99 }).reihen).toBe(5)
+    expect(neuesTraining({ datum: '2026-10-29', bahnen: 2, reihen: 0 }).reihen).toBe(1)
+  })
+})
+
+// Eine geänderte Aufteilung darf Personen nicht in eine andere Reihe schieben.
+describe('ordneAktiveUm', () => {
+  // Zwei Reihen à zwei Bahnen: a/b in Reihe 1, c/d in Reihe 2.
+  const zweiMalZwei = ['a', 'b', 'c', 'd']
+
+  it('behält die Position innerhalb der Reihe beim Verkleinern', () => {
+    expect(
+      ordneAktiveUm(zweiMalZwei, { bahnen: 2, reihen: 2 }, { bahnen: 1, reihen: 2 }),
+    ).toEqual(['a', 'c'])
+  })
+
+  it('füllt neue Bahnen innerhalb einer Reihe mit null auf', () => {
+    expect(
+      ordneAktiveUm(zweiMalZwei, { bahnen: 2, reihen: 2 }, { bahnen: 3, reihen: 2 }),
+    ).toEqual(['a', 'b', null, 'c', 'd', null])
+  })
+
+  it('schneidet entfallende Reihen ab und ergänzt neue Reihen leer', () => {
+    expect(
+      ordneAktiveUm(zweiMalZwei, { bahnen: 2, reihen: 2 }, { bahnen: 2, reihen: 1 }),
+    ).toEqual(['a', 'b'])
+    expect(
+      ordneAktiveUm(zweiMalZwei, { bahnen: 2, reihen: 2 }, { bahnen: 2, reihen: 3 }),
+    ).toEqual(['a', 'b', 'c', 'd', null, null])
+  })
 })
 
 // Beschreibungstexte für die Satzliste: „n×Strecke · Schwimmart“ und die
@@ -139,7 +189,7 @@ describe('Satzbeschreibung', () => {
       taktSek: 120,
       startversatzMs: 10_000,
     })
-    expect(trainingsSatzMeta(serie)).toBe('50 m-Becken · Takt 02:00 · 10 s Versatz')
+    expect(trainingsSatzMeta(serie)).toBe('50 m-Becken · Takt 02:00 · 10 s Reihenversatz')
   })
 })
 
@@ -183,6 +233,19 @@ describe('pruefeTraining', () => {
   it('verlangt eine Aktivenzuordnung je Bahn', () => {
     const training = { ...basisTraining(), aktive: ['s1'] }
     expect(pruefeTraining(training)).toContain('Bahn')
+  })
+
+  it('verlangt eine Aktivenzuordnung je Person über alle Reihen', () => {
+    const training = { ...basisTraining(), bahnen: 2, reihen: 2, aktive: ['s1', null] }
+    expect(pruefeTraining(training)).toContain('Bahn')
+    expect(
+      pruefeTraining({ ...training, aktive: ['s1', null, null, null] }),
+    ).toBeNull()
+  })
+
+  it('lehnt zu viele Reihen ab', () => {
+    const training = { ...basisTraining(), reihen: 6 }
+    expect(pruefeTraining(training)).toContain('Reihen')
   })
 
   it('verlangt mindestens einen Satz', () => {

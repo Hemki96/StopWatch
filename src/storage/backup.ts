@@ -19,7 +19,13 @@
  *   Integrität zwischen den Beständen (etwa ob eine `satzId` existiert).
  * - Die Prüfung verändert die Eingabe nicht.
  */
-import { MAX_BAHNEN, MAX_TRAININGS_SAETZE, MAX_WIEDERHOLUNGEN } from '../domain/training'
+import {
+  MAX_BAHNEN,
+  MAX_REIHEN,
+  MAX_TRAININGS_SAETZE,
+  MAX_WIEDERHOLUNGEN,
+  bahnenGesamt,
+} from '../domain/training'
 import {
   SCHWIMMARTEN,
   type Lauf,
@@ -192,11 +198,13 @@ function pruefeTrainingsSatz(wert: unknown, pfad: string): string | null {
 /**
  * Prüft einen Trainingsplan.
  *
- * `bahnen` muss zwischen 1 und 10 liegen (die Obergrenze entspricht
- * `MAX_BAHNEN`), `aktive` genau einen Text- oder null-Eintrag je Bahn haben,
- * `saetze` zwischen 1 und `MAX_TRAININGS_SAETZE` Pläne enthalten. `gestartet`
- * ist die Zuordnung TrainingsSatz.id → Satz.id und darf nur Textwerte tragen.
- * Die Reihenfolge der Sätze bleibt erhalten, weil sie den Ablauf bestimmt.
+ * `bahnen` (je Reihe) muss zwischen 1 und 10 liegen (die Obergrenze entspricht
+ * `MAX_BAHNEN`), `reihen` optional zwischen 1 und `MAX_REIHEN` (ältere Backups
+ * kennen das Feld nicht und gelten als eine Reihe), `aktive` genau einen Text-
+ * oder null-Eintrag je Person haben, `saetze` zwischen 1 und
+ * `MAX_TRAININGS_SAETZE` Pläne enthalten. `gestartet` ist die Zuordnung
+ * TrainingsSatz.id → Satz.id und darf nur Textwerte tragen. Die Reihenfolge der
+ * Sätze bleibt erhalten, weil sie den Ablauf bestimmt.
  */
 function pruefeTraining(wert: unknown, index: number): string | null {
   const pfad = `Training ${index + 1}`
@@ -209,8 +217,15 @@ function pruefeTraining(wert: unknown, index: number): string | null {
   if (!istIndex(wert.bahnen) || wert.bahnen < 1 || wert.bahnen > 10) {
     return `${pfad}: Feld "bahnen" muss eine ganze Zahl von 1 bis 10 sein.`
   }
-  if (!Array.isArray(wert.aktive) || wert.aktive.length !== wert.bahnen) {
-    return `${pfad}: Feld "aktive" muss genau einen Eintrag je Bahn enthalten.`
+  if (
+    wert.reihen !== undefined &&
+    (!istIndex(wert.reihen) || wert.reihen < 1 || wert.reihen > MAX_REIHEN)
+  ) {
+    return `${pfad}: Feld "reihen" muss eine ganze Zahl von 1 bis ${MAX_REIHEN} sein.`
+  }
+  const reihen = wert.reihen ?? 1
+  if (!Array.isArray(wert.aktive) || wert.aktive.length !== bahnenGesamt(wert.bahnen, reihen)) {
+    return `${pfad}: Feld "aktive" muss genau einen Eintrag je Person enthalten.`
   }
   if (wert.aktive.some((eintrag) => eintrag !== null && !istText(eintrag))) {
     return `${pfad}: Feld "aktive" darf nur Text oder null enthalten.`
@@ -314,15 +329,22 @@ function pruefeAnschlag(wert: unknown, pfad: string): string | null {
 }
 
 /**
- * Prüft eine Bahn: Nummer im Bereich 1..`MAX_BAHNEN`, `schwimmerId` als Text
- * oder null (ohne Zuordnung), `startMs` als Zahl oder null (nicht gestartet)
- * und eine Liste von Anschlägen, die einzeln geprüft wird.
+ * Prüft eine Bahn: Nummer im Bereich 1..`MAX_BAHNEN`, optional die Reihe im
+ * Bereich 1..`MAX_REIHEN` (ältere Backups kennen sie nicht), `schwimmerId` als
+ * Text oder null (ohne Zuordnung), `startMs` als Zahl oder null (nicht
+ * gestartet) und eine Liste von Anschlägen, die einzeln geprüft wird.
  */
 function pruefeBahn(wert: unknown, pfad: string): string | null {
   if (!istObjekt(wert)) return `${pfad}: Eintrag ist kein Objekt.`
   if (!istText(wert.id) || wert.id.length === 0) return `${pfad}: Feld "id" fehlt.`
   if (!istIndex(wert.nummer) || wert.nummer < 1 || wert.nummer > MAX_BAHNEN) {
     return `${pfad}: Feld "nummer" muss eine ganze Zahl von 1 bis ${MAX_BAHNEN} sein.`
+  }
+  if (
+    wert.reihe !== undefined &&
+    (!istIndex(wert.reihe) || wert.reihe < 1 || wert.reihe > MAX_REIHEN)
+  ) {
+    return `${pfad}: Feld "reihe" muss eine ganze Zahl von 1 bis ${MAX_REIHEN} sein.`
   }
   if (wert.schwimmerId !== null && !istText(wert.schwimmerId)) {
     return `${pfad}: Feld "schwimmerId" muss Text oder null sein.`
@@ -376,8 +398,9 @@ function pruefeLauf(wert: unknown, index: number): string | null {
   }
   if (!Array.isArray(wert.bahnen)) return `${pfad}: Feld "bahnen" fehlt oder ist keine Liste.`
   if (wert.bahnen.length === 0) return `${pfad}: Ein Lauf braucht mindestens eine Bahn.`
-  if (wert.bahnen.length > MAX_BAHNEN) {
-    return `${pfad}: Ein Lauf darf höchstens ${MAX_BAHNEN} Bahnen haben.`
+  const maxBahnen = bahnenGesamt(MAX_BAHNEN, MAX_REIHEN)
+  if (wert.bahnen.length > maxBahnen) {
+    return `${pfad}: Ein Lauf darf höchstens ${maxBahnen} Bahnen haben.`
   }
   for (const [i, bahn] of wert.bahnen.entries()) {
     const fehler = pruefeBahn(bahn, `${pfad}, Bahn ${i + 1}`)

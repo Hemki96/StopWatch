@@ -31,9 +31,11 @@ import type {
   Schwimmart,
 } from './types'
 
-/** Eingabe für `createLauf`: Bahnnummer und optionale Schwimmerzuordnung. */
+/** Eingabe für `createLauf`: Bahnnummer, Reihe und optionale Schwimmerzuordnung. */
 export interface BahnInit {
   nummer: number
+  /** Startgruppe ab 1; fehlt sie, startet die Bahn in Reihe 1. */
+  reihe?: number
   schwimmerId?: string | null
 }
 
@@ -85,6 +87,7 @@ export function validateKonfiguration(konfiguration: LaufKonfiguration): string 
  * `startversatzMs` wird auf eine ganze, nicht negative Zahl gerundet;
  * unbrauchbare Werte (fehlend, `NaN`) werden zu 0. `modus` ist `training`,
  * solange nichts anderes angegeben ist, `wiederholung` bleibt sonst `null`.
+ * Eine fehlende oder unbrauchbare Reihe wird zu 1.
  */
 export function createLauf(
   konfiguration: LaufKonfiguration,
@@ -105,11 +108,47 @@ export function createLauf(
     bahnen: bahnen.map((b) => ({
       id: newId(),
       nummer: b.nummer,
+      reihe: normalisiereReihe(b.reihe),
       schwimmerId: b.schwimmerId ?? null,
       startMs: null,
       anschlaege: [],
     })),
   }
+}
+
+/** Eine Reihe ist 1-basiert; fehlende oder unbrauchbare Werte gelten als 1. */
+export function normalisiereReihe(reihe: number | null | undefined): number {
+  return Number.isFinite(reihe) ? Math.max(1, Math.round(reihe as number)) : 1
+}
+
+/** Die Reihe einer Bahn; ältere Datensätze ohne Feld gelten als Reihe 1. */
+export function bahnReihe(bahn: Bahn): number {
+  return normalisiereReihe(bahn.reihe)
+}
+
+/** Höchste Reihe eines Laufs; ohne Bahnen bleibt es bei 1. */
+export function reihenVon(lauf: Lauf): number {
+  return lauf.bahnen.reduce((hoechste, bahn) => Math.max(hoechste, bahnReihe(bahn)), 1)
+}
+
+/**
+ * Gruppiert Bahnen nach ihrer Reihe, Reihen aufsteigend. Innerhalb einer Reihe
+ * bleibt die übergebene Reihenfolge erhalten. Die Oberfläche zeigt je Gruppe
+ * einen Abschnitt; die Domain braucht die Gruppierung nur für Startzeiten.
+ */
+export function bahnenNachReihen<T extends { reihe: number }>(
+  bahnen: T[],
+): { reihe: number; bahnen: T[] }[] {
+  const gruppen = new Map<number, T[]>()
+  for (const eintrag of bahnen) {
+    const reihe = normalisiereReihe(eintrag.reihe)
+    const liste = gruppen.get(reihe)
+    if (liste) liste.push(eintrag)
+    else gruppen.set(reihe, [eintrag])
+  }
+  return [...gruppen.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([reihe, liste]) => ({ reihe, bahnen: liste }))
 }
 
 /**
@@ -206,9 +245,10 @@ export function startLane(lauf: Lauf, bahnId: string, now: number, wallNow: numb
 }
 
 /**
- * Setzt die Startzeitpunkte einer unberührten Bahnfolge: Bahn 1 bei `startMs`,
- * jede weitere um `versatzMs` später. Der Versatz wird am Lauf gespeichert,
- * damit ein Neustart derselben Bahnen dieselbe Staffelung ergibt.
+ * Setzt die Startzeitpunkte einer unberührten Bahnfolge: Alle Bahnen einer
+ * Reihe starten gemeinsam, jede weitere Reihe um `versatzMs` später. Der
+ * Versatz wird am Lauf gespeichert, damit ein Neustart derselben Bahnen dieselbe
+ * Staffelung ergibt.
  *
  * Achtung: Bereits gesetzte Startzeiten werden überschrieben. Aufrufer müssen
  * sicherstellen, dass die Bahnen noch unberührt sind; `AppProvider` plant so
@@ -226,31 +266,30 @@ export function planeLauf(
     ...lauf,
     startversatzMs: abstand,
     startWallMs: wallStartMs,
-    bahnen: lauf.bahnen.map((bahn, index) => ({
+    bahnen: lauf.bahnen.map((bahn) => ({
       ...bahn,
-      startMs: startMs + index * abstand,
+      startMs: startMs + (bahnReihe(bahn) - 1) * abstand,
     })),
   }
 }
 
 /**
- * Startet alle noch nicht gestarteten Bahnen, gestaffelt um den Startversatz.
+ * Startet alle noch nicht gestarteten Bahnen, gestaffelt nach ihrer Reihe.
  *
- * Der Versatz richtet sich nach der Bahnposition (`index`) und dem übergebenen
- * `now`, nicht nach dem tatsächlichen Start der Vorgängerbahn: Bahn 2 bekommt
- * `now + Versatz`, auch wenn Bahn 1 schon vorher einzeln gestartet wurde. Der
- * Wanduhr-Anker bleibt erhalten, wenn er bereits gesetzt ist; ist nichts zu tun,
- * kommt derselbe Lauf zurück.
+ * Der Versatz richtet sich nach der Reihe, nicht nach der Bahnposition: Reihe 2
+ * bekommt `now + Versatz`, auch wenn Reihe 1 schon vorher einzeln gestartet
+ * wurde. Der Wanduhr-Anker bleibt erhalten, wenn er bereits gesetzt ist; ist
+ * nichts zu tun, kommt derselbe Lauf zurück.
  */
 export function startAll(lauf: Lauf, now: number, wallNow: number): Lauf {
   const versatz = Number.isFinite(lauf.startversatzMs)
     ? Math.max(0, Math.round(lauf.startversatzMs ?? 0))
     : 0
   let changed = false
-  const bahnen = lauf.bahnen.map((bahn, index) => {
+  const bahnen = lauf.bahnen.map((bahn) => {
     if (bahn.startMs !== null || isFinished(bahn)) return bahn
     changed = true
-    return { ...bahn, startMs: now + index * versatz }
+    return { ...bahn, startMs: now + (bahnReihe(bahn) - 1) * versatz }
   })
   if (!changed) return lauf
   return { ...lauf, bahnen, startWallMs: lauf.startWallMs ?? wallNow }

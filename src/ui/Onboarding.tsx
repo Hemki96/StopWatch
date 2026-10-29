@@ -113,6 +113,7 @@ export function Onboarding({ onFertig }: { onFertig: () => void }) {
     app.setzeEinstellungen({
       konfiguration,
       bahnen,
+      reihen: 1,
       schwimmerProBahn: speichereNamen(),
       // Serie und Startversatz sind bewusst zurückgesetzt: Das Onboarding
       // erklärt den einfachen Einzellauf.
@@ -128,6 +129,7 @@ export function Onboarding({ onFertig }: { onFertig: () => void }) {
     app.setzeEinstellungen({
       konfiguration: { ...STANDARD_KONFIGURATION },
       bahnen: 6,
+      reihen: 1,
       schwimmerProBahn: [],
       startversatzMs: 0,
       wiederholungen: 1,

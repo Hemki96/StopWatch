@@ -142,6 +142,8 @@ export function createWettkampfLauf(
       .map((start) => ({
         id: newId(),
         nummer: start.bahn,
+        // Wettkampf-Heats sind eine Reihe; die Staffelung übernimmt der Heat.
+        reihe: 1,
         schwimmerId: schwimmerFuer(start),
         startMs: null,
         anschlaege: [],

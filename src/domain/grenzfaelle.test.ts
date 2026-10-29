@@ -685,7 +685,7 @@ describe('CSV: leere und unvollständige Bestände', () => {
       ],
     }
     const zeilen = laeufeAlsCsv([mitAnschlag], [], []).replace(/^\uFEFF/, '').trim().split('\r\n')
-    expect(zeilen[1]).toMatch(/^;;50;100;freistil;1;;1;30000;/)
+    expect(zeilen[1]).toMatch(/^;;50;100;freistil;1;1;;1;30000;/)
   })
 
   // Serienfelder stammen aus Lauf (`wiederholung`, `startversatzMs`) und
@@ -714,7 +714,7 @@ describe('CSV: leere und unvollständige Bestände', () => {
       ],
     }
     const zeilen = laeufeAlsCsv([mitAnschlag], [satz], []).replace(/^\uFEFF/, '').trim().split('\r\n')
-    expect(zeilen[1]).toContain('Serie;2026-10-29;50;100;freistil;1;;1;30000;00:30,00;0;0;2;4;120;10000')
+    expect(zeilen[1]).toContain('Serie;2026-10-29;50;100;freistil;1;1;;1;30000;00:30,00;0;0;2;4;120;10000')
   })
 
   // Namen und Bezeichnungen kommen vom Nutzer: `@Formel` und ein Name mit
