@@ -10,7 +10,7 @@
  */
 
 import { expect, test } from '@playwright/test'
-import { oeffneApp } from './helfer'
+import { oeffneApp, starteLauf } from './helfer'
 
 const KONFIGURATION = { beckenlaengeM: 50, streckeM: 100, schwimmart: 'freistil' }
 
@@ -209,7 +209,7 @@ test('zeigt die Abweichung zur Vorrunde in der Serien-Ansicht erst ab Runde 2', 
     }
   })
   await oeffneApp(page)
-  await page.getByRole('button', { name: 'Start', exact: true }).tap()
+  await starteLauf(page)
 
   const runde1 = page.getByRole('button', { name: /Bahn 1, Runde 1 von 2, läuft$/ })
   await expect(runde1).toBeVisible()

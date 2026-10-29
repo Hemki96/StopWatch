@@ -11,11 +11,11 @@
  */
 
 import { expect, test } from '@playwright/test'
-import { oeffneApp, warteAufZielzeiten } from './helfer'
+import { oeffneApp, starteLauf, warteAufZielzeiten } from './helfer'
 
 /** Tippt drei Längen an und prüft, dass die vierte Länge ansteht. */
 async function pruefeVierLaengen(page: import('@playwright/test').Page): Promise<void> {
-  await page.getByRole('button', { name: 'Start', exact: true }).tap()
+  await starteLauf(page)
   const bahn = page.getByRole('button', { name: /Bahn 1, läuft$/ })
   await expect(bahn).toBeVisible()
   for (let i = 0; i < 3; i += 1) {
@@ -104,7 +104,7 @@ test('zeigt einen Yard-Lauf in Verlauf, Detail und getrennten Bestzeiten', async
   await konfiguration.getByRole('button', { name: 'Schließen', exact: true }).click()
 
   // Erster Lauf: 100 m im 50-m-Becken, zwei Längen.
-  await page.getByRole('button', { name: 'Start', exact: true }).tap()
+  await starteLauf(page)
   const meterBahn = page.getByRole('button', { name: /Bahn 1, Mia, läuft$/ })
   await expect(meterBahn).toBeVisible()
   await meterBahn.dispatchEvent('click')
@@ -127,6 +127,7 @@ test('zeigt einen Yard-Lauf in Verlauf, Detail und getrennten Bestzeiten', async
   await page.getByRole('button', { name: 'Weiteren Lauf anlegen' }).tap()
   await expect(page.getByText('25 yd · 100 yd · Freistil · 6 Bahnen')).toBeVisible()
   await page.getByRole('button', { name: 'Start alle', exact: true }).tap()
+  await page.getByRole('button', { name: 'Jetzt starten', exact: true }).tap()
   const yardBahn = page.getByRole('button', { name: /Bahn 1, Mia, läuft$/ })
   // Die ersten drei Anschläge lassen die vierte Länge offen; der vierte Tap
   // beendet die Bahn und ändert das `aria-label` auf „im Ziel“.
@@ -188,6 +189,7 @@ test('legt einen Trainingssatz in Yards an und startet ihn im Timer', async ({ p
     page.getByRole('button', { name: 'Satz 1: 100 yd · Freistil, offen' }),
   ).toBeVisible()
   await page.getByRole('button', { name: 'Satz 1 starten' }).tap()
+  await page.getByRole('dialog').getByRole('button', { name: 'Jetzt starten' }).tap()
   await expect(page.getByText('25 yd · 100 yd · Freistil · 6 Bahnen')).toBeVisible()
   await expect(page.getByRole('button', { name: /Bahn 1, läuft$/ })).toBeVisible()
 })

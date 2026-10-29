@@ -43,6 +43,8 @@ test('legt einen Yard-Wettkampf an, misst, exportiert und importiert', async ({ 
   await page.getByRole('button', { name: /Bahnen ohne Namen/ }).tap()
   await page.getByLabel('Name für Bahn 1').fill('Mia')
   await page.getByRole('button', { name: 'Namen speichern' }).tap()
+  // Im Wettkampf startet der Knopf direkt; nur der Trainings-Timer zeigt die
+  // Startübersicht.
   await page.getByRole('button', { name: 'Start', exact: true }).tap()
   await page.getByRole('button', { name: /^Bahn 1, Mia, läuft$/ }).tap()
   await expect(
