@@ -39,6 +39,7 @@ Für die Handy-Ansicht am Rechner zeigt `http://localhost:5173/preview.html` die
 │   └── main.tsx       Einstiegspunkt, ErrorBoundary, Speicherschutz
 ├── e2e/               Playwright-Tests
 ├── public/icons/      generierte PWA-Icons
+├── design/            Design-Brief und Redesign-Referenz
 ├── docs/
 │   ├── handbuch/      Anwenderdokumentation
 │   ├── entwicklung/   diese Dokumentation
@@ -59,7 +60,8 @@ Für die Handy-Ansicht am Rechner zeigt `http://localhost:5173/preview.html` die
 5. [Testen](testen.md) — Testpyramide und Playwright-Eigenheiten
 6. [Bauen und Veröffentlichen](bauen-und-veroeffentlichen.md) — Vite, PWA, CI, Pages
 7. [Beitragen](beitragen.md) — Konventionen und Checkliste
-8. [Audit 2026-10-29](audit-2026-10-29.md) — Ausgangslage, Änderungen, Messungen und offene Schuld
+8. [Design-Referenz](../../design/redesign-referenz/README.md) — Zielbild, Sollmaße und offene Designentscheidungen
+9. [Audit 2026-10-29](audit-2026-10-29.md) — Ausgangslage, Änderungen, Messungen und offene Schuld
 
 ## Leitprinzipien
 
@@ -114,6 +116,7 @@ Lauf neu. Eine Render-Ausnahme landet in der `ErrorBoundary` statt in einer wei�
 | Globaler Zustand, aktive Läufe | `src/app/AppProvider.tsx` |
 | PWA, Installation, Update | `src/app/pwa.ts`, `vite.config.ts` |
 | Screen oder Dialog | `src/ui/` |
+| Visuelle Sprache, Maße, Zustände | `design/redesign-referenz/` |
 | Akzeptanzfall | `e2e/` |
 | Öffentliches Verhalten | `docs/handbuch/` |
 | Architekturentscheidung | `docs/adr/` |

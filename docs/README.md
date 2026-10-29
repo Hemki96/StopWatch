@@ -26,6 +26,7 @@ Diese Dokumentation richtet sich an zwei Gruppen:
 | eine Domänenfunktion nachschlagen | [Domänenreferenz](entwicklung/domain-referenz.md) |
 | Tests ausführen oder erweitern | [Testen](entwicklung/testen.md) |
 | bauen und veröffentlichen | [Bauen und Veröffentlichen](entwicklung/bauen-und-veroeffentlichen.md) |
+| das Redesign nachschlagen | [Design-Referenz](../design/redesign-referenz/README.md) |
 | Begriffe der Domäne nachlesen | [GLOSSARY.md](../GLOSSARY.md) |
 | eine getroffene Entscheidung verstehen | [Architekturentscheidungen](adr/) |
 | den Funktionsumfang je Version nachlesen | [ROADMAP.md](../ROADMAP.md) |
@@ -61,6 +62,8 @@ Die Entwicklerdokumentation setzt TypeScript, React und Grundkenntnisse im Brows
 ## Referenz und Entscheidungen
 
 - [`ROADMAP.md`](../ROADMAP.md) — Funktionsumfang je Major-Version, Release-Kriterien und Nicht-Ziele.
+- [`design/redesign-referenz/`](../design/redesign-referenz/README.md) — Zielbild der Oberfläche:
+  Informationsarchitektur, Screens, Raster, Tokens, Komponenten, Bewegung und Barrierefreiheit.
 - [`GLOSSARY.md`](../GLOSSARY.md) — die verbindlichen Begriffe: Lauf, Bahn, Satz, Serie, Training,
   Aktive, Wettkampf, Disziplin, Meldeliste und weitere.
 - [`docs/adr/`](adr/) — Architekturentscheidungen mit Kontext, Alternativen und Folgen.
