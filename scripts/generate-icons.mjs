@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 const HIER = dirname(fileURLToPath(import.meta.url))
 const ZIEL = join(HIER, '..', 'public', 'icons')
 
-const HINTERGRUND = [11, 18, 32]
+const HINTERGRUND = [7, 12, 21]
 const AKZENT = [56, 189, 248]
 const WEISS = [242, 246, 252]
 
@@ -90,13 +90,19 @@ function abstandSegment(px, py, ax, ay, bx, by) {
   return Math.hypot(px - nx, py - ny)
 }
 
-function zeichne(size) {
-  const s = size / 512
-  const mitte = { x: 256 * s, y: 274 * s }
+function zeichne(size, skalierung = 1) {
+  // `skalierung` verkleinert die Zeichnung um die Bildmitte. Maskable-Icons
+  // brauchen Rand, weil Android sie zu einem Kreis oder Quadrat zuschneidet.
+  const s = (size / 512) * skalierung
+  const versatz = size / 2 - 256 * s
+  const x = (wert) => wert * s + versatz
+  const y = (wert) => wert * s + versatz
+
+  const mitte = { x: x(256), y: y(274) }
   const radius = 148 * s
   const ringStaerke = 30 * s
   const handStaerke = 22 * s
-  const knopf = { x1: 216 * s, y1: 56 * s, x2: 296 * s, y2: 96 * s, r: 20 * s }
+  const knopf = { x1: x(216), y1: y(56), x2: x(296), y2: y(96), r: 20 * s }
 
   const knopfMitte = { x: (knopf.x1 + knopf.x2) / 2, y: (knopf.y1 + knopf.y2) / 2 }
   const knopfHalb = { x: (knopf.x2 - knopf.x1) / 2, y: (knopf.y2 - knopf.y1) / 2 }
@@ -124,11 +130,13 @@ function zeichne(size) {
 
 mkdirSync(ZIEL, { recursive: true })
 
-for (const [name, size] of [
-  ['icon-192.png', 192],
-  ['icon-512.png', 512],
-  ['apple-touch-icon.png', 180],
+for (const [name, size, skalierung] of [
+  ['icon-192.png', 192, 1],
+  ['icon-512.png', 512, 1],
+  ['icon-maskable-512.png', 512, 0.72],
+  ['apple-touch-icon.png', 180, 1],
+  ['favicon-32.png', 32, 0.92],
 ]) {
-  writeFileSync(join(ZIEL, name), pngBreite(size, zeichne(size)))
+  writeFileSync(join(ZIEL, name), pngBreite(size, zeichne(size, skalierung)))
   console.log(`geschrieben: public/icons/${name}`)
 }

@@ -9,9 +9,14 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: 'autoUpdate',
-      includeAssets: ['icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'],
+      // update: erst nach Zustimmung, damit kein Neuladen mitten im Lauf passiert
+      registerType: 'prompt',
+      // Registrierung übernimmt src/app/pwa.ts — nicht zusätzlich per Script.
+      injectRegister: null,
+      // Icons kommen über globPatterns, sonst stehen sie doppelt in der Precache-Liste.
+      includeManifestIcons: false,
       manifest: {
+        id: '.',
         name: 'Beckenrand',
         short_name: 'Beckenrand',
         description: 'Zeitmessung für Schwimmtrainer am Beckenrand.',
@@ -20,13 +25,16 @@ export default defineConfig({
         scope: '.',
         display: 'standalone',
         orientation: 'portrait',
-        background_color: '#0b1220',
-        theme_color: '#0b1220',
+        categories: ['sports', 'utilities'],
+        // Muss dem tatsächlichen Hintergrund entsprechen, sonst blitzt beim Start
+        // ein andersfarbiger Splashscreen auf.
+        background_color: '#070c15',
+        theme_color: '#070c15',
         icons: [
-          { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+          { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
           {
-            src: 'icons/icon-512.png',
+            src: 'icons/icon-maskable-512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable',

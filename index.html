@@ -2,20 +2,88 @@
 <html lang="de" class="dark">
   <head>
     <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no"
-    />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#070c15" />
     <meta name="description" content="Zeitmessung für Schwimmtrainer am Beckenrand." />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <meta name="apple-mobile-web-app-title" content="Beckenrand" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon-32.png" />
     <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
     <title>Beckenrand</title>
+    <style>
+      /*
+       * Das Manifest kennt genau eine Splash-Farbe. Sie ist dunkel, weil die App
+       * dort mit der Messung beginnt. Im hellen Design deckt dieser Layer den
+       * ersten Frame ab und blendet weich ins helle Design über — so entsteht
+       * zwischen Splash und App kein harter Farbblitz. Siehe ADR-0004.
+       */
+      html,
+      body {
+        background: #070c15;
+      }
+      #startfarbe {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background: #070c15;
+        pointer-events: none;
+        transition: opacity 200ms ease-out;
+      }
+      #startfarbe.weg {
+        opacity: 0;
+      }
+    </style>
+    <script>
+      // Theme vor dem ersten Paint setzen, sonst blitzt beim PWA-Start das falsche Design auf.
+      try {
+        const gespeichert = localStorage.getItem('beckenrand.theme')
+        const dunkel =
+          gespeichert === 'dark' ||
+          (gespeichert !== 'light' && !window.matchMedia('(prefers-color-scheme: light)').matches)
+        document.documentElement.classList.toggle('dark', dunkel)
+        document.documentElement.style.colorScheme = dunkel ? 'dark' : 'light'
+        document
+          .querySelector('meta[name="theme-color"]')
+          ?.setAttribute('content', dunkel ? '#070c15' : '#eef2f7')
+        // Deckende Statusleiste statt `black-translucent`: der Inhalt beginnt
+        // unterhalb der Uhr, und die Schrift bleibt in beiden Designs lesbar.
+        document
+          .querySelector('meta[name="apple-mobile-web-app-status-bar-style"]')
+          ?.setAttribute('content', dunkel ? 'black' : 'default')
+
+        const startfarbe = () => document.getElementById('startfarbe')
+        if (dunkel) {
+          // Der Splash ist bereits dunkel; der Layer wird nicht gebraucht.
+          document.addEventListener('DOMContentLoaded', () => startfarbe()?.remove())
+        } else {
+          // Erster Frame bleibt in der Splash-Farbe, danach weicher Übergang.
+          document.addEventListener('DOMContentLoaded', () => {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                document.documentElement.classList.remove('dark')
+                document.documentElement.style.colorScheme = 'light'
+                document
+                  .querySelector('meta[name="theme-color"]')
+                  ?.setAttribute('content', '#eef2f7')
+                const layer = startfarbe()
+                layer?.classList.add('weg')
+                window.setTimeout(() => layer?.remove(), 260)
+              })
+            })
+          })
+        }
+      } catch {
+        // Ohne localStorage bleibt das dunkle Standarddesign.
+        document.addEventListener('DOMContentLoaded', () =>
+          document.getElementById('startfarbe')?.remove(),
+        )
+      }
+    </script>
   </head>
   <body>
+    <div id="startfarbe" aria-hidden="true"></div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
