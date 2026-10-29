@@ -75,6 +75,7 @@ import 'fake-indexeddb/auto'
 | `app/tabKoordinator.test.ts` | Claim, Heartbeat, Takeover, Ausfall, kleinere Tab-ID |
 | `app/hooks.test.tsx` | `useNow`, `useWakeLock`, reduzierte Bewegung |
 | `app/pwa.test.tsx` | Update-Erkennung, Installationsprompt, iOS-Anleitung |
+| `app/csp.test.ts` | CSP-Direktiven, Hash des Theme-Skripts, Position des Meta-Tags |
 | `app/ErrorBoundary.test.tsx` | Renderfehler und Neuladen |
 | `ui/Dialog.test.tsx` | Fokusfalle, Escape-Stapel, Scroll-Sperre, Fokus-Rückgabe |
 | `ui/Bausteine.test.tsx` | `Sheet`, `Bestaetigung`, `Feld`, `Chip` |

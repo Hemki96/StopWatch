@@ -1,7 +1,30 @@
 import { defineConfig } from 'vitest/config'
+import type { Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import { mitCsp } from './src/app/csp.ts'
+
+/**
+ * Setzt die CSP nur in den Build. Der Dev-Server braucht Inline-Skripte von
+ * Vite und React Refresh; ein Meta-CSP würde die App dort blockieren. GitHub
+ * Pages erlaubt keine eigenen Header, deshalb reist die Policy als Meta-Tag im
+ * gebauten `index.html` mit (siehe `src/app/csp.ts`).
+ */
+function cspPlugin(): Plugin {
+  return {
+    name: 'beckenrand-csp',
+    apply: 'build',
+    transformIndexHtml: {
+      // Nach Vitens eigener HTML-Transformation: Der Hash wird über den
+      // endgültigen Inline-Skript-Text gebildet.
+      order: 'post',
+      handler(html) {
+        return mitCsp(html)
+      },
+    },
+  }
+}
 
 export default defineConfig({
   base: './',
@@ -14,6 +37,7 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    cspPlugin(),
     VitePWA({
       // update: erst nach Zustimmung, damit kein Neuladen mitten im Lauf passiert
       registerType: 'prompt',

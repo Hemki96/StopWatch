@@ -147,6 +147,57 @@ Wer die Splash-Farbe ändert, muss sie an drei Stellen konsistent halten:
 2. `background` und `#startfarbe` in `index.html`,
 3. die Theme-Metas in `index.html` und `AppProvider`.
 
+### Content-Security-Policy
+
+GitHub Pages erlaubt keine eigenen HTTP-Header. Die App liefert die Policy deshalb als Meta-Tag
+aus. Eingefügt wird sie erst im Build (`cspPlugin` in `vite.config.ts`, Regeln und Hash in
+`src/app/csp.ts`), damit der Dev-Server mit seinen Inline-Skripten von Vite und React Refresh
+weiterläuft.
+
+```text
+default-src 'self';
+script-src 'self' 'sha256-…';
+style-src 'self' 'unsafe-inline';
+img-src 'self' data:;
+font-src 'self';
+connect-src 'self';
+manifest-src 'self';
+worker-src 'self';
+object-src 'none';
+base-uri 'none';
+form-action 'none'
+```
+
+| Direktive | Grund |
+| --- | --- |
+| `script-src` | nur eigene Dateien plus Hash des Inline-Theme-Skripts; kein `unsafe-inline` |
+| `style-src 'unsafe-inline'` | Inline-`<style>` im Kopf und `style`-Attribute von React |
+| `img-src 'self' data:` | Icons aus dem Build, eingebettete Bilder erlaubt |
+| `connect-src 'self'` | kein Netzwerkziel außer der eigenen Origin (Service-Worker-Update) |
+| `worker-src 'self'` | `sw.js` und die Workbox-Importe liegen auf der eigenen Origin; Blob-Worker sind gesperrt |
+| `object-src`, `base-uri`, `form-action` | keine Plugins, kein `<base>`, keine Formularziele |
+
+Der Hash wird beim Build über den endgültigen Text des Inline-Skripts berechnet. Ändert sich das
+Skript, ändert sich der Hash automatisch; er muss nicht von Hand nachgezogen werden. Das Meta-Tag
+steht nach dem Charset und vor `<style>` und Inline-Skript, weil ein Meta-CSP nur für den
+nachfolgenden Inhalt gilt.
+
+Grenzen der Meta-Lösung:
+
+- `frame-ancestors`, `report-uri`/`report-to` und `sandbox` ignoriert der Browser in einem
+  Meta-Tag. Clickjacking-Schutz und CSP-Reporte brauchen einen echten HTTP-Header.
+- `style-src` braucht `'unsafe-inline'`, weil die Splash-Regeln und React-`style`-Attribute keine
+  Nonce tragen können. Das erlaubt Style-Injection, aber kein Skript.
+- Im Dev-Server ist die Policy bewusst **nicht** aktiv. Geprüft wird der Produktions-Build mit
+  `npm run build && npm run preview`.
+- GitHub Pages kann die Header nicht setzen. Ein Wechsel zu einem Host mit Headern (oder ein
+  Proxy davor) ist eine eigene Entscheidung; dann sollte dieselbe Policy zusätzlich als Header
+  ausgeliefert und das Meta-Tag entfernt werden.
+
+`src/app/csp.test.ts` prüft die Direktiven, den Hash gegen das echte `index.html` und die Position
+des Meta-Tags. Ein versehentlich veralteter Hash fällt damit im Test auf, bevor der Theme-Boot im
+Browser blockiert.
+
 ## Lokal veröffentlichen
 
 ```bash
@@ -308,12 +359,18 @@ Der Pfad `/StopWatch/` ist der Grund für `base: './'` und die relativen Manifes
 - Der Deploy nutzt ausschließlich die von GitHub bereitgestellten Berechtigungen (`GITHUB_TOKEN`,
   OIDC für Pages).
 - Keine `.env`-Dateien einchecken.
+- Der Build liefert eine Content-Security-Policy als Meta-Tag aus: Skripte nur von der eigenen
+  Origin und mit dem Hash des Theme-Skripts, Netzwerk nur zur eigenen Origin. Details und Grenzen
+  stehen unter [Content-Security-Policy](#content-security-policy).
+- Ein echter HTTP-Header (u. a. für `frame-ancestors`) ist mit GitHub Pages nicht möglich und
+  bleibt eine Hosting-Entscheidung.
 
 ## Checkliste vor einer Veröffentlichung
 
 - [ ] `npm ci` sauber
 - [ ] `npm run verify` grün
 - [ ] `npm run test:e2e` grün (dev und produktion)
+- [ ] Produktions-Build ohne CSP-Fehler in der Konsole geöffnet
 - [ ] Handbuch bei Bedarf aktualisiert
 - [ ] Glossar bei neuen Begriffen ergänzt
 - [ ] ADR bei bewussten Architekturentscheidungen ergänzt
