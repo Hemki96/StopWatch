@@ -12,6 +12,7 @@ import { useMemo, useState } from 'react'
 import { useApp } from '../app/AppProvider'
 import { berechnePbs, pbKey } from '../domain/analyse'
 import { formatStrecke, formatTime } from '../domain/format'
+import { einheitVon, formatBeckenlaenge } from '../domain/einheit'
 import { finishMs } from '../domain/lauf'
 import { SCHWIMMARTEN, type Lauf, type Schwimmer } from '../domain/types'
 import { Bestaetigung } from './Bestaetigung'
@@ -45,7 +46,8 @@ interface BestzeitenGruppe {
 /** Gruppentitel aus Strecke, Schwimmart und Beckenlänge, z. B. „100 m · Freistil · 50 m“. */
 function beschreibeGruppe(lauf: Lauf): string {
   const art = SCHWIMMARTEN.find((s) => s.wert === lauf.konfiguration.schwimmart)?.label ?? ''
-  return `${formatStrecke(lauf.konfiguration.streckeM)} · ${art} · ${lauf.konfiguration.beckenlaengeM} m`
+  const einheit = einheitVon(lauf.konfiguration)
+  return `${formatStrecke(lauf.konfiguration.streckeM, einheit)} · ${art} · ${formatBeckenlaenge(lauf.konfiguration.beckenlaengeM, einheit)}`
 }
 
 /**

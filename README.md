@@ -20,12 +20,15 @@ Der **Wettkampfmodus** ist ein eigener Tab: Ein **Wettkampf** bündelt **Diszipl
 - Messung aus Zeitstempeln (`performance.now()`), unabhängig von Rendering
 - **Startübersicht** vor jedem Start: Becken, Strecke, Bahnen, Schwimmer, Startzeiten, Takt und die
   Reihenfolge der Trainingssätze prüfen, dann erst startet die Uhr
-- Splits, Bestzeiten je Schwimmer/Strecke/Schwimmart/Beckenlänge, Pace pro 100 m
+- Splits, Bestzeiten je Schwimmer/Strecke/Schwimmart/Beckenlänge, Pace pro 100 m oder 100 yd
+- Meter und Yards: 25-Yard-Becken, Umrechnung an einer Stelle, getrennte Bestzeiten
 - Startversatz zwischen Reihen, mehrere aktive Läufe, Serien mit festem Takt
 - Trainingsplan mit Aktiven, mehreren Sätzen in fester Reihenfolge und Anpassung während des Trainings
 - Wettkampfmodus mit Disziplinen, Heats, Platzierung und Zielzeit pro Tap
 - Meldelisten-Import als CSV (Vorlage in der App), Ergebnisse als CSV
 - Verlauf gruppiert nach **Satz**, CSV-Export (inkl. Runde, Takt, Versatz), JSON-Backup
+- **Analyse** im Verlauf: Matrix Person × Runde, Längenzeiten je Person, Abweichung zur Vorrunde
+  und Vergleich mit dem letzten gleichen Satz — ohne zusätzliche Speicherung
 - Handy und Tablet: untere Leiste bzw. seitliche Navigation, Raster, Sheets und Listen passen sich an
 - Installierbar, offline, lokal gespeichert (IndexedDB)
 
@@ -83,14 +86,18 @@ Der Zeitkern ist frei von Seiteneffekten: `startAll(lauf, now, wallNow)` bekommt
 Im Tab „Wettkampf“ unter „Meldeliste importieren“ (oder „Meldeliste hinzufügen“) lässt sich eine CSV einfügen oder als Datei wählen. Die App zeigt vor dem Import eine Vorschau mit Disziplinen, Läufen und Starts. Eine Vorlage lässt sich direkt herunterladen.
 
 ```
-disziplin;strecke_m;schwimmart;lauf;bahn;name;jahrgang
-100 m Freistil;100;freistil;1;3;Anna Muster;2010
-100 m Freistil;100;freistil;1;4;Ben Beispiel;2011
-100 m Freistil;100;freistil;2;3;Clara Muster;2010
-50 m Brust;50;brust;1;1;Dana Beispiel;2012
+disziplin;strecke;schwimmart;lauf;bahn;name;jahrgang
+100 m Freistil;100 m;freistil;1;3;Anna Muster;2010
+100 m Freistil;100 m;freistil;1;4;Ben Beispiel;2011
+100 m Freistil;100 m;freistil;2;3;Clara Muster;2010
+50 m Brust;50 m;brust;1;1;Dana Beispiel;2012
 ```
 
-Erkannt werden auch englische Spaltennamen (`lane`, `heat`, `distance`, `stroke`, `name`), getrennte Spalten `vorname`/`nachname`, Komma oder Semikolon und eine einfache Liste `bahn;name`. Fehlt die Bahn, vergibt die App die nächste freie. Fehlt die Disziplin, gelten die Vorgaben im Import-Dialog. Die Strecke muss ein Vielfaches der Beckenlänge sein.
+In einem Yard-Wettkampf stehen `100 yd Freistil;100 yd` in den ersten beiden Spalten. Ohne Einheit
+gilt die Einheit des Wettkampfs; ein Meter-Eintrag in einem Yard-Wettkampf wird mit Zeilennummer
+abgelehnt.
+
+Erkannt werden auch englische Spaltennamen (`lane`, `heat`, `distance`, `stroke`, `name`), getrennte Spalten `vorname`/`nachname`, Komma oder Semikolon und eine einfache Liste `bahn;name`. Einheiten werden als `m`, `yd`, `yard(s)` oder `y` erkannt. Fehlt die Bahn, vergibt die App die nächste freie. Fehlt die Disziplin, gelten die Vorgaben im Import-Dialog. Die Strecke muss ein Vielfaches der Beckenlänge sein.
 
 ## Dokumentation
 

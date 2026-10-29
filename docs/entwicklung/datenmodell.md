@@ -17,9 +17,10 @@ type Beckenlaenge = 25 | 50
 type LaufModus = 'training' | 'wettkampf'
 
 interface LaufKonfiguration {
-  beckenlaengeM: Beckenlaenge
-  streckeM: number | null      // null = offene Strecke
+  beckenlaengeM: Beckenlaenge  // 25 | 50 | 22.86 (25 yd), kanonisch in Metern
+  streckeM: number | null      // null = offene Strecke, kanonisch in Metern
   schwimmart: Schwimmart
+  einheit?: 'm' | 'yd'         // Anzeige-Einheit; fehlt = 'm'
 }
 ```
 
@@ -48,6 +49,7 @@ interface Bahn {
   schwimmerId: string | null
   startMs: number | null         // performance.now, null = nicht gestartet
   anschlaege: Anschlag[]
+  status?: 'dns' | 'dnf'         // nur Wettkampf, endgültig ohne Zeit
 }
 ```
 
@@ -97,7 +99,8 @@ interface Wettkampf {
   id: string
   name: string
   datum: string                  // YYYY-MM-DD
-  beckenlaengeM: Beckenlaenge
+  beckenlaengeM: Beckenlaenge   // kanonisch in Metern
+  einheit?: 'm' | 'yd'          // Anzeige-Einheit; fehlt = 'm'
   erstelltAm: number
 }
 ```
@@ -172,6 +175,10 @@ gestarteter Trainingssatz erzeugt ebenfalls immer einen eigenen Satz.
 Diese Regeln werden von den Erzeugern und Domain-Funktionen eingehalten. Die Datenbank erzwingt sie
 nicht; das Backup validiert einen Teil davon.
 
+**Nicht gespeichert:** Längenzeiten, Abweichungen, Rundenmittel und die Referenz „zuletzt“ werden
+bei jeder Anzeige aus den Splits abgeleitet (`domain/analyse.ts`). Die Analyse führt deshalb keine
+eigene Tabelle und keine Migrationsschritte.
+
 ### Bahn und Anschlag
 
 - `bahn.nummer` liegt zwischen 1 und 10 und ist innerhalb ihrer Reihe eindeutig.
@@ -182,6 +189,10 @@ nicht; das Backup validiert einen Teil davon.
 - Höchstens der letzte Anschlag hat `istFinish === true`. Ein Finish beendet die Bahn.
 - Ein nachträglich korrigierter Anschlag trägt `manuell: true`.
 - Eine Bahn mit Finish ist beendet; weitere Tipps ändern nichts.
+- `status` ist optional und nur im Wettkampf erlaubt: `dns` (nicht gestartet) oder `dnf` (nicht
+  beendet). Markierte Bahnen haben keine Zielzeit und nehmen keinen Start und keinen Anschlag mehr
+  an; sie zählen als beendet, aber nicht in Platzierung und Rückstand. Beim Laden wird `startMs`
+  auf `null` gesetzt.
 
 ### Lauf
 
@@ -215,7 +226,10 @@ nicht; das Backup validiert einen Teil davon.
 
 - `name` ist nicht leer.
 - `datum` ist ein ISO-Datum.
-- `beckenlaengeM` ist 25 oder 50.
+- `beckenlaengeM` ist 25, 50 oder 22,86 (25-Yard-Becken). Kanonisch gespeichert wird immer in
+  Metern; `einheit` steuert nur Anzeige und Eingabe (ADR 0009).
+- Eine Yard-Konfiguration speichert 100 yd als `streckeM: 91.44`; die Längenprüfung arbeitet mit
+  einer kleinen Toleranz, weil `91.44 / 22.86` in Gleitkomma nicht exakt 4 ergibt.
 
 ### Referenzielle Integrität
 

@@ -11,6 +11,9 @@
  * Eingabefelder liest `parseTime` das deutsche Format zurück.
  */
 
+import { formatStreckeEinheit } from './einheit'
+import type { Einheit } from './types'
+
 /**
  * Zeiten werden auf Hundertstel abgeschnitten, nicht gerundet.
  * So entstehen keine Abweichungen zu offiziellen Schwimmzeiten.
@@ -129,12 +132,12 @@ export function formatTimeInput(ms: number): string {
 }
 
 /**
- * Formatiert eine Distanz, z. B. `100 m` oder `1.500 m` (deutscher
- * Tausenderpunkt). `null` steht für eine offene Strecke ohne feste Distanz.
+ * Formatiert eine Distanz in der Anzeige-Einheit, z. B. `100 m`, `1.500 m`
+ * oder `100 yd`. `null` steht für eine offene Strecke ohne feste Distanz.
+ * Gespeichert bleiben die Meter; die Umrechnung liegt in `domain/einheit`.
  */
-export function formatStrecke(streckeM: number | null): string {
-  if (streckeM === null) return 'offene Strecke'
-  return `${streckeM.toLocaleString('de-DE')} m`
+export function formatStrecke(streckeM: number | null, einheit: Einheit = 'm'): string {
+  return formatStreckeEinheit(streckeM, einheit)
 }
 
 /**

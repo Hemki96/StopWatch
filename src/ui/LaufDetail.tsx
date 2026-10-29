@@ -11,10 +11,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { useApp } from '../app/AppProvider'
 import { berechnePbs, pacePro100, pbDelta } from '../domain/analyse'
 import { formatDelta, formatStrecke, formatTakt, formatTime, parseTime } from '../domain/format'
+import { einheitVon, formatBeckenlaenge } from '../domain/einheit'
 import {
   finishMs,
   hatBegonnen,
-  isFinished,
+  istBahnBeendet,
   laneStatus,
   pruefeAnschlagKorrektur,
   reihenVon,
@@ -90,6 +91,7 @@ export function LaufDetail({
   }
 
   const art = SCHWIMMARTEN.find((s) => s.wert === lauf.konfiguration.schwimmart)?.label ?? ''
+  const einheit = einheitVon(lauf.konfiguration)
   const satz = app.satze.find((eintrag) => eintrag.id === lauf.satzId) ?? null
   // Unbegonnene Läufe und unvollständige Läufe werden unterschiedlich erklärt:
   // Der erste Fall hat noch keine Zeiten, der zweite zählt nicht als Bestzeit.
@@ -149,10 +151,10 @@ export function LaufDetail({
         </p>
         <h1 className="mt-1 text-xl font-semibold">
           {lauf.bahnen.length} {reihenVon(lauf) > 1 ? 'Personen' : 'Bahnen'} ·{' '}
-          {formatStrecke(lauf.konfiguration.streckeM)}
+          {formatStrecke(lauf.konfiguration.streckeM, einheit)}
         </h1>
         <p className="text-sm text-muted">
-          {lauf.konfiguration.beckenlaengeM} m-Becken · {art}
+          {formatBeckenlaenge(lauf.konfiguration.beckenlaengeM, einheit)}-Becken · {art}
           {reihenVon(lauf) > 1 ? ` · ${reihenVon(lauf)} Reihen` : ''}
           {lauf.startversatzMs > 0 && reihenVon(lauf) > 1
             ? ` · ${lauf.startversatzMs / 1000} s Reihenversatz`
@@ -173,7 +175,7 @@ export function LaufDetail({
           <p className="mt-3 rounded-xl border border-line bg-surface2 px-3 py-2 text-xs text-muted">
             Diese Runde hat noch nicht begonnen.
           </p>
-        ) : !lauf.bahnen.every(isFinished) ? (
+        ) : !lauf.bahnen.every(istBahnBeendet) ? (
           <p className="mt-3 rounded-xl border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn">
             Dieser Lauf ist unvollständig und zählt nicht als Bestzeit.
           </p>
@@ -188,6 +190,7 @@ export function LaufDetail({
             const status = laneStatus(bahn)
             const finishAnschlag = bahn.anschlaege.find((a) => a.istFinish)
             const finishManuell = finishAnschlag?.manuell === true
+            const wettkampfStatus = bahn.status ?? null
             // Nur die Zeile des gerade bearbeiteten Anschlags wird zum Formular.
             const bearbeitet =
               bearbeitung?.bahnId === bahn.id ? bearbeitung.laengeNr : null
@@ -229,11 +232,30 @@ export function LaufDetail({
                     {delta === null && finishManuell ? (
                       <p className="text-xs text-warn">manuell korrigiert</p>
                     ) : null}
+                    {wettkampfStatus ? (
+                      <p
+                        className={`text-xs ${wettkampfStatus === 'dnf' ? 'text-warn' : 'text-muted'}`}
+                      >
+                        {wettkampfStatus === 'dns' ? 'nicht gestartet' : 'nicht beendet'}
+                      </p>
+                    ) : null}
                   </div>
                   <p
-                    className={`tabular shrink-0 text-2xl font-semibold ${ms === null ? 'text-muted' : 'text-fg'}`}
+                    className={`tabular shrink-0 text-2xl font-semibold ${
+                      wettkampfStatus === 'dnf'
+                        ? 'text-warn'
+                        : ms === null
+                          ? 'text-muted'
+                          : 'text-fg'
+                    }`}
                   >
-                    {ms === null ? '—' : formatTime(ms)}
+                    {wettkampfStatus === 'dns'
+                      ? 'DNS'
+                      : wettkampfStatus === 'dnf'
+                        ? 'DNF'
+                        : ms === null
+                          ? '—'
+                          : formatTime(ms)}
                   </p>
                 </div>
 
@@ -248,7 +270,10 @@ export function LaufDetail({
                           <span className="tabular w-14 shrink-0 text-muted">
                             {lauf.modus === 'wettkampf'
                               ? 'Ziel'
-                              : `${anschlag.laengeNr * lauf.konfiguration.beckenlaengeM} m`}
+                              : formatStrecke(
+                                  anschlag.laengeNr * lauf.konfiguration.beckenlaengeM,
+                                  einheit,
+                                )}
                           </span>
                           {/*
                             Korrektur: Erst die Eingabe parsen, dann die
@@ -375,9 +400,9 @@ export function LaufDetail({
                 {/* Pace nur mit fester Strecke; bei offener Strecke fehlt der
                     Bezug. Ein noch laufender Lauf wird als unvollständig
                     gekennzeichnet. */}
-                {ms !== null && lauf.konfiguration.streckeM ? (
+                {ms !== null && !wettkampfStatus && lauf.konfiguration.streckeM ? (
                   <p className="tabular mt-2 text-[11px] text-muted">
-                    Pace {formatTime(pacePro100(ms, lauf.konfiguration.streckeM))} / 100 m
+                    Pace {formatTime(pacePro100(ms, lauf.konfiguration.streckeM, einheit))} / 100 {einheit}
                     {status === 'beendet' ? '' : ' · unvollständig'}
                   </p>
                 ) : null}

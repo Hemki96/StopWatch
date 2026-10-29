@@ -8,16 +8,43 @@
  * Sperren und Prüfungen kommen aus domain/lauf und domain/serie.
  */
 import { useApp } from '../app/AppProvider'
-import { bahnenNachReihen, isStreckeLocked, reihenVon, validateKonfiguration } from '../domain/lauf'
+import {
+  anzeigeZuMeter,
+  beckenlaengenFuer,
+  einheitVon,
+  formatBeckenlaenge,
+  standardBeckenlaenge,
+  streckeAnzeige,
+} from '../domain/einheit'
+import {
+  bahnenNachReihen,
+  isStreckeLocked,
+  istVielfacheDerBeckenlaenge,
+  reihenVon,
+  validateKonfiguration,
+} from '../domain/lauf'
 import { istSerie, warnungSeriePlan } from '../domain/serie'
 import { MAX_BAHNEN, MAX_REIHEN, bahnenGesamt, ordneAktiveUm } from '../domain/training'
-import { SCHWIMMARTEN, type Beckenlaenge, type LaufKonfiguration, type Schwimmart } from '../domain/types'
+import {
+  SCHWIMMARTEN,
+  type Beckenlaenge,
+  type Einheit,
+  type LaufKonfiguration,
+  type Schwimmart,
+} from '../domain/types'
 import { Chip, Feld, TaktWahl } from './Felder'
 import { Sheet } from './Sheet'
 
 // Feste Auswahlwerte der Chips. Ein bereits gesetzter, hier nicht enthaltener
 // Wert (z. B. aus einem Backup) wird später ergänzt, damit er sichtbar bleibt.
 const STRECKEN = [50, 100, 200, 400, 800, 1500] as const
+
+/**
+ * Einheiten-Wechsel: Die angezeigte Zahl bleibt erhalten (100 m → 100 yd), die
+ * kanonische Strecke wird neu berechnet. Passt sie nicht zur neuen
+ * Beckenlänge, gelten zwei Beckenlängen. So wechselt der Trainer die Einheit,
+ * ohne eine ungültige Kombination zu erzeugen.
+ */
 const VERSATZE = [0, 5_000, 10_000, 15_000, 20_000, 30_000] as const
 
 interface KonfigurationSheetProps {
@@ -122,24 +149,56 @@ export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetP
   const setzeBeckenlaenge = (beckenlaengeM: Beckenlaenge) => {
     const strecke = konfiguration.streckeM
     const naechste =
-      strecke !== null && strecke % beckenlaengeM !== 0
+      strecke !== null && !istVielfacheDerBeckenlaenge(strecke, beckenlaengeM)
         ? { beckenlaengeM, streckeM: beckenlaengeM * 2 }
         : { beckenlaengeM }
     aendere(naechste)
   }
 
+  /** Wechselt Meter/Yards und übernimmt die angezeigte Streckenzahl. */
+  const setzeEinheit = (einheit: Einheit) => {
+    if (einheit === einheitVon(konfiguration)) return
+    const anzeige = streckeAnzeige(konfiguration.streckeM, einheitVon(konfiguration))
+    const beckenlaengeM = standardBeckenlaenge(einheit)
+    const streckeM =
+      anzeige === null
+        ? null
+        : istVielfacheDerBeckenlaenge(anzeigeZuMeter(anzeige, einheit), beckenlaengeM)
+          ? anzeigeZuMeter(anzeige, einheit)
+          : beckenlaengeM * 2
+    aendere({ einheit, beckenlaengeM, streckeM })
+  }
+
   return (
     <Sheet open={open} onClose={onClose} titel={modus === 'lauf' ? 'Lauf' : 'Nächster Lauf'}>
-      <Feld label="Beckenlänge">
+      <Feld
+        label="Einheit"
+        hint="Strecken und Pace erscheinen in dieser Einheit. Gespeichert wird intern in Metern."
+      >
         <div className="flex gap-2">
-          {([25, 50] as const).map((wert) => (
+          {(['m', 'yd'] as const).map((wert) => (
+            <Chip
+              key={wert}
+              aktiv={einheitVon(konfiguration) === wert}
+              disabled={gesperrt}
+              onClick={() => setzeEinheit(wert)}
+            >
+              {wert === 'm' ? 'Meter' : 'Yards'}
+            </Chip>
+          ))}
+        </div>
+      </Feld>
+
+      <Feld label="Beckenlänge">
+        <div className="flex flex-wrap gap-2">
+          {beckenlaengenFuer(einheitVon(konfiguration)).map((wert) => (
             <Chip
               key={wert}
               aktiv={konfiguration.beckenlaengeM === wert}
               disabled={gesperrt}
               onClick={() => setzeBeckenlaenge(wert)}
             >
-              {wert} m
+              {formatBeckenlaenge(wert, einheitVon(konfiguration))}
             </Chip>
           ))}
         </div>
@@ -159,11 +218,11 @@ export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetP
           {STRECKEN.map((wert) => (
             <Chip
               key={wert}
-              aktiv={konfiguration.streckeM === wert}
+              aktiv={streckeAnzeige(konfiguration.streckeM, einheitVon(konfiguration)) === wert}
               disabled={gesperrt}
-              onClick={() => aendere({ streckeM: wert })}
+              onClick={() => aendere({ streckeM: anzeigeZuMeter(wert, einheitVon(konfiguration)) })}
             >
-              {wert} m
+              {wert} {einheitVon(konfiguration)}
             </Chip>
           ))}
           <Chip

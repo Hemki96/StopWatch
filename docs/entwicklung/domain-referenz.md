@@ -68,17 +68,23 @@ const lauf = createLauf(
 | Funktion | Rückgabe |
 | --- | --- |
 | `isFinished(bahn)` | true, wenn ein Anschlag `istFinish` hat |
+| `istBahnBeendet(bahn)` | true bei Finish **oder** Wettkampf-Status DNS/DNF |
 | `laneStatus(bahn)` | `bereit`, `laeuft` oder `beendet` — ohne Zeitbezug, kennt kein „geplant“ |
 | `laneStatusAt(bahn, now)` | zusätzlich `geplant`, wenn `startMs > now` |
 | `elapsedMs(bahn, now)` | `max(0, now - startMs)`, sonst 0 |
 | `finishMs(bahn)` | `splitMs` des Finish-Anschlags oder `null` |
 | `lastSplit(bahn)` | letzter Anschlag oder `null` |
-| `isComplete(lauf)` | true, wenn **alle** Bahnen ein Finish haben |
+| `isComplete(lauf)` | true, wenn **alle** Bahnen beendet sind (Finish oder DNS/DNF) |
 | `hasStarted(lauf)` | true, sobald irgendeine Bahn `startMs !== null` hat |
-| `hatLaufendeBahn(lauf)` | true, solange eine gestartete Bahn nicht im Ziel ist |
+| `hatLaufendeBahn(lauf)` | true, solange eine gestartete Bahn nicht beendet ist |
 | `hatBegonnen(lauf, wallNow?)` | true, wenn der Lauf im Verlauf erscheinen soll |
 
 `hatLaufendeBahn` zählt auch **geplante** Bahnen mit, weil ihr Countdown sonst einfrieren würde.
+DNS/DNF-Bahnen sind beendet und halten die Uhr nicht wach.
+
+`setzeWettkampfStatus(lauf, bahnId, status)` markiert eine offene Wettkampf-Bahn als `dns`/`dnf`
+oder hebt die Markierung mit `null` auf. Die Funktion ist im Training und auf gewerteten Bahnen
+wirkungslos. `undoLane` entfernt eine Markierung wie eine andere letzte Aktion.
 
 `hatBegonnen` ist bewusst wanduhrbasiert:
 
@@ -474,20 +480,23 @@ Ablauf:
 4. Kopfzeile erkennen; sonst nur 1 oder 2 Spalten erlauben.
 5. Jede Datenzeile parsen:
    - Name aus `name` oder `vorname` + `nachname`,
-   - Strecke aus `strecke` oder Disziplintext oder Vorgabe,
+   - Strecke aus `strecke` oder Disziplintext oder Vorgabe; Suffixe `m`, `yd`, `yard(s)`, `y`
+     werden erkannt, ohne Suffix gilt `vorgabe.einheit` (Default `m`),
+   - eine ausdrücklich genannte Einheit, die nicht zur Vorgabe passt, bricht mit Zeilennummer ab,
    - Schwimmart aus `schwimmart` oder Disziplintext oder Vorgabe,
    - Lauf aus `lauf` oder Vorgabe (Default 1),
    - Bahn aus `bahn` oder nächste freie 1..10,
    - Jahrgang optional.
-6. Nach Disziplin (Name|Strecke|Art) und Lauf gruppieren.
+6. Nach Disziplin (Name|Strecke|Art|Einheit) und Lauf gruppieren.
 7. Disziplinen in Dateireihenfolge, Heats und Bahnen sortiert zurückgeben.
 
 Fehler nennen die Zeilennummer. Warnungen (z. B. unbekannte Schwimmart) landen in
 `meldeliste.warnungen` und blockieren nicht.
 
-### `meldelisteVorlage(): string`
+### `meldelisteVorlage(einheit = 'm'): string`
 
-UTF-8-BOM, Semikolon, CRLF, Beispielzeilen. Wird von „Vorlage laden“ verwendet.
+UTF-8-BOM, Semikolon, CRLF, Beispielzeilen in der Einheit des Wettkampfs. Wird von „Vorlage laden“
+verwendet.
 
 ### `meldelisteZusammenfassung(meldeliste): string`
 
@@ -574,6 +583,23 @@ Alias für `formatTime`; für Eingabefelder gedacht.
 
 `YYYY-MM-DD` in der lokalen Zeitzone, nicht UTC. Wichtig für Wettkampf- und CSV-Daten.
 
+## `einheit.ts`
+
+Die einzige Quelle für Meter ↔ Yards (ADR 0009).
+
+| Funktion | Ergebnis |
+| --- | --- |
+| `einheitVon(konfiguration)` | `'yd'` oder `'m'`; fehlendes Feld = Meter |
+| `anzeigeZuMeter(wert, einheit)` | kanonische Meter, auf zwei Nachkommastellen gerundet |
+| `meterZuAnzeige(meter, einheit)` | Anzeigewert; Yards auf ganze Yards gerundet |
+| `beckenlaengenFuer(einheit)` | Meter `[25, 50]`, Yards `[22.86]` |
+| `istBeckenlaenge(wert)` | Type Guard für 25, 50, 22.86 |
+| `pacePro100Einheit(ms, streckeM, einheit)` | Pace pro 100 m bzw. 100 yd |
+| `formatStreckeEinheit` / `formatBeckenlaenge` | Beschriftung mit Einheit |
+
+Kanonische Werte: 25 yd = 22,86 m, 100 yd = 91,44 m, 1 yd = 0,9144 m. Vielfache werden mit einer
+Toleranz von `1e-9` geprüft (`istVielfacheDerBeckenlaenge` in `lauf.ts`).
+
 ## `analyse.ts`
 
 ### `pbKey(konfiguration, schwimmerId): string`
@@ -602,13 +628,35 @@ Alias für `formatTime`; für Eingabefelder gedacht.
 
 Sonst `{ deltaMs: ms - pb.ms, istPb: pb.bahnId === bahn.id }`.
 
-### `pacePro100(ms, streckeM): number`
+### `pacePro100(ms, streckeM, einheit = 'm'): number`
 
-`(ms / streckeM) * 100`. Keine Division durch 0; Aufrufer prüfen `streckeM`.
+`(ms / streckeM) * 100` für Meter, `ms * 91,44 / streckeM` für Yards. Keine Division durch 0;
+Aufrufer prüfen `streckeM`.
 
 ### `schnellsteZeit(lauf): number | null`
 
 Kleinste Finish-Zeit aller Bahnen oder `null`.
+
+### Analyse: abgeleitete Werte ohne Speicherung
+
+Alles in diesem Abschnitt entsteht aus `Lauf.bahnen[].anschlaege`; es gibt keine neuen Felder und
+keine Aggregate in der Datenbank.
+
+| Funktion | Ergebnis |
+| --- | --- |
+| `laengenZeiten(bahn)` | Längenzeiten aus kumulierten Splits (`splitMs` minus vorheriger Split) |
+| `analyseRunden(satz, laeufe)` | Runden nach Wiederholungsnummer, bei freien Sätzen nach Startzeit |
+| `istAnalyseSatz(satz, laeufe)` | true bei mindestens einem Split und keinem Wettkampf |
+| `rundenzahl(satz, laeufe)` | geplante Wiederholungen einer Serie, sonst Anzahl der Läufe |
+| `letzterGleicherSatz(aktuell, satze, laeufe)` | letzter früherer Satz mit gleicher Strecke, Schwimmart, Beckenlänge und Rundenzahl |
+| `analyseMatrix(runden, referenzRunden?)` | Zellen je Person und Runde mit Abweichung, Schnellster-Marke und Referenzzeit |
+| `laengenMatrix(runden, index)` | Längenzeiten einer Person über alle Runden mit Abweichung |
+| `abweichungZurVorrunde(runden, index, runde)` | Differenz zur Vorrunde oder `null` |
+| `mittlereAbweichungen(runden)` | durchschnittliche Abweichung je Runde für die Satzliste |
+
+`letzterGleicherSatz` schließt offene Strecken aus (keine definierte Strecke) und ignoriert den
+Takt als Vergleichskriterium. `analyseMatrix` markiert die schnellste Zeit je Runde nur fett; die
+Farbe trägt ausschließlich die Abweichung.
 
 ## `id.ts`
 

@@ -13,6 +13,7 @@ import { useEffect, useState } from 'react'
 import { useApp } from '../app/AppProvider'
 import { useInstallPrompt } from '../app/pwa'
 import { formatStrecke, formatTakt, lokalesDatum } from '../domain/format'
+import { einheitVon, formatBeckenlaenge } from '../domain/einheit'
 import { SCHWIMMARTEN } from '../domain/types'
 import { csvDateiname, laeufeAlsCsv } from '../export/csv'
 import { speichereDatei, waehleDatei } from '../export/datei'
@@ -107,13 +108,14 @@ export function SettingsScreen() {
   }
 
   const konfiguration = app.einstellungen.konfiguration
+  const einheit = einheitVon(konfiguration)
   const art = SCHWIMMARTEN.find((s) => s.wert === konfiguration.schwimmart)?.label ?? ''
   // Vorschau des nächsten Laufs: Serie nur mit Wiederholungszahl und Takt,
   // Versatz nur wenn gesetzt. `null`-Teile werden vor dem Join entfernt.
   const naechsterLauf = [
     app.einstellungen.wiederholungen > 1
-      ? `${app.einstellungen.wiederholungen}×${formatStrecke(konfiguration.streckeM)}`
-      : formatStrecke(konfiguration.streckeM),
+      ? `${app.einstellungen.wiederholungen}×${formatStrecke(konfiguration.streckeM, einheit)}`
+      : formatStrecke(konfiguration.streckeM, einheit),
     art,
     app.einstellungen.reihen > 1
       ? `${app.einstellungen.bahnen * app.einstellungen.reihen} Personen in ${app.einstellungen.reihen} Reihen`
@@ -254,7 +256,7 @@ export function SettingsScreen() {
         </h2>
         <Karte>
           <Zeile
-            label={`${konfiguration.beckenlaengeM} m-Becken · ${app.einstellungen.bahnen} Bahnen`}
+            label={`${formatBeckenlaenge(konfiguration.beckenlaengeM, einheit)}-Becken · ${app.einstellungen.bahnen} Bahnen`}
             wert={naechsterLauf}
             onClick={() => setSheet(true)}
           />

@@ -13,9 +13,10 @@
  * Erzeugern; die Messzeit selbst kommt aus `lauf.ts`.
  */
 
-import { finishMs, isFinished } from './lauf'
+import { finishMs, istBahnBeendet } from './lauf'
 import { newId } from './id'
 import { truncateToHundredths } from './format'
+import { einheitVon, formatStreckeEinheit } from './einheit'
 import {
   SCHWIMMARTEN,
   type Bahn,
@@ -24,6 +25,8 @@ import {
   type Satz,
   type Schwimmart,
   type Wettkampf,
+  type WettkampfStatus,
+  type Einheit,
 } from './types'
 
 /** Eine Zeile einer Meldeliste: Name und Bahn innerhalb eines Laufs. */
@@ -44,6 +47,8 @@ export interface WettkampfDisziplinPlan {
   bezeichnung: string
   streckeM: number
   schwimmart: Schwimmart
+  /** Anzeige-Einheit; fehlt sie, gilt die des Wettkampfs bzw. Meter. */
+  einheit?: Einheit
   laeufe: WettkampfLaufPlan[]
 }
 
@@ -52,6 +57,8 @@ export interface WettkampfPlan {
   name: string
   datum: string
   beckenlaengeM: Beckenlaenge
+  /** Anzeige-Einheit; fehlt sie, gilt Meter. */
+  einheit?: Einheit
   disziplinen: WettkampfDisziplinPlan[]
 }
 
@@ -64,12 +71,14 @@ export function createWettkampf(daten: {
   name: string
   datum: string
   beckenlaengeM: Beckenlaenge
+  einheit?: Einheit
 }): Wettkampf {
   return {
     id: newId(),
     name: daten.name.trim(),
     datum: daten.datum,
     beckenlaengeM: daten.beckenlaengeM,
+    ...(daten.einheit === 'yd' ? { einheit: 'yd' as const } : {}),
     erstelltAm: Date.now(),
   }
 }
@@ -79,9 +88,13 @@ export function createWettkampf(daten: {
  * z. B. „100 m Freistil“. Eine unbekannte Schwimmart fällt auf Freistil
  * zurück, damit die Anzeige nie leer bleibt.
  */
-export function disziplinBezeichnung(streckeM: number, schwimmart: Schwimmart): string {
+export function disziplinBezeichnung(
+  streckeM: number,
+  schwimmart: Schwimmart,
+  einheit: Einheit = 'm',
+): string {
   const art = SCHWIMMARTEN.find((eintrag) => eintrag.wert === schwimmart)?.label ?? 'Freistil'
-  return `${streckeM} m ${art}`
+  return `${formatStreckeEinheit(streckeM, einheit)} ${art}`
 }
 
 /**
@@ -100,11 +113,18 @@ export function createWettkampfSatz(
   return {
     id: newId(),
     datum: wettkampf.datum,
-    bezeichnung: disziplin.bezeichnung || disziplinBezeichnung(disziplin.streckeM, disziplin.schwimmart),
+    bezeichnung:
+      disziplin.bezeichnung ||
+      disziplinBezeichnung(
+        disziplin.streckeM,
+        disziplin.schwimmart,
+        einheitVon({ einheit: disziplin.einheit ?? wettkampf.einheit }),
+      ),
     konfiguration: {
       beckenlaengeM: wettkampf.beckenlaengeM,
       streckeM: disziplin.streckeM,
       schwimmart: disziplin.schwimmart,
+      einheit: einheitVon({ einheit: disziplin.einheit ?? wettkampf.einheit }),
     },
     plan: null,
     wettkampfId: wettkampf.id,
@@ -166,6 +186,8 @@ export interface WettkampfErgebnisZeile {
   /** Abstand zur Siegerzeit; null ohne Zeit. */
   rueckstandMs: number | null
   manuell: boolean
+  /** Endgültig ohne Zeit beendet; `null` heißt offen oder gewertet. */
+  status: WettkampfStatus | null
 }
 
 /**
@@ -189,6 +211,7 @@ export function wettkampfErgebnis(lauf: Lauf): WettkampfErgebnisZeile[] {
       platz: null as number | null,
       rueckstandMs: null as number | null,
       manuell: bahn.anschlaege.some((anschlag) => anschlag.istFinish && anschlag.manuell),
+      status: bahn.status ?? null,
     }
   })
 
@@ -201,9 +224,16 @@ export function wettkampfErgebnis(lauf: Lauf): WettkampfErgebnisZeile[] {
         truncateToHundredths(a.zeitMs ?? 0) - truncateToHundredths(b.zeitMs ?? 0) ||
         a.bahn.nummer - b.bahn.nummer,
     )
+  // Ohne Zeit stehen DNS, dann DNF, dann noch offene Bahnen am Ende; innerhalb
+  // einer Gruppe bleibt die Bahnnummer die stabile Reihenfolge.
+  const rang: Record<string, number> = { dns: 0, dnf: 1 }
   const offen = zeilen
     .filter((zeile) => zeile.zeitMs === null)
-    .sort((a, b) => a.bahn.nummer - b.bahn.nummer)
+    .sort(
+      (a, b) =>
+        (a.status ? rang[a.status]! : 2) - (b.status ? rang[b.status]! : 2) ||
+        a.bahn.nummer - b.bahn.nummer,
+    )
 
   // Für den Rückstand zählt die schnellste rohe Zeit, nicht die erste Zeile
   // nach Hundertstel-Sortierung. Sonst könnte bei einem angezeigten Gleichstand
@@ -236,16 +266,17 @@ export function wettkampfErgebnis(lauf: Lauf): WettkampfErgebnisZeile[] {
 }
 
 /**
- * Anzahl gewerteter Bahnen und Bahnen insgesamt über einen oder mehrere Läufe.
- * Gedacht für die Kopfzeilen von Wettkampf, Disziplin und Lauf; gezählt wird
- * pro Bahn, nicht pro Lauf.
+ * Anzahl entschiedener Bahnen und Bahnen insgesamt über einen oder mehrere
+ * Läufe. Entschieden heißt: Zielzeit, DNS oder DNF. Gedacht für die
+ * Kopfzeilen von Wettkampf, Disziplin und Lauf; gezählt wird pro Bahn, nicht
+ * pro Lauf.
  */
 export function wettkampfFortschritt(laeufe: Lauf[]): { fertig: number; gesamt: number } {
   let fertig = 0
   let gesamt = 0
   for (const lauf of laeufe) {
     gesamt += lauf.bahnen.length
-    fertig += lauf.bahnen.filter(isFinished).length
+    fertig += lauf.bahnen.filter(istBahnBeendet).length
   }
   return { fertig, gesamt }
 }

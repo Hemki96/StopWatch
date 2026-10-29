@@ -61,6 +61,7 @@ Sheet:
 | **Bahnen pro Reihe** | 1 bis 10. Gilt für alle noch nicht gestarteten Sätze. |
 | **Reihen** | 1 bis 5 Startgruppen; jede startet gemeinsam, die nächste nach dem Reihenversatz. |
 | **Wer schwimmt mit?** | Ein Schwimmer pro Person aus dem Tab **Schwimmer**; leer bedeutet ohne Zuordnung. |
+| **Einheit** | Meter oder Yards; gilt für Strecke, Becken und Pace dieses Satzes. |
 
 Die Aktiven gelten für alle Sätze, die noch **nicht angelegt** sind. Ein Satz wird beim ersten Start
 angelegt. Bereits angelegte Sätze — auch solche, die nach einem Reload nur „bereit“ sind — behalten

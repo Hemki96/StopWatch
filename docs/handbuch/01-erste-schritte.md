@@ -65,12 +65,14 @@ Eine kurze Erklärung von **Lauf**, **Bahn** und **Anschlag**:
 
 | Feld | Bedeutung |
 | --- | --- |
-| **Beckenlänge** | 25 m oder 50 m. Bestimmt, wie viele Längen eine Strecke hat. |
-| **Strecke** | 50, 100, 200, 400, 800 oder 1.500 m — oder **Offene Strecke**. |
+| **Einheit** | **Meter** oder **Yards**. Steuert Anzeige und Eingabe; intern wird immer in Metern gespeichert. |
+| **Beckenlänge** | 25 m oder 50 m; bei Yards nur **25 yd** (22,86 m). Bestimmt, wie viele Längen eine Strecke hat. |
+| **Strecke** | 50, 100, 200, 400, 800 oder 1.500 in der Einheit — oder **Offene Strecke**. |
 | **Schwimmart** | Freistil, Brust, Rücken, Schmetterling, Lagen oder Beliebig. |
 
-Die Strecke muss ein Vielfaches der Beckenlänge sein. Bei einem Wechsel der Beckenlänge korrigiert
-die App eine unpassende Strecke automatisch auf zwei Bahnlängen.
+Die Strecke muss ein Vielfaches der Beckenlänge sein. Bei einem Wechsel der Beckenlänge oder Einheit
+korrigiert die App eine unpassende Strecke automatisch auf zwei Bahnlängen. Ein Wechsel von Meter
+auf Yards behält die angezeigte Zahl: Aus 100 m wird 100 yd (91,44 m).
 
 **Offene Strecke** bedeutet: Es gibt keine feste Längenanzahl. Jeder Anschlag ist ein Split; das
 Ziel wird mit einem eigenen **Ziel**-Knopf gesetzt. Das passt für Technik- und Ausdauereinheiten

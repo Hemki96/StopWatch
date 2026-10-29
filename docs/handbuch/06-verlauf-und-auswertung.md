@@ -59,8 +59,8 @@ angezeigt werden, etwa unberührte Wiederholungen einer Serie. Vorher ein Backup
 Ein Tipp auf einen Lauf öffnet das Detail. Es zeigt:
 
 - Datum und Startuhrzeit,
-- Anzahl Bahnen und Strecke,
-- Beckenlänge, Schwimmart und ggf. Startversatz,
+- Anzahl Bahnen und Strecke **in der Einheit des Laufs**,
+- Beckenlänge in derselben Einheit, Schwimmart und ggf. Startversatz,
 - bei Serien und Wettkämpfen die Runde bzw. den Lauf und den Takt,
 - einen Hinweis, wenn der Lauf unvollständig ist.
 
@@ -75,7 +75,7 @@ Pro Bahn:
 | **Zielzeit** | Die Finish-Zeit, oder `—` |
 | **Bestzeit / Delta** | `Bestzeit`, `+01,23 zum PB` oder `-00,45 zum PB` |
 | **manuell** | Die Zielzeit wurde von Hand eingetragen oder korrigiert |
-| **Pace** | Zeit pro 100 m, nur bei fester Strecke |
+| **Pace** | Zeit pro 100 in der Einheit des Laufs (`/ 100 m` oder `/ 100 yd`), nur bei fester Strecke |
 
 Die Schwimmerzuordnung lässt sich auch nachträglich ändern. Die Zeiten bleiben dabei erhalten. Das
 ist nützlich, wenn eine Bahn während des Laufs falsch zugeordnet war.
@@ -84,7 +84,8 @@ ist nützlich, wenn eine Bahn während des Laufs falsch zugeordnet war.
 
 Unter jeder Bahn stehen die Anschläge:
 
-- Bei fester Strecke mit der Distanz, z. B. `50 m`, `100 m`.
+- Bei fester Strecke mit der Distanz in der Einheit des Laufs, z. B. `50 m`, `100 m` oder
+  `25 yd`, `50 yd`, `75 yd`, `100 yd`.
 - Bei offener Strecke ebenfalls mit der kumulierten Distanz.
 - Im Wettkampf mit **Ziel** statt einer Längenbezeichnung.
 - Das letzte Finish trägt das Badge **Ziel**.
@@ -127,8 +128,9 @@ Eine **Bestzeit (PB)** gilt je Kombination aus:
 - Schwimmart,
 - Beckenlänge.
 
-Kurzbahn und Langbahn sind bewusst getrennt, weil sie nicht vergleichbar sind. Offene Strecken
-erzeugen keine Bestzeit.
+Kurzbahn und Langbahn sind bewusst getrennt, weil sie nicht vergleichbar sind. Meter- und
+Yard-Becken sind ebenfalls getrennt: 100 yd sind 91,44 m und ergeben eine eigene Bestzeit. Offene
+Strecken erzeugen keine Bestzeit.
 
 Eine Zielzeit zählt, sobald sie als Finish erfasst ist. Ein Lauf, in dem nicht alle Bahnen im Ziel
 sind, wird im Verlauf und im Detail als **unvollständig** markiert; die vorhandenen Zielzeiten
@@ -151,7 +153,8 @@ Regressionstest in `e2e/schwimmer.spec.ts` hält sie fest.
 
 Ein Tipp klappt die Bestzeiten auf:
 
-- Gruppen nach Strecke, Schwimmart und Beckenlänge, z. B. `100 m · Freistil · 50 m`.
+- Gruppen nach Strecke, Schwimmart, Beckenlänge **und Einheit**, z. B. `100 m · Freistil · 50 m`
+  oder `100 yd · Freistil · 25 yd`. Meter- und Yard-Becken erzeugen getrennte Bestzeiten.
 - Die schnellste Zeit ist grün markiert.
 - Darunter stehen die Zeiten chronologisch mit Datum (Tag/Monat).
 - Manuell korrigierte Zeiten tragen den Hinweis **korrigiert**.
@@ -165,6 +168,47 @@ Screenreader-Text nennt Schwimmer, Datum und Zeit.
 Ein Klick auf **Bearbeiten** öffnet Name, Jahrgang und Notiz. Beim Löschen einer Person bleiben die
 gemessenen Zeiten erhalten, verlieren aber ihre Zuordnung. Die Person wird außerdem aus den
 Standardwerten und aus vorbereiteten Trainings entfernt.
+
+## Analyse
+
+Der Verlauf hat zwei Ansichten: **Verlauf** und **Analyse**. Der Umschalter sitzt in der
+Kopfzeile; die Wahl wird nicht gespeichert. Die Analyse zeigt nur Sätze mit **Zwischenzeiten** —
+Wettkampf-Läufe haben keine Splits und erscheinen dort nicht.
+
+### Satzliste
+
+Die Liste ist wie der Verlauf nach Tag gruppiert, neueste Sätze zuerst. Jede Zeile nennt
+Bezeichnung, Konfiguration und die durchschnittliche Abweichung je Runde (`R2 +01,20`).
+Unvollständige und manuell korrigierte Sätze tragen ein Kennzeichen.
+
+### Matrix Person × Runde
+
+Ein Tipp auf einen Satz öffnet die Matrix:
+
+- **Zeilen** sind Personen, nach Bahnnummer sortiert.
+- **Spalten** sind die Runden. Die aktuelle Runde ist markiert.
+- Die Zelle zeigt die **Zielzeit**; darunter steht die **Abweichung zur Vorrunde** desselben
+  Schwimmers. Grün heißt schneller, rot langsamer, grau gleich oder ohne Bezug. Die Zeit selbst
+  bleibt ungefärbt; die schnellste Zeit je Runde ist fett.
+- Fehlende Zeiten bleiben leer; unvollständige und manuell korrigierte Zellen sind markiert.
+- Die Spalte **zuletzt** zeigt die Zielzeiten derselben Personen aus dem letzten vergleichbaren
+  Satz. Darüber steht die Referenz mit Datum und Takt, z. B. `zuletzt: 22.10. · Takt 02:00`.
+
+Verglichen wird nur bei gleicher **Strecke, Schwimmart, Beckenlänge und Rundenzahl**. Der Takt
+zählt nicht zum Ausschluss, wird aber genannt. Offene Strecken erscheinen in der Matrix, aber nie
+als Referenz für einen anderen Satz. Fehlt eine Person in der Referenz, bleibt ihre Zelle leer.
+
+### Längenzeiten einer Person
+
+Ein Tipp auf eine Personenzeile öffnet die **Längenzeiten** über alle Runden:
+
+- Zeilen sind die Längen (`50 m`, `100 m`, …), Spalten die Runden.
+- Der Wert ist die **Längenzeit**, nicht die kumulierte Splitzeit; darunter steht die Abweichung
+  zur Vorrunde.
+- Läuft der Satz noch, bleiben spätere Längen leer.
+
+Es gibt keine Diagramme und keine manuelle Referenzwahl. Mehrere Runden lassen sich nur vergleichen,
+wenn sie zur selben Strecke und Beckenlänge gehören.
 
 ## CSV-Export
 
@@ -184,8 +228,10 @@ Die Datei heißt `beckenrand-JJJJ-MM-TT.csv` und enthält:
 | --- | --- |
 | `satz` | Satzbezeichnung, ggf. leer |
 | `datum` | lokales Datum des Laufs |
-| `beckenlaenge_m` | 25 oder 50 |
-| `strecke_m` | Strecke oder leer bei offener Strecke |
+| `beckenlaenge_m` | kanonische Beckenlänge in Metern: 25, 50 oder 22,86 |
+| `einheit` | `m` oder `yd` — die Anzeige-Einheit des Laufs |
+| `strecke_m` | kanonische Strecke in Metern oder leer bei offener Strecke |
+| `strecke` | Anzeige-Strecke in der Einheit, z. B. `100` bei 100 yd |
 | `schwimmart` | interner Wert, z. B. `freistil` |
 | `bahn` | Bahnnummer |
 | `schwimmer` | Name oder leer |
@@ -215,8 +261,8 @@ Wichtige Eigenschaften:
 
 Typische Auswertungen:
 
-- **Zielzeiten:** `ist_finish = 1` filtern, dann nach `schwimmer`, `strecke_m`, `schwimmart` und
-  `beckenlaenge_m` gruppieren.
+- **Zielzeiten:** `ist_finish = 1` filtern, dann nach `schwimmer`, `strecke_m`, `einheit`,
+  `schwimmart` und `beckenlaenge_m` gruppieren. Meter- und Yard-Zeiten nie mischen.
 - **Splits:** `split_ms` in Sekunden umrechnen (`/1000`) und pro `lauf`/`bahn` sortieren.
 - **Serien:** nach `satz` und `wiederholung` gruppieren; `takt_s` und `startversatz_ms` stehen in
   jeder Zeile.

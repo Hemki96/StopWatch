@@ -9,7 +9,22 @@
  */
 import { useEffect, useState, type ReactNode } from 'react'
 import { formatTime, lokalesDatum, parseTime } from '../domain/format'
-import { SCHWIMMARTEN, type Beckenlaenge, type Lauf, type Schwimmart } from '../domain/types'
+import {
+  anzeigeZuMeter,
+  beckenlaengenFuer,
+  formatBeckenlaenge,
+  standardBeckenlaenge,
+  streckeAnzeige,
+} from '../domain/einheit'
+import { istVielfacheDerBeckenlaenge } from '../domain/lauf'
+import {
+  SCHWIMMARTEN,
+  type Beckenlaenge,
+  type Einheit,
+  type Lauf,
+  type Schwimmart,
+  type WettkampfStatus,
+} from '../domain/types'
 import { Sheet } from './Sheet'
 
 const STRECKEN = [50, 100, 200, 400, 800, 1500] as const
@@ -104,17 +119,24 @@ export function WettkampfAnlegenSheet({
 }: {
   open: boolean
   onClose: () => void
-  onCreate: (daten: { name: string; datum: string; beckenlaengeM: Beckenlaenge }) => void
+  onCreate: (daten: {
+    name: string
+    datum: string
+    beckenlaengeM: Beckenlaenge
+    einheit: Einheit
+  }) => void
 }) {
   const [name, setName] = useState('')
   const [datum, setDatum] = useState(() => lokalesDatum(Date.now()))
+  const [einheit, setEinheit] = useState<Einheit>('m')
   const [beckenlaengeM, setBeckenlaengeM] = useState<Beckenlaenge>(50)
 
-  // Jedes Öffnen startet mit leerem Namen, heutigem Datum und 50-m-Becken.
+  // Jedes Öffnen startet mit leerem Namen, heutigem Datum, Meter und 50-m-Becken.
   useEffect(() => {
     if (!open) return
     setName('')
     setDatum(lokalesDatum(Date.now()))
+    setEinheit('m')
     setBeckenlaengeM(50)
   }, [open])
 
@@ -141,11 +163,32 @@ export function WettkampfAnlegenSheet({
         />
       </Feld>
 
-      <Feld label="Beckenlänge" hint="Gilt für alle Disziplinen dieses Wettkampfs.">
+      <Feld label="Einheit" hint="Gilt für alle Disziplinen und die Ergebnis-CSV.">
         <div className="flex gap-2">
-          {([25, 50] as const).map((wert) => (
-            <Chip key={wert} aktiv={beckenlaengeM === wert} onClick={() => setBeckenlaengeM(wert)}>
-              {wert} m
+          {(['m', 'yd'] as const).map((wert) => (
+            <Chip
+              key={wert}
+              aktiv={einheit === wert}
+              onClick={() => {
+                setEinheit(wert)
+                setBeckenlaengeM(standardBeckenlaenge(wert))
+              }}
+            >
+              {wert === 'm' ? 'Meter' : 'Yards'}
+            </Chip>
+          ))}
+        </div>
+      </Feld>
+
+      <Feld label="Beckenlänge" hint="Gilt für alle Disziplinen dieses Wettkampfs.">
+        <div className="flex flex-wrap gap-2">
+          {beckenlaengenFuer(einheit).map((wert) => (
+            <Chip
+              key={wert}
+              aktiv={beckenlaengeM === wert}
+              onClick={() => setBeckenlaengeM(wert)}
+            >
+              {formatBeckenlaenge(wert, einheit)}
             </Chip>
           ))}
         </div>
@@ -154,7 +197,7 @@ export function WettkampfAnlegenSheet({
       <button
         type="button"
         disabled={!name.trim() || !datum}
-        onClick={() => onCreate({ name: name.trim(), datum, beckenlaengeM })}
+        onClick={() => onCreate({ name: name.trim(), datum, beckenlaengeM, einheit })}
         className="h-14 w-full rounded-xl bg-accent text-base font-bold text-accent-fg disabled:opacity-40"
       >
         Wettkampf anlegen
@@ -174,11 +217,14 @@ export function DisziplinSheet({
   open,
   onClose,
   beckenlaengeM,
+  einheit,
   onCreate,
 }: {
   open: boolean
   onClose: () => void
   beckenlaengeM: Beckenlaenge
+  /** Anzeige-Einheit des Wettkampfs; Strecken werden darin gewählt. */
+  einheit: Einheit
   onCreate: (daten: {
     bezeichnung: string
     streckeM: number
@@ -187,7 +233,7 @@ export function DisziplinSheet({
     bahnen: number
   }) => void
 }) {
-  const [streckeM, setStreckeM] = useState(100)
+  const [streckeM, setStreckeM] = useState(() => anzeigeZuMeter(100, einheit))
   const [schwimmart, setSchwimmart] = useState<Schwimmart>('freistil')
   const [laeufe, setLaeufe] = useState(1)
   const [bahnen, setBahnen] = useState(6)
@@ -195,25 +241,35 @@ export function DisziplinSheet({
   // Vorgaben bei jedem Öffnen; die Beckenlänge kommt vom Wettkampf.
   useEffect(() => {
     if (!open) return
-    setStreckeM(100)
+    setStreckeM(anzeigeZuMeter(100, einheit))
     setSchwimmart('freistil')
     setLaeufe(1)
     setBahnen(6)
-  }, [open])
+  }, [open, einheit])
 
   const art = SCHWIMMARTEN.find((eintrag) => eintrag.wert === schwimmart)?.label ?? ''
   // Ein Lauf ist ein Heat; die Strecke muss ganzzahlig in Becken passen.
-  const ungueltig = streckeM % beckenlaengeM !== 0
+  const ungueltig = !istVielfacheDerBeckenlaenge(streckeM, beckenlaengeM)
 
   return (
     <Sheet open={open} onClose={onClose} titel="Disziplin anlegen">
-      <Feld label="Strecke" hint={ungueltig ? `Passt nicht zu ${beckenlaengeM} m.` : undefined}>
+      <Feld
+        label="Strecke"
+        hint={ungueltig ? `Passt nicht zu ${formatBeckenlaenge(beckenlaengeM, einheit)}.` : undefined}
+      >
         <div className="flex flex-wrap gap-2">
-          {STRECKEN.map((wert) => (
-            <Chip key={wert} aktiv={streckeM === wert} onClick={() => setStreckeM(wert)}>
-              {wert} m
-            </Chip>
-          ))}
+          {STRECKEN.map((wert) => {
+            const kanonisch = anzeigeZuMeter(wert, einheit)
+            return (
+              <Chip
+                key={wert}
+                aktiv={streckeM === kanonisch}
+                onClick={() => setStreckeM(kanonisch)}
+              >
+                {wert} {einheit}
+              </Chip>
+            )
+          })}
         </div>
       </Feld>
 
@@ -244,7 +300,7 @@ export function DisziplinSheet({
         disabled={ungueltig}
         onClick={() =>
           onCreate({
-            bezeichnung: `${streckeM} m ${art}`,
+            bezeichnung: `${streckeAnzeige(streckeM, einheit)} ${einheit} ${art}`,
             streckeM,
             schwimmart,
             laeufe,
@@ -253,7 +309,7 @@ export function DisziplinSheet({
         }
         className="h-14 w-full rounded-xl bg-accent text-base font-bold text-accent-fg disabled:opacity-40"
       >
-        {`${streckeM} m ${art} anlegen`}
+        {`${streckeAnzeige(streckeM, einheit)} ${einheit} ${art} anlegen`}
       </button>
     </Sheet>
   )
@@ -340,13 +396,19 @@ export function ZeitSheet({
   onClose,
   titel,
   wert,
+  status,
   onSave,
+  onStatus,
 }: {
   open: boolean
   onClose: () => void
   titel: string
   wert: number | null
+  /** Bereits gesetzter Wettkampf-Status der Bahn oder `null`. */
+  status: WettkampfStatus | null
   onSave: (ms: number) => void
+  /** Setzt DNS/DNF oder hebt die Markierung mit `null` auf. */
+  onStatus: (status: WettkampfStatus | null) => void
 }) {
   const [eingabe, setEingabe] = useState('')
   const [fehler, setFehler] = useState<string | null>(null)
@@ -371,7 +433,51 @@ export function ZeitSheet({
   return (
     <Sheet open={open} onClose={onClose} titel={titel}>
       <p className="mb-4 text-xs leading-relaxed text-muted">
-        Die Zeit wird als manuell erfasst markiert. Format: Minuten:Sekunden,Hundertstel.
+        Ist eine Bahn nicht gestartet oder nicht angekommen, lässt sie sich hier ohne Zeit
+        abschließen. Eine Markierung ist endgültig und zählt nicht in die Platzierung.
+      </p>
+
+      {/* DNS/DNF statt Zeit: Beides beendet die Bahn für den Heat, ohne eine
+          Wertung zu erzeugen. Die aktive Markierung ist hervorgehoben. */}
+      <div className="mb-2 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => onStatus('dns')}
+          aria-pressed={status === 'dns'}
+          className={`h-12 rounded-xl border text-sm font-semibold ${
+            status === 'dns'
+              ? 'border-fg bg-surface2 text-fg'
+              : 'border-line bg-surface2 text-muted'
+          }`}
+        >
+          DNS · nicht gestartet
+        </button>
+        <button
+          type="button"
+          onClick={() => onStatus('dnf')}
+          aria-pressed={status === 'dnf'}
+          className={`h-12 rounded-xl border text-sm font-semibold ${
+            status === 'dnf'
+              ? 'border-warn bg-warn/15 text-warn'
+              : 'border-line bg-surface2 text-muted'
+          }`}
+        >
+          DNF · nicht beendet
+        </button>
+      </div>
+      {status ? (
+        <button
+          type="button"
+          onClick={() => onStatus(null)}
+          className="mb-4 h-10 w-full rounded-xl text-xs font-semibold text-accent"
+        >
+          Markierung entfernen
+        </button>
+      ) : null}
+
+      <p className="mb-4 mt-4 text-xs leading-relaxed text-muted">
+        Alternativ eine Zeit von Hand eintragen. Sie wird als manuell erfasst markiert. Format:
+        Minuten:Sekunden,Hundertstel.
       </p>
       <form
         onSubmit={(event) => {
@@ -382,6 +488,7 @@ export function ZeitSheet({
         <input
           autoFocus
           value={eingabe}
+          disabled={status !== null}
           onChange={(event) => {
             setEingabe(event.target.value)
             // Eine alte Fehlermeldung verschwindet beim Weitertippen.
@@ -390,7 +497,7 @@ export function ZeitSheet({
           inputMode="decimal"
           placeholder="01:23,45"
           aria-label="Zielzeit"
-          className="tabular h-16 w-full rounded-xl border border-line bg-surface2 px-3 text-center text-3xl font-semibold"
+          className="tabular h-16 w-full rounded-xl border border-line bg-surface2 px-3 text-center text-3xl font-semibold disabled:opacity-40"
         />
         {fehler ? (
           <p role="alert" className="mt-2 text-sm text-danger">
@@ -399,7 +506,8 @@ export function ZeitSheet({
         ) : null}
         <button
           type="submit"
-          className="mt-5 h-14 w-full rounded-xl bg-accent text-base font-bold text-accent-fg"
+          disabled={status !== null}
+          className="mt-5 h-14 w-full rounded-xl bg-accent text-base font-bold text-accent-fg disabled:opacity-40"
         >
           Zeit speichern
         </button>

@@ -61,6 +61,18 @@ Fehlende Namen lassen sich auch nach dem Start noch ergänzen — der Knopf ersc
 mindestens eine Bahn ohne Namen ist. Eine bereits vorhandene Zuordnung lässt sich im
 **Verlauf → Lauf-Detail** über die Schwimmer-Auswahl ändern.
 
+## Einheiten: Meter und Yards
+
+Ein Wettkampf wird in **Meter** oder **Yards** angelegt. Die Wahl gilt für alle Disziplinen und die
+Ergebnis-CSV:
+
+- Bei Yards steht nur das **25-Yard-Becken** (`25 yd`, kanonisch 22,86 m) bereit.
+- Disziplinen werden in der Einheit des Wettkampfs gewählt, z. B. `100 yd Freistil`; intern
+  gespeichert werden 91,44 m.
+- Die Meldeliste erkennt `m`, `yd`, `yard(s)` und `y`. Ohne Suffix gilt die Einheit des
+  Wettkampfs. Ein Meter-Eintrag in einem Yard-Wettkampf wird **mit Zeilennummer** abgelehnt.
+- Der CSV-Export weist `strecke_m` (kanonisch) und `strecke` + `einheit` (Anzeige) aus.
+
 ## Meldeliste importieren
 
 Der Import ist der schnellste Weg zu einem vollständigen Wettkampf. Er akzeptiert eine CSV aus einer
@@ -80,12 +92,14 @@ importieren erzeugt deshalb Duplikate.
 Die App kann unter **Vorlage laden** eine CSV speichern:
 
 ```csv
-disziplin;strecke_m;schwimmart;lauf;bahn;name;jahrgang
-100 m Freistil;100;freistil;1;3;Anna Muster;2010
-100 m Freistil;100;freistil;1;4;Ben Beispiel;2011
-100 m Freistil;100;freistil;2;3;Clara Muster;2010
-50 m Brust;50;brust;1;1;Dana Beispiel;2012
+disziplin;strecke;schwimmart;lauf;bahn;name;jahrgang
+100 m Freistil;100 m;freistil;1;3;Anna Muster;2010
+100 m Freistil;100 m;freistil;1;4;Ben Beispiel;2011
+100 m Freistil;100 m;freistil;2;3;Clara Muster;2010
+50 m Brust;50 m;brust;1;1;Dana Beispiel;2012
 ```
+
+In einem Yard-Wettkampf stehen in den ersten beiden Spalten z. B. `100 yd Freistil;100 yd`.
 
 Die Datei ist UTF-8 mit BOM und Semikolon, damit deutsches Excel sie direkt öffnet.
 
@@ -201,6 +215,21 @@ Neben jeder Bahn steht ein **Stift**. Er öffnet ein Sheet für eine manuelle Zi
 Das ist der Ausweg, wenn ein Tipp danebenging, eine Zeit aus dem Protokoll nachgetragen wird oder
 eine Bahn ausgefallen ist.
 
+### DNS und DNF
+
+Neben der Zeit lassen sich zwei endgültige Zustände ohne Zeit eintragen — im selben Stift-Sheet:
+
+| Status | Bedeutung | Anzeige |
+| --- | --- | --- |
+| **DNS** | did not start, nicht gestartet | `DNS` und „nicht gestartet“ |
+| **DNF** | did not finish, nicht beendet | `DNF` und „nicht beendet“ |
+
+- Markierte Bahnen sind **endgültig**: Tippen, Starten und Zeiteintragen ändern nichts mehr.
+- Sie zählen **nicht** in Platzierung und Rückstand, beenden den Heat aber mit.
+- **Markierung entfernen** im Stift-Sheet oder langes Drücken macht die Bahn wieder offen.
+- Ein Heat gilt als beendet, sobald jede Bahn eine Zeit, DNS oder DNF hat.
+- Der Status überlebt Reload und Backup-Import.
+
 ### Rückgängig
 
 Langes Drücken auf einer Bahn nimmt die letzte Aktion zurück:
@@ -221,19 +250,20 @@ Die Platzierung wird auf Hundertstel verglichen:
 
 - Schnellste Zeit zuerst.
 - Zeitgleiche Zeiten teilen sich den Platz: `1, 1, 3`.
-- Bahnen ohne Zielzeit stehen am Ende in Bahnreihenfolge.
+- Bahnen ohne Zielzeit stehen am Ende: erst DNS, dann DNF, dann offene Bahnen.
+- DNS/DNF tragen keinen Platz und keinen Rückstand.
 - Der Rückstand bezieht sich auf die schnellste rohe Zeit des Laufs.
 
-Sind alle Bahnen im Ziel, erscheint:
+Sind alle Bahnen entschieden, erscheint:
 
-> `Lauf beendet · 6 von 6 im Ziel · Sieger 00:58,31`
+> `Lauf beendet · 6 von 6 entschieden · Sieger 00:58,31`
 
 Danach führt der große Knopf zum nächsten Heat, zur nächsten Disziplin oder zurück zum Wettkampf.
 
 ### Fehlende Zeiten und nächster Heat
 
-Ein Lauf gilt als beendet, wenn **alle** Bahnen eine Zielzeit haben. Solange einzelne Bahnen offen
-sind, bleibt der Lauf sichtbar. Über **Nächster Lauf** kann trotzdem zum nächsten Heat gewechselt
+Ein Lauf gilt als beendet, wenn **alle** Bahnen eine Zielzeit, DNS oder DNF haben. Solange einzelne
+Bahnen offen sind, bleibt der Lauf sichtbar. Über **Nächster Lauf** kann trotzdem zum nächsten Heat gewechselt
 werden; die offenen Bahnen bleiben offen und können später nachgetragen werden.
 
 ## Ergebnisse exportieren
@@ -248,14 +278,18 @@ Es gibt zwei CSV-Exporte:
 Die Datei heißt `beckenrand-wettkampf-JJJJ-MM-TT.csv` und enthält eine Zeile pro Start:
 
 ```csv
-wettkampf;datum;disziplin;strecke_m;schwimmart;lauf;platz;bahn;schwimmer;zeit_ms;zeit_formatiert;status;manuell
-Herbstpokal;2026-10-29;100 m Freistil;100;freistil;1;1;3;Anna Muster;58310;00:58,31;Ziel;0
-Herbstpokal;2026-10-29;100 m Freistil;100;freistil;1;2;4;Ben Beispiel;59020;00:59,02;Ziel;0
-Herbstpokal;2026-10-29;100 m Freistil;100;freistil;1;;5;Clara Muster;;;offen;0
+wettkampf;datum;disziplin;strecke_m;strecke;einheit;schwimmart;lauf;platz;bahn;schwimmer;zeit_ms;zeit_formatiert;status;manuell
+Herbstpokal;2026-10-29;100 m Freistil;100;100;m;freistil;1;1;3;Anna Muster;58310;00:58,31;Ziel;0
+Herbstpokal;2026-10-29;100 m Freistil;100;100;m;freistil;1;2;4;Ben Beispiel;59020;00:59,02;Ziel;0
+Herbstpokal;2026-10-29;100 m Freistil;100;100;m;freistil;1;;5;Clara Muster;;;offen;0
+Herbstpokal;2026-10-29;100 m Freistil;100;100;m;freistil;1;;6;Dana Beispiel;;;DNS;0
+Herbstpokal;2026-10-29;100 m Freistil;100;100;m;freistil;1;;7;Emil Beispiel;;;DNF;0
 ```
 
-- Gewertete Bahnen stehen nach Platz, offene am Ende.
-- `status` ist `Ziel` oder `offen`.
+- Gewertete Bahnen stehen nach Platz, markierte und offene am Ende.
+- In einem Yard-Wettkampf heißt die Disziplin z. B. `100 yd Freistil`; `strecke_m` bleibt mit
+  91,44 kanonisch, `strecke` zeigt 100 und `einheit` ist `yd`.
+- `status` ist `Ziel`, `DNS`, `DNF` oder `offen`.
 - `manuell` ist `1` bei von Hand eingetragenen oder korrigierten Zeiten.
 - Semikolon und UTF-8-BOM, damit deutsches Excel die Datei direkt öffnet.
 - Auf dem iPhone öffnet sich beim Teilen das Share-Sheet; auf Desktop wird die Datei
@@ -286,8 +320,8 @@ Löschen ist sinnvoll.
 
 | Regel | Wert |
 | --- | --- |
-| Beckenlänge | 25 m oder 50 m, fest pro Wettkampf |
-| Strecke | Vielfaches der Beckenlänge |
+| Beckenlänge | 25 m, 50 m oder 25 yd (22,86 m), fest pro Wettkampf |
+| Strecke | Vielfaches der Beckenlänge, in der Einheit des Wettkampfs |
 | Heats pro Disziplin (manuell) | 1 bis 20 |
 | Heats pro Disziplin (Import) | 1 bis 99 |
 | Bahnen pro Heat | 1 bis 10 |

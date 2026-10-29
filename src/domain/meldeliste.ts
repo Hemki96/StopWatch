@@ -18,8 +18,16 @@
 import {
   SCHWIMMARTEN,
   type Beckenlaenge,
+  type Einheit,
   type Schwimmart,
 } from './types'
+import {
+  anzeigeZuMeter,
+  einheitVon,
+  formatBeckenlaenge,
+  formatStreckeEinheit,
+} from './einheit'
+import { istVielfacheDerBeckenlaenge } from './lauf'
 import { disziplinBezeichnung, type WettkampfDisziplinPlan } from './wettkampf'
 
 /**
@@ -28,7 +36,9 @@ import { disziplinBezeichnung, type WettkampfDisziplinPlan } from './wettkampf'
  */
 export interface MeldelisteVorgabe {
   beckenlaengeM: Beckenlaenge
-  /** Fallback, wenn die Datei keine Strecke nennt. */
+  /** Anzeige-Einheit des Wettkampfs; fehlt sie, gilt Meter. */
+  einheit?: Einheit
+  /** Fallback, wenn die Datei keine Strecke nennt (kanonisch in Metern). */
   streckeM: number
   /** Fallback, wenn die Datei keine Schwimmart nennt. */
   schwimmart: Schwimmart
@@ -211,17 +221,29 @@ function ganzeZahl(wert: string): number | null {
  * bis vier Ziffern im Bereich 25..5000 m; alles andere ist `null`. Die Grenzen
  * halten Zahlen wie „5“ oder „10000“ heraus, ohne echte Strecken zu beschneiden.
  */
-function parseStrecke(wert: string): number | null {
+function parseStrecke(wert: string): { streckeM: number; einheit: Einheit | null; anzeige: number } | null {
+  // Tausenderpunkte entfernen; Yard-Angaben sind ganzzahlig, Meterangaben
+  // davor auch. Die Einheit steht optional hinter der Zahl.
   const text = wert.replace(/\./g, '').trim()
+  const mitYard = text.match(/(\d{2,4})\s*(?:yd|yards?|y)\b/i)
+  if (mitYard?.[1]) {
+    const anzeige = Number(mitYard[1])
+    if (anzeige < 25 || anzeige > 5000) return null
+    return { anzeige, einheit: 'yd', streckeM: anzeigeZuMeter(anzeige, 'yd') }
+  }
   const mitMeter = text.match(/(\d{2,4})\s*m\b/i)
   if (mitMeter?.[1]) {
-    const zahl = Number(mitMeter[1])
-    return zahl >= 25 && zahl <= 5000 ? zahl : null
+    const anzeige = Number(mitMeter[1])
+    if (anzeige < 25 || anzeige > 5000) return null
+    return { anzeige, einheit: 'm', streckeM: anzeige }
   }
   const nurZahl = text.match(/^\s*(\d{2,4})\s*$/)
   if (nurZahl?.[1]) {
-    const zahl = Number(nurZahl[1])
-    return zahl >= 25 && zahl <= 5000 ? zahl : null
+    const anzeige = Number(nurZahl[1])
+    if (anzeige < 25 || anzeige > 5000) return null
+    // Ohne Einheit gilt die des Wettkampfs; die Umrechnung passiert beim
+    // Aufrufer, weil dort die Vorgabe bekannt ist.
+    return { anzeige, einheit: null, streckeM: anzeige }
   }
   return null
 }
@@ -260,8 +282,13 @@ function parseJahrgang(wert: string): number | null {
  * mitgenommen, damit eine Freitext-Disziplin (z. B. „Staffel Mixed“) getrennt
  * bleibt, auch wenn Strecke und Schwimmart zufällig gleich sind.
  */
-function disziplinSchluessel(bezeichnung: string, streckeM: number, schwimmart: Schwimmart): string {
-  return `${normalisiere(bezeichnung)}|${streckeM}|${schwimmart}`
+function disziplinSchluessel(
+  bezeichnung: string,
+  streckeM: number,
+  schwimmart: Schwimmart,
+  einheit: Einheit,
+): string {
+  return `${normalisiere(bezeichnung)}|${streckeM}|${schwimmart}|${einheit}`
 }
 
 /** Baut die Fehlerantwort; einheitlich für alle Abbruchstellen. */
@@ -370,18 +397,42 @@ export function parseMeldeliste(text: string, vorgabe: MeldelisteVorgabe): Melde
     const disziplinText = wert('disziplin')
     const streckeText = wert('strecke')
     const artText = wert('schwimmart')
+    const vorgabeEinheit = einheitVon(vorgabe)
 
     // Reihenfolge: eigene Streckenspalte, Zahl im Disziplintext, Vorgabe.
-    const streckeM = parseStrecke(streckeText) ?? parseStrecke(disziplinText) ?? vorgabe.streckeM
-    // Die Strecke muss ein Vielfaches der Beckenlänge sein, sonst passt die
-    // Längenanzahl des Laufs nicht zum Becken.
-    if (streckeM % vorgabe.beckenlaengeM !== 0) {
+    const streckeAngabe = parseStrecke(streckeText) ?? parseStrecke(disziplinText)
+    // Eine ausdrücklich genannte Einheit muss zum Wettkampf passen. Ein
+    // Meter-Eintrag in einem Yard-Wettkampf wäre sonst stillschweigend falsch.
+    if (streckeAngabe?.einheit && streckeAngabe.einheit !== vorgabeEinheit) {
       return fehler(
-        `Zeile ${zeile.nummer}: ${streckeM} m passt nicht zu einem ${vorgabe.beckenlaengeM} m-Becken.`,
+        `Zeile ${zeile.nummer}: ${formatStreckeEinheit(
+          streckeAngabe.streckeM,
+          streckeAngabe.einheit,
+        )} passt nicht zu einem Wettkampf in ${formatBeckenlaenge(
+          vorgabe.beckenlaengeM,
+          vorgabeEinheit,
+        )}-Becken.`,
       )
     }
+    const einheit = streckeAngabe?.einheit ?? vorgabeEinheit
+    // Ohne Einheit ist die Zahl in der Einheit des Wettkampfs zu lesen.
+    const streckeM = streckeAngabe
+      ? streckeAngabe.einheit
+        ? streckeAngabe.streckeM
+        : anzeigeZuMeter(streckeAngabe.anzeige, vorgabeEinheit)
+      : vorgabe.streckeM
     if (streckeM <= 0) {
       return fehler(`Zeile ${zeile.nummer}: Die Strecke fehlt oder ist ungültig.`)
+    }
+    // Die Strecke muss ein Vielfaches der Beckenlänge sein, sonst passt die
+    // Längenanzahl des Laufs nicht zum Becken.
+    if (!istVielfacheDerBeckenlaenge(streckeM, vorgabe.beckenlaengeM)) {
+      return fehler(
+        `Zeile ${zeile.nummer}: ${formatStreckeEinheit(streckeM, einheit)} passt nicht zu einem ${formatBeckenlaenge(
+          vorgabe.beckenlaengeM,
+          vorgabeEinheit,
+        )}-Becken.`,
+      )
     }
 
     const schwimmart =
@@ -397,12 +448,12 @@ export function parseMeldeliste(text: string, vorgabe: MeldelisteVorgabe): Melde
     const bezeichnung =
       disziplinText && parseStrecke(disziplinText) === null && parseSchwimmart(disziplinText) === null
         ? disziplinText
-        : disziplinBezeichnung(streckeM, schwimmart)
-    const schluessel = disziplinSchluessel(bezeichnung, streckeM, schwimmart)
+        : disziplinBezeichnung(streckeM, schwimmart, einheit)
+    const schluessel = disziplinSchluessel(bezeichnung, streckeM, schwimmart, einheit)
 
     let disziplin = disziplinen.get(schluessel)
     if (!disziplin) {
-      disziplin = { bezeichnung, streckeM, schwimmart, laeufe: [] }
+      disziplin = { bezeichnung, streckeM, schwimmart, einheit, laeufe: [] }
       disziplinen.set(schluessel, disziplin)
     }
 
@@ -494,13 +545,15 @@ export function parseMeldeliste(text: string, vorgabe: MeldelisteVorgabe): Melde
  * in deutschen Tabellenprogrammen erwartete Form. Die Vorlage muss durch
  * `parseMeldeliste` selbst wieder lesbar sein.
  */
-export function meldelisteVorlage(): string {
+export function meldelisteVorlage(einheit: Einheit = 'm'): string {
+  const yd = einheit === 'yd'
+  const einheitText = yd ? 'yd' : 'm'
   return `\uFEFF${[
-    'disziplin;strecke_m;schwimmart;lauf;bahn;name;jahrgang',
-    '100 m Freistil;100;freistil;1;1;Anna Muster;2010',
-    '100 m Freistil;100;freistil;1;2;Ben Beispiel;2011',
-    '100 m Freistil;100;freistil;2;1;Clara Muster;2010',
-    '50 m Brust;50;brust;1;1;Dana Beispiel;2012',
+    'disziplin;strecke;schwimmart;lauf;bahn;name;jahrgang',
+    `100 ${einheitText} Freistil;100 ${einheitText};freistil;1;1;Anna Muster;2010`,
+    `100 ${einheitText} Freistil;100 ${einheitText};freistil;1;2;Ben Beispiel;2011`,
+    `100 ${einheitText} Freistil;100 ${einheitText};freistil;2;1;Clara Muster;2010`,
+    `${'50'} ${einheitText} Brust;50 ${einheitText};brust;1;1;Dana Beispiel;2012`,
   ].join('\r\n')}\r\n`
 }
 

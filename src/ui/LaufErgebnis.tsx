@@ -13,6 +13,7 @@
  */
 import { berechnePbs, pbDelta } from '../domain/analyse'
 import { formatDelta, formatStrecke, formatTime } from '../domain/format'
+import { einheitVon } from '../domain/einheit'
 import { finishMs } from '../domain/lauf'
 import type { Lauf } from '../domain/types'
 
@@ -86,7 +87,7 @@ export function LaufErgebnis({
           <h2 className="text-sm font-semibold">Ergebnis</h2>
           <p className="text-[11px] text-muted">
             {zeilen.length} {zeilen.length === 1 ? 'Bahn' : 'Bahnen'} ·{' '}
-            {formatStrecke(lauf.konfiguration.streckeM)}
+            {formatStrecke(lauf.konfiguration.streckeM, einheitVon(lauf.konfiguration))}
           </p>
         </div>
 

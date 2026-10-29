@@ -16,6 +16,7 @@
  * werden unverändert (nicht lokalisiert) geschrieben.
  */
 import { formatTime, lokalesDatum } from '../domain/format'
+import { einheitVon, streckeAnzeige } from '../domain/einheit'
 import { wettkampfErgebnis } from '../domain/wettkampf'
 import type { Lauf, Satz, Schwimmer, Wettkampf } from '../domain/types'
 
@@ -55,7 +56,9 @@ const KOPFZEILE = [
   'satz',
   'datum',
   'beckenlaenge_m',
+  'einheit',
   'strecke_m',
+  'strecke',
   'schwimmart',
   'reihe',
   'bahn',
@@ -105,13 +108,17 @@ export function laeufeAlsCsv(laeufe: Lauf[], satze: Satz[], schwimmer: Schwimmer
       // Ein Lauf liefert so viele Zeilen, wie er Anschläge hat. Die
       // Konfiguration wird pro Zeile wiederholt, damit jede Zeile für sich
       // auswertbar ist.
+      const einheit = einheitVon(lauf.konfiguration)
       return lauf.bahnen.flatMap((bahn) =>
         bahn.anschlaege.map((anschlag) =>
           [
             satz?.bezeichnung ?? '',
             datum,
             lauf.konfiguration.beckenlaengeM,
+            einheit,
             lauf.konfiguration.streckeM ?? '',
+            // Anzeige-Strecke in der Einheit; `strecke_m` bleibt kanonisch.
+            streckeAnzeige(lauf.konfiguration.streckeM, einheit) ?? '',
             lauf.konfiguration.schwimmart,
             bahn.reihe ?? 1,
             bahn.nummer,
@@ -153,6 +160,8 @@ const WETTKAMPF_KOPFZEILE = [
   'datum',
   'disziplin',
   'strecke_m',
+  'strecke',
+  'einheit',
   'schwimmart',
   'lauf',
   'platz',
@@ -204,6 +213,8 @@ export function wettkampfErgebnisseAlsCsv(
             wettkampf.datum,
             satz.bezeichnung,
             satz.konfiguration.streckeM ?? '',
+            streckeAnzeige(satz.konfiguration.streckeM, einheitVon(satz.konfiguration)) ?? '',
+            einheitVon(satz.konfiguration),
             satz.konfiguration.schwimmart,
             lauf.wiederholung ?? 1,
             zeile.platz ?? '',
@@ -213,7 +224,15 @@ export function wettkampfErgebnisseAlsCsv(
             // Excel sie nicht als 0 zählt.
             zeile.zeitMs ?? '',
             zeile.zeitMs === null ? '' : formatTime(zeile.zeitMs),
-            zeile.zeitMs === null ? 'offen' : 'Ziel',
+            // Status statt Zeit: DNS und DNF sind endgültig und für die
+            // Ergebnisliste eindeutig; nur wirklich offene Bahnen heißen offen.
+            zeile.status === 'dns'
+              ? 'DNS'
+              : zeile.status === 'dnf'
+                ? 'DNF'
+                : zeile.zeitMs === null
+                  ? 'offen'
+                  : 'Ziel',
             zeile.manuell ? 1 : 0,
           ]
             .map(feld)

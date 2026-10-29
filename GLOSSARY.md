@@ -96,6 +96,10 @@ _Avoid_: Startliste, Entry List, Meldung
 Die Zeit vom Start einer Bahn bis zu ihrem letzten Anschlag. Im Wettkampfmodus genügt dafür ein Tap pro Bahn; Splits werden nicht erfasst.
 _Avoid_: Endzeit, Finish Time
 
+**DNS / DNF**:
+Endgültiger Wettkampf-Status einer Bahn ohne Zielzeit: **DNS** (did not start) heißt „nicht gestartet“, **DNF** (did not finish) „nicht beendet“. Markierte Bahnen fehlen in Platzierung und Rückstand, beenden den Heat aber mit. Im Training kommt der Status nicht vor.
+_Avoid_: Ausfall, Disqualifikation, DSQ
+
 **Bestzeit (PB)**:
 Die schnellste gültige Zielzeit eines Schwimmers für eine Kombination aus Strecke, Schwimmart und Beckenlänge.
 _Avoid_: Rekord, Bestwert, PR

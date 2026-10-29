@@ -41,10 +41,20 @@ export const SCHWIMMARTEN: readonly { wert: Schwimmart; label: string }[] = [
 ]
 
 /**
- * Erlaubte Beckenlängen in Metern: 25 (Kurzbahn) und 50 (Langbahn).
- * Bestzeiten hängen an diesem Wert, deshalb ist er bewusst nicht frei.
+ * Anzeige-Einheit eines Laufs oder Wettkampfs.
+ *
+ * `m` ist die Voreinstellung; fehlt das Feld in älteren Daten, gilt Meter.
+ * Gespeichert wird immer kanonisch in Metern — die Einheit steuert nur
+ * Eingabe, Anzeige und die Trennung der Bestzeiten (ADR 0009).
  */
-export type Beckenlaenge = 25 | 50
+export type Einheit = 'm' | 'yd'
+
+/**
+ * Erlaubte Beckenlängen in Metern: 25 (Kurzbahn), 50 (Langbahn) und 22,86 m
+ * für ein 25-Yard-Becken. Bestzeiten hängen an diesem Wert, deshalb ist er
+ * bewusst nicht frei.
+ */
+export type Beckenlaenge = 25 | 50 | 22.86
 
 /**
  * Ein Lauf ist entweder Training (Anschläge pro Länge) oder Wettkampf (ein
@@ -54,14 +64,22 @@ export type Beckenlaenge = 25 | 50
  */
 export type LaufModus = 'training' | 'wettkampf'
 
-/** Die Konfiguration eines Laufs. `streckeM: null` bedeutet offene Strecke. */
+/**
+ * Die Konfiguration eines Laufs. `streckeM: null` bedeutet offene Strecke.
+ *
+ * `beckenlaengeM` und `streckeM` sind immer kanonisch in Metern gespeichert;
+ * `einheit` ist nur die Anzeige- und Eingabeeinheit. Fehlt sie, gilt `m`
+ * (ältere Daten und Backups bleiben unverändert lesbar).
+ */
 export interface LaufKonfiguration {
-  /** Beckenlänge, in der gemessen wird. */
+  /** Beckenlänge, in der gemessen wird (kanonisch in Metern). */
   beckenlaengeM: Beckenlaenge
   /** Zu schwimmende Distanz in Metern; ein Vielfaches der Beckenlänge. */
   streckeM: number | null
   /** Schwimmart für Bestzeiten und Beschreibung. */
   schwimmart: Schwimmart
+  /** Anzeige-Einheit; fehlt = `m`. */
+  einheit?: Einheit
 }
 
 /**
@@ -85,6 +103,16 @@ export interface Anschlag {
 }
 
 /**
+ * Endgültiger Wettkampf-Status einer Bahn ohne Zielzeit.
+ *
+ * `dns` = did not start (nicht gestartet), `dnf` = did not finish (nicht
+ * beendet). Markierte Bahnen zählen nicht in Platzierung und Rückstand und
+ * werden im CSV als `DNS` bzw. `DNF` ausgewiesen. Im Training kommt der Status
+ * nicht vor.
+ */
+export type WettkampfStatus = 'dns' | 'dnf'
+
+/**
  * Eine Bahn ist ein einzelner Timer innerhalb eines Laufs und gehört genau
  * einem Schwimmer (oder niemandem, `schwimmerId: null`).
  */
@@ -103,6 +131,11 @@ export interface Bahn {
   /** Monotone Startzeit der Bahn (`performance.now`), null solange nicht gestartet. */
   startMs: number | null
   anschlaege: Anschlag[]
+  /**
+   * Endgültig ohne Zeit beendet (`dns`/`dnf`), nur im Wettkampf. Fehlt das Feld,
+   * ist die Bahn offen bzw. normal gewertet; ältere Backups laden unverändert.
+   */
+  status?: WettkampfStatus
 }
 
 /**
@@ -138,7 +171,10 @@ export interface Wettkampf {
   name: string
   /** Wettkampftag als ISO-Datum (YYYY-MM-DD). */
   datum: string
+  /** Beckenlänge, kanonisch in Metern. */
   beckenlaengeM: Beckenlaenge
+  /** Anzeige-Einheit des Wettkampfs; fehlt = `m`. */
+  einheit?: Einheit
   /** Erstellungszeitpunkt als Wanduhr (`Date.now`), für Sortierung und Backup. */
   erstelltAm: number
 }

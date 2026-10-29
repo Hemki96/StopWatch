@@ -60,7 +60,7 @@ describe('laeufeAlsCsv', () => {
 
     expect(zeilen).toHaveLength(3)
     expect(zeilen[0]).toBe(
-      'satz;datum;beckenlaenge_m;strecke_m;schwimmart;reihe;bahn;schwimmer;laenge_nr;split_ms;split_formatiert;ist_finish;manuell;wiederholung;wiederholungen;takt_s;startversatz_ms',
+      'satz;datum;beckenlaenge_m;einheit;strecke_m;strecke;schwimmart;reihe;bahn;schwimmer;laenge_nr;split_ms;split_formatiert;ist_finish;manuell;wiederholung;wiederholungen;takt_s;startversatz_ms',
     )
     expect(zeilen[1]).toContain('1;31250;00:31,25;0;0')
     expect(zeilen[2]).toContain('2;64000;01:04,00;1;0')
@@ -72,6 +72,25 @@ describe('laeufeAlsCsv', () => {
     const csv = laeufeAlsCsv([laufMitZweiLaengen()], [satz], schwimmer)
     expect(csv.startsWith('\uFEFF')).toBe(true)
     expect(csv).toContain('"Test; mit Semikolon"')
+  })
+
+  // Ein Yard-Lauf weist Strecke und Einheit eindeutig aus: `strecke_m` bleibt
+  // kanonisch (91,44), `strecke` ist die Anzeige (100), `einheit` ist `yd`.
+  it('schreibt Strecke und Einheit für Yard-Läufe', () => {
+    const konfiguration = {
+      beckenlaengeM: 22.86 as const,
+      streckeM: 91.44,
+      schwimmart: 'freistil' as const,
+      einheit: 'yd' as const,
+    }
+    let lauf = createLauf(konfiguration, [{ nummer: 1 }])
+    lauf = startAll(lauf, 0, Date.UTC(2026, 9, 29, 9, 30))
+    const bahn = lauf.bahnen[0]!
+    lauf = tapLane(lauf, bahn.id, 30_000, 0)
+    lauf = tapLane(lauf, bahn.id, 61_000, 0)
+
+    const csv = laeufeAlsCsv([lauf], [], schwimmer)
+    expect(csv).toContain(';22.86;yd;91.44;100;freistil;')
   })
 
   // Ohne `schwimmerId` bleibt die Namensspalte leer; die Bahnnummer bleibt
