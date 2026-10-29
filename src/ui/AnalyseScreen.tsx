@@ -13,20 +13,16 @@
  */
 import { useMemo, useState } from 'react'
 import { useApp } from '../app/AppProvider'
-import {
-  abweichungZurVorrunde,
-  analyseMatrix,
-  analyseRunden,
-  istAnalyseSatz,
-  laengenMatrix,
-  letzterGleicherSatz,
-  mittlereAbweichungen,
-  rundenzahl,
-} from '../domain/analyse'
+import { istAnalyseSatzAusRunden } from '../domain/analyse'
 import { formatDelta, formatStrecke, formatTakt, formatTime } from '../domain/format'
 import { einheitVon, formatBeckenlaenge } from '../domain/einheit'
-import { isComplete, isFinished } from '../domain/lauf'
 import { SCHWIMMARTEN, type Satz } from '../domain/types'
+import {
+  kennzahlenFuerSatz,
+  laeufeNachSatz,
+  matrixFuerSatz,
+  personFuerSatz,
+} from './analyseMemo'
 import { ChevronLeftIcon, ChevronRightIcon } from './icons'
 
 const datumFormat = new Intl.DateTimeFormat('de-DE', {
@@ -105,13 +101,14 @@ function Leer() {
 /** Satzliste: neuester auswertbarer Satz zuerst, mit Kernzahl. */
 function SatzListe({ onOeffnen }: { onOeffnen: (satzId: string) => void }) {
   const app = useApp()
-  const saetze = useMemo(
-    () =>
-      app.satze
-        .filter((satz) => istAnalyseSatz(satz, app.laeufe))
-        .sort((a, b) => b.datum.localeCompare(a.datum) || b.erstelltAm - a.erstelltAm),
-    [app.satze, app.laeufe],
-  )
+  // Einmal gruppieren statt für jeden Satz alle Läufe zu filtern (#68). Die
+  // Kennzahlen je Zeile kommen memoisiert aus `analyseMemo`.
+  const saetze = useMemo(() => {
+    const nachSatz = laeufeNachSatz(app.laeufe)
+    return app.satze
+      .filter((satz) => istAnalyseSatzAusRunden(satz, nachSatz.get(satz.id) ?? []))
+      .sort((a, b) => b.datum.localeCompare(a.datum) || b.erstelltAm - a.erstelltAm)
+  }, [app.satze, app.laeufe])
 
   if (saetze.length === 0) return <Leer />
 
@@ -133,15 +130,9 @@ function SatzListe({ onOeffnen }: { onOeffnen: (satzId: string) => void }) {
           </h2>
           <ul className="space-y-2">
       {tagesSaetze.map((satz) => {
-        const runden = analyseRunden(satz, app.laeufe)
-        const abweichungen = mittlereAbweichungen(runden).filter(
-          (eintrag) => eintrag.mittelMs !== null,
-        )
-        const unvollstaendig = runden.some((lauf) => !isComplete(lauf))
-        const manuell = runden.some((lauf) =>
-          lauf.bahnen.some((bahn) =>
-            bahn.anschlaege.some((anschlag) => anschlag.manuell === true),
-          ),
+        const { runden, abweichungen, unvollstaendig, manuell } = kennzahlenFuerSatz(
+          satz,
+          app.laeufe,
         )
         return (
           <li key={satz.id}>
@@ -242,21 +233,16 @@ function SatzMatrix({
   onPerson: (index: number) => void
 }) {
   const app = useApp()
-  const runden = analyseRunden(satz, app.laeufe)
-  const referenz = letzterGleicherSatz(satz, app.satze, app.laeufe)
-  const referenzRunden = referenz ? analyseRunden(referenz, app.laeufe) : []
-  const matrix = analyseMatrix(runden, referenzRunden)
+  // Matrix, Referenz und „läuft“-Markierung werden nur für diesen Satz und nur
+  // bei geänderten Läufen neu gerechnet (#68). Die Markierung fällt nach einem
+  // Reload aus, weil dann die Startzeiten fehlen.
+  const { anzahlRunden, referenz, matrix, laufendeRunde, unvollstaendig } = matrixFuerSatz(
+    satz,
+    app.satze,
+    app.laeufe,
+  )
   const name = (id: string | null) =>
     id ? (app.schwimmer.find((eintrag) => eintrag.id === id)?.name ?? null) : null
-
-  // Die höchste gestartete, noch nicht vollständige Runde ist „läuft“; nach
-  // einem Reload fehlen die Startzeiten, dann bleibt die Markierung aus.
-  const laufendeRunde =
-    [...runden]
-      .reverse()
-      .find((lauf) => lauf.bahnen.some((bahn) => bahn.startMs !== null && !isFinished(bahn)))
-      ?.wiederholung ?? null
-  const unvollstaendig = runden.some((lauf) => !isComplete(lauf))
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -268,7 +254,7 @@ function SatzMatrix({
             satz.konfiguration.streckeM,
             einheitVon(satz.konfiguration),
           )} · ${artLabel(satz.konfiguration.schwimmart)}`,
-          `${rundenzahl(satz, app.laeufe)} ${rundenzahl(satz, app.laeufe) === 1 ? 'Runde' : 'Runden'}`,
+          `${anzahlRunden} ${anzahlRunden === 1 ? 'Runde' : 'Runden'}`,
           satz.plan ? `Takt ${formatTakt(satz.plan.taktSek)}` : null,
         ]
           .filter((teil): teil is string => Boolean(teil))
@@ -414,19 +400,13 @@ function PersonDrilldown({
   onZurueck: () => void
 }) {
   const app = useApp()
-  const runden = analyseRunden(satz, app.laeufe)
+  // Längenzeiten und Live-Abweichung je Person memoisiert; ein Wechsel der
+  // Runden invalidiert den Eintrag, ein reiner Render nicht (#68).
+  const { runden, matrix, live } = personFuerSatz(satz, index, app.laeufe)
   const basis = runden[0]?.bahnen[index]
   const name = basis?.schwimmerId
     ? (app.schwimmer.find((eintrag) => eintrag.id === basis.schwimmerId)?.name ?? null)
     : null
-  const matrix = laengenMatrix(runden, index)
-
-  // Live-Abweichung der zuletzt beendeten Runde, falls die Vorrunde im Ziel ist.
-  const letzteRunde = runden.at(-1)
-  const live =
-    letzteRunde?.wiederholung != null
-      ? abweichungZurVorrunde(runden, index, letzteRunde.wiederholung)
-      : null
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
