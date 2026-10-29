@@ -18,6 +18,7 @@ import 'fake-indexeddb/auto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Lauf, Satz, Schwimmer, Training, Wettkampf } from '../domain/types'
 import { getDb } from './db'
+import { DATENBANK_NAME } from './namensraum'
 import {
   clearAll,
   deleteLauf,
@@ -135,7 +136,7 @@ describe('getDb', () => {
   // statt die Datenbank mehrfach zu öffnen.
   it('öffnet das Schema in Version 3 und teilt die Verbindung', async () => {
     const db = await getDb()
-    expect(db.name).toBe('beckenrand')
+    expect(db.name).toBe(DATENBANK_NAME)
     expect(db.version).toBe(3)
     expect([...db.objectStoreNames].sort()).toEqual([
       'lauf',

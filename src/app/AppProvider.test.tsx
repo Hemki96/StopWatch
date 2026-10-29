@@ -21,11 +21,15 @@ import type { Training } from '../domain/types'
 import { isComplete } from '../domain/lauf'
 import { clearAll, loadAll } from '../storage/repository'
 import { BACKUP_FORMAT, BACKUP_VERSION } from '../storage/backup'
+import { speicherSchluessel } from '../storage/namensraum'
 import { render, warteAuf } from '../test/render'
 import { AppProvider, leseEinstellungen, useApp, type AppContextValue } from './AppProvider'
 
 /** Konfiguration mit zwei Längen: 100 m in einem 50-m-Becken. */
 const K100 = { beckenlaengeM: 50, streckeM: 100, schwimmart: 'freistil' } as const
+
+const EINSTELLUNGEN_KEY = speicherSchluessel('einstellungen')
+const THEME_KEY = speicherSchluessel('theme')
 
 // Gemountete Provider werden gesammelt und im `afterEach` abgebaut. Ohne das
 // würden Effekte, Timer und IndexedDB-Zugriffe in den nächsten Test lecken.
@@ -130,7 +134,7 @@ describe('AppProvider', () => {
     expect(app.wert().einstellungen.taktSek).toBe(10)
     expect(app.wert().einstellungen.schwimmerProBahn.slice(0, 4)).toEqual(['a', null, 'b', null])
 
-    const gespeichert = JSON.parse(localStorage.getItem('beckenrand.einstellungen') ?? '{}')
+    const gespeichert = JSON.parse(localStorage.getItem(EINSTELLUNGEN_KEY) ?? '{}')
     expect(gespeichert.startversatzMs).toBe(5_000)
 
     const neu = await geladeneApp()
@@ -143,14 +147,14 @@ describe('AppProvider', () => {
   // Beckenlänge ist, fällt auf den Standard zurück — Beckenlänge und
   // Schwimmart bleiben dabei erhalten.
   it('verwirft fehlerhafte gespeicherte Einstellungen und nimmt Standardwerte', () => {
-    localStorage.setItem('beckenrand.einstellungen', '{kaputt')
+    localStorage.setItem(EINSTELLUNGEN_KEY, '{kaputt')
     expect(leseEinstellungen().bahnen).toBe(6)
 
-    localStorage.setItem('beckenrand.einstellungen', JSON.stringify({ bahnen: 0 }))
+    localStorage.setItem(EINSTELLUNGEN_KEY, JSON.stringify({ bahnen: 0 }))
     expect(leseEinstellungen().bahnen).toBe(1)
 
     localStorage.setItem(
-      'beckenrand.einstellungen',
+      EINSTELLUNGEN_KEY,
       JSON.stringify({
         konfiguration: { beckenlaengeM: 25, streckeM: 30, schwimmart: 'brust' },
       }),
@@ -713,7 +717,7 @@ describe('AppProvider', () => {
     act(() => app.wert().setzeTheme('light'))
     expect(app.wert().theme).toBe('light')
     expect(document.documentElement.classList.contains('dark')).toBe(false)
-    expect(localStorage.getItem('beckenrand.theme')).toBe('light')
+    expect(localStorage.getItem(THEME_KEY)).toBe('light')
 
     act(() => app.wert().setzeTheme('dark'))
     expect(app.wert().theme).toBe('dark')

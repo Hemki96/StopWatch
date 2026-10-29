@@ -8,7 +8,7 @@ du sie sicherst oder löschst.
 
 ### IndexedDB
 
-Die fachlichen Daten liegen in der IndexedDB-Datenbank **`beckenrand`** (Version 3):
+Die fachlichen Daten liegen in der IndexedDB-Datenbank **`beckenrand.v2`** (Schema-Version 3):
 
 | Store | Inhalt |
 | --- | --- |
@@ -22,18 +22,37 @@ Die Datenbank gehört zum **Origin** der App. `https://hemki96.github.io/StopWat
 Entwicklungsserver haben getrennte Datenbestände. Ein anderer Browser oder ein anderes Gerät sieht
 die Daten ebenfalls nicht.
 
+**Geteilte Origin:** GitHub Pages liefert alle Projektseiten eines Accounts unter derselben Origin
+(`https://hemki96.github.io`) aus. IndexedDB und `localStorage` sind originweit und nicht durch den
+Pfad `/StopWatch/` getrennt. Andere Projekte unter derselben Origin könnten die Daten daher
+technisch lesen. Der Namensraum `beckenrand.v2` verhindert versehentliche Kollisionen, ist aber
+keine Sicherheitsgrenze. Wer diesen Schutz braucht, muss die App unter einer eigenen Domain
+betreiben; siehe [ADR-0011](../adr/0011-geteilte-origin-und-speicher-namensraum.md).
+
+Die App liest beim ersten Start nach dem Update den bisherigen Bestand aus der Datenbank
+`beckenrand` und kopiert ihn einmalig nach `beckenrand.v2`. Die alte Datenbank bleibt unverändert
+liegen und wird nicht gelöscht; schlägt die Übernahme fehl, arbeitet die App vorerst mit ihr weiter.
+Ein Merker verhindert, dass die Übernahme nach **Alle Daten löschen** erneut läuft und gelöschte
+Messungen zurückholt. Beim ersten Start nach dem Update sollten andere Beckenrand-Tabs geschlossen
+sein: Ein noch offener Tab der alten Version schreibt weiter in die alte Datenbank, und diese
+späteren Änderungen werden nicht automatisch nachgezogen.
+
 ### localStorage
 
 Kleine Bedieneinstellungen liegen im localStorage:
 
 | Schlüssel | Inhalt |
 | --- | --- |
-| `beckenrand.onboarding` | ob das Onboarding abgeschlossen ist |
-| `beckenrand.theme` | Designwahl `system`, `light` oder `dark` |
-| `beckenrand.einstellungen` | Standardwerte für den nächsten Lauf |
-| `beckenrand.aktiverLauf` | zuletzt sichtbarer Lauf |
-| `beckenrand.aktiveLaeufe` | Liste der aktiven Läufe |
-| `beckenrand.training` | zuletzt geöffnetes Training |
+| `beckenrand.v2.onboarding` | ob das Onboarding abgeschlossen ist |
+| `beckenrand.v2.theme` | Designwahl `system`, `light` oder `dark` |
+| `beckenrand.v2.einstellungen` | Standardwerte für den nächsten Lauf |
+| `beckenrand.v2.aktiverLauf` | zuletzt sichtbarer Lauf |
+| `beckenrand.v2.aktiveLaeufe` | Liste der aktiven Läufe |
+| `beckenrand.v2.training` | zuletzt geöffnetes Training |
+| `beckenrand.v2.migration` | technischer Merker: Datenübernahme ist abgeschlossen |
+
+Die früheren Schlüssel ohne `.v2` (`beckenrand.theme` usw.) werden weiterhin gelesen, solange der
+neue Schlüssel fehlt, und beim nächsten Schreiben ersetzt. Nichts wird dabei gelöscht.
 
 Diese Werte sind **nicht** Teil des JSON-Backups. Nach einem Import auf einem anderen Gerät sind
 Design und Standardwerte deshalb wieder auf den Standard gesetzt.
@@ -219,6 +238,11 @@ Gerät oder nach dem Löschen der Daten den Import testen.
 - Es gibt keine Anmeldung, keine Analyse und keine Werbung.
 - Die Live-App wird als statische Seite über GitHub Pages ausgeliefert. Beim Laden der App fallen
   die üblichen Server-Zugriffsdaten an; die Messdaten bleiben davon unberührt.
+- **Die GitHub-Pages-Origin ist geteilt.** Alle Projektseiten desselben Accounts laufen unter
+  `https://hemki96.github.io`. IndexedDB und `localStorage` gelten für die ganze Origin, nicht nur
+  für `/StopWatch/`. Anderes JavaScript auf dieser Origin könnte die lokal gespeicherten Daten
+  technisch lesen. Das ist kein akuter Angriff, aber eine bewusste Grenze. Der Namensraum
+  `beckenrand.v2` verhindert nur Verwechslungen, keine fremden Zugriffe.
 - Namen und Jahrgänge sind personenbezogene Daten. Das Backup entsprechend behandeln und nicht
   öffentlich ablegen.
 

@@ -10,6 +10,7 @@
  */
 import { useState } from 'react'
 import { useApp } from '../app/AppProvider'
+import { entferneText, leseText, schreibeText } from '../app/lokalSpeicher'
 import {
   MAX_TRAININGS_SAETZE,
   naechsterSatz,
@@ -32,8 +33,10 @@ import { TrainingsSatzSheet } from './TrainingsSatzSheet'
 import { ChevronLeftIcon, PlusIcon, TrashIcon } from './icons'
 
 // Gemerkt wird nur die Auswahl (Training), nicht der Bearbeitungszustand:
-// Nach einem Neustart landet man wieder im zuletzt geöffneten Training.
-const AUSWAHL_KEY = 'beckenrand.training'
+// Nach einem Neustart landet man wieder im zuletzt geöffneten Training. Der
+// logische Schlüssel wird von `lokalSpeicher` namespaced; der frühere Schlüssel
+// bleibt als Rückfall lesbar.
+const AUSWAHL_KEY = 'training'
 
 // Anzeigetexte und Farben je Satzstatus; die Statuswerte selbst kommen aus
 // domain/training.
@@ -60,21 +63,13 @@ const datumFormat = new Intl.DateTimeFormat('de-DE', {
 
 /** Liest die zuletzt gewählte Trainings-ID; ohne Speicher beginnt der Tab in der Liste. */
 function leseAuswahl(): string | null {
-  try {
-    return localStorage.getItem(AUSWAHL_KEY)
-  } catch {
-    return null
-  }
+  return leseText(AUSWAHL_KEY)
 }
 
 /** Merkt die Auswahl; `null` löscht den Eintrag und zeigt wieder die Liste. */
 function merkeAuswahl(id: string | null): void {
-  try {
-    if (id) localStorage.setItem(AUSWAHL_KEY, id)
-    else localStorage.removeItem(AUSWAHL_KEY)
-  } catch {
-    // Ohne Speicher startet der Tab beim nächsten Mal wieder in der Liste.
-  }
+  if (id) schreibeText(AUSWAHL_KEY, id)
+  else entferneText(AUSWAHL_KEY)
 }
 
 /**

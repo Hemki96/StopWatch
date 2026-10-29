@@ -25,7 +25,7 @@ import { oeffneApp, starteLauf } from './helfer'
  * Wiederholungen und Takt in Sekunden.
  * @returns Promise, das nach dem Laden und der Tab-Abstimmung auflöst.
  *
- * Das Skript schreibt den vollständigen Block `beckenrand.einstellungen`, den
+ * Das Skript schreibt den vollständigen Block `beckenrand.v2.einstellungen`, den
  * die App beim Laden validiert und begrenzt (Startversatz 0…120 s, Takt
  * 10…3600 s, Wiederholungen 1…20). `wiederholungen: 1` bedeutet „kein Plan“,
  * also einen normalen Lauf. `addInitScript` läuft auch nach einem Reload,
@@ -46,7 +46,7 @@ async function oeffneMitEinstellungen(
   await page.addInitScript((werte) => {
     try {
       localStorage.setItem(
-        'beckenrand.einstellungen',
+        'beckenrand.v2.einstellungen',
         JSON.stringify({
           konfiguration: {
             beckenlaengeM: 50,

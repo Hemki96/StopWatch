@@ -338,6 +338,7 @@ Details: [Oberfläche](oberflaeche.md).
 | `BroadcastChannel` nicht verfügbar | Tab wird sofort aktiv |
 | `localStorage` wirft (privater Modus) | App läuft ohne gemerkte Auswahl weiter |
 | Ungültiges Backup | Meldung mit Pfad; nichts wird geschrieben |
+| Übernahme aus alter Datenbank scheitert | Konsolenwarnung; App arbeitet mit `beckenrand` weiter, nächster Start versucht es erneut |
 | Ungültige Konfiguration | Domain-Funktion gibt den alten Lauf zurück; UI zeigt den Fehler |
 
 ## Performance
@@ -360,6 +361,35 @@ Details: [Oberfläche](oberflaeche.md).
 - CSV schützt vor Formel-Injection durch ein führendes Apostroph.
 - Das Backup wird vollständig validiert und in einer Transaktion geschrieben.
 - Lokale Daten sind nicht verschlüsselt. Wer Gerätezugriff hat, hat Datenzugriff.
+
+### Geteilte GitHub-Pages-Origin
+
+GitHub Pages liefert alle Projektseiten eines Accounts unter derselben **Origin** aus, z. B.
+`https://hemki96.github.io`. IndexedDB und `localStorage` sind originweit und **nicht** durch den
+Pfad `/StopWatch/` getrennt; der Service-Worker-Scope schon. Anderes JavaScript auf derselben Origin
+könnte die Datenbank also öffnen und lesen.
+
+Deshalb tragen alle persistenten Namen einen Speicher-Namensraum aus
+`src/storage/namensraum.ts`:
+
+| Zweck | Name |
+| --- | --- |
+| IndexedDB | `beckenrand.v2` |
+| `localStorage` | `beckenrand.v2.<schlüssel>` |
+| `BroadcastChannel` | `beckenrand.tabs` (bewusst ohne neuen Namensraum) |
+
+Der Kanal speichert keine Daten. Sein bisheriger Name lässt einen noch offenen Tab der alten
+App-Version und die neue Version weiter koordinieren, statt gleichzeitig in zwei getrennte
+Datenbanken zu schreiben.
+
+Der Namensraum verhindert versehentliche Kollisionen mit anderen Projekten, ist aber **keine
+Sicherheitsgrenze**. Diese schafft nur eine eigene Origin (eigene Domain). Siehe
+[ADR-0011](../adr/0011-geteilte-origin-und-speicher-namensraum.md).
+
+Die Übernahme aus der früheren Datenbank `beckenrand` ist nicht destruktiv: Sie läuft nur, wenn die
+neue Datenbank leer ist, kopiert in einer Transaktion und lässt die alte Datenbank unverändert.
+Schlägt sie fehl, arbeitet die App mit der alten Datenbank weiter. `localStorage` liest den früheren
+Schlüssel als Rückfall und schreibt immer den neuen; Löschen entfernt beide.
 
 ## Bewusste Grenzen
 
