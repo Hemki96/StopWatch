@@ -6,7 +6,7 @@
  * ein versehentliches Enter nichts löscht; die Bestätigung ist standardmäßig
  * rot, außer bei nicht-destruktiven Aktionen wie einem Import.
  */
-import { useId, useRef } from 'react'
+import { useId, useRef, type ReactNode } from 'react'
 import { Dialog } from './Dialog'
 
 interface BestaetigungProps {
@@ -18,6 +18,8 @@ interface BestaetigungProps {
   gefahr?: boolean
   onBestaetigen: () => void
   onAbbrechen: () => void
+  /** Zusätzliche Entscheidung zwischen Text und Knöpfen, z. B. eine Option. */
+  children?: ReactNode
 }
 
 /**
@@ -33,6 +35,7 @@ export function Bestaetigung({
   gefahr = true,
   onBestaetigen,
   onAbbrechen,
+  children,
 }: BestaetigungProps) {
   // Ids für `aria-labelledby`/`aria-describedby`; sprechende Texte allein
   // reichen Screenreadern nicht, sie brauchen die Verknüpfung.
@@ -59,6 +62,7 @@ export function Bestaetigung({
       <p id={textId} className="mt-2 text-sm leading-relaxed text-muted">
         {text}
       </p>
+      {children}
       <div className="mt-5 flex gap-2">
         {/* Abbrechen steht links und behält den Fokus; die destruktive
             Bestätigung ist die bewusstere zweite Handlung. */}

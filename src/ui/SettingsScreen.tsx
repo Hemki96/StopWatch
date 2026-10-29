@@ -9,8 +9,8 @@
  * den Bestand verändert. Gelesen und geschrieben wird über `app/AppProvider`;
  * Dateiformate kommen aus export/, Datenzugriffe und Prüfungen aus app/.
  */
-import { useState } from 'react'
-import { useApp, type Backup } from '../app/AppProvider'
+import { useId, useState } from 'react'
+import { useApp, type Backup, type ImportKonflikte } from '../app/AppProvider'
 import { useInstallPrompt } from '../app/pwa'
 import { formatStrecke, formatTakt, lokalesDatum } from '../domain/format'
 import { einheitVon, formatBeckenlaenge } from '../domain/einheit'
@@ -80,10 +80,17 @@ export function SettingsScreen() {
   const [frageLoeschen, setFrageLoeschen] = useState(false)
   // Import läuft in zwei Stufen: erst prüfen und als Vorschau merken, dann
   // erst nach Bestätigung schreiben. `importMeldung` zeigt Ablehnungen an.
-  const [importVorschau, setImportVorschau] = useState<{ backup: Backup; text: string } | null>(
-    null,
-  )
+  // `konflikteErsetzen` ist die ausdrückliche Entscheidung, kollidierende
+  // Datensätze durch das Backup zu ersetzen; ohne sie bleibt der lokale Stand.
+  const [importVorschau, setImportVorschau] = useState<{
+    backup: Backup
+    text: string
+    konflikte: ImportKonflikte
+  } | null>(null)
+  const [konflikteErsetzen, setKonflikteErsetzen] = useState(false)
   const [importMeldung, setImportMeldung] = useState<string | null>(null)
+  // Verknüpft den Erklärtext mit dem Kästchen für Screenreader.
+  const konfliktHinweisId = useId()
 
   /** Fordert dauerhaften Speicher an und meldet das Ergebnis als Toast. */
   const fordereSpeicherSchutz = async () => {
@@ -97,6 +104,13 @@ export function SettingsScreen() {
   const speicher = app.speicherSchutz
   const einheit = einheitVon(konfiguration)
   const art = SCHWIMMARTEN.find((s) => s.wert === konfiguration.schwimmart)?.label ?? ''
+  // Solange Konflikte lokal bleiben, wäre „übernommen“ für die Backup-Zahl
+  // falsch: Ein Teil der Datensätze wird übersprungen.
+  const importUmfangText = importVorschau
+    ? importVorschau.konflikte.gesamt === 0 || konflikteErsetzen
+      ? `Übernommen werden: ${importVorschau.text}.`
+      : `Im Backup enthalten: ${importVorschau.text}.`
+    : ''
   // Vorschau des nächsten Laufs: Serie nur mit Wiederholungszahl und Takt,
   // Versatz nur wenn gesetzt. `null`-Teile werden vor dem Join entfernt.
   const naechsterLauf = [
@@ -157,37 +171,63 @@ export function SettingsScreen() {
       setImportMeldung('Die Datei ist größer als 10 MB und wird nicht eingelesen.')
       return
     }
+    let inhalt: unknown
     try {
-      const inhalt: unknown = JSON.parse(await datei.text())
-      const pruefung = app.pruefeBackupFuerImport(inhalt)
-      if (!pruefung.ok) {
-        setImportMeldung(pruefung.fehler)
-        return
-      }
+      inhalt = JSON.parse(await datei.text())
+    } catch {
+      setImportMeldung('Die Datei ist kein gültiges JSON.')
+      return
+    }
+    const pruefung = app.pruefeBackupFuerImport(inhalt)
+    if (!pruefung.ok) {
+      setImportMeldung(pruefung.fehler)
+      return
+    }
+    try {
+      // Die Konfliktprüfung liest nur. Sie entscheidet nichts; die Auswahl
+      // trifft der Nutzer im nächsten Dialog.
+      const konflikte = await app.ermittleImportKonflikte(pruefung.backup)
+      setKonflikteErsetzen(false)
       setImportVorschau({
         backup: pruefung.backup,
         text: pruefung.text,
+        konflikte,
       })
     } catch {
-      setImportMeldung('Die Datei ist kein gültiges JSON.')
+      setImportMeldung(
+        'Der vorhandene Bestand konnte nicht gelesen werden. Es wurde nichts verändert.',
+      )
     }
   }
 
   /**
    * Schreibt das geprüfte Backup und lädt anschließend alle Daten neu.
    *
-   * Der Import ergänzt den Bestand, er ersetzt ihn nicht. Schlägt das Schreiben
-   * fehl, wird die Vorschau geschlossen und die Fehlermeldung angezeigt.
+   * Der Import ergänzt den Bestand; kollidierende Datensätze bleiben ohne
+   * ausdrückliche Entscheidung lokal erhalten. Schlägt das Schreiben fehl, wird
+   * die Vorschau geschlossen und die Fehlermeldung angezeigt.
    */
   const fuehreImportAus = async () => {
     if (!importVorschau || !app.tabAktiv) return
     const { backup, text } = importVorschau
+    const aufloesung = konflikteErsetzen ? 'backupErsetzen' : 'lokalBehalten'
     try {
-      await app.importiereBackup(backup)
+      const konflikte = await app.importiereBackup(backup, aufloesung)
       setImportVorschau(null)
-      app.zeigeToast(`Übernommen: ${text}.`)
+      setKonflikteErsetzen(false)
+      // Die Zahl stammt aus der Prüfung im Schreibvorgang: Sie kann von der
+      // Vorschau abweichen, wenn sich der Bestand inzwischen geändert hat.
+      const hinweis =
+        konflikte.gesamt === 0
+          ? ''
+          : aufloesung === 'backupErsetzen'
+            ? ` ${konflikte.gesamt} Konflikte wurden durch das Backup ersetzt.`
+            : ` ${konflikte.gesamt} Konflikte: Der lokale Stand blieb erhalten.`
+      const kopf = konflikte.gesamt === 0 ? 'Übernommen' : 'Backup gelesen'
+      app.zeigeToast(`${kopf}: ${text}.${hinweis}`)
     } catch (fehler) {
       setImportVorschau(null)
+      setKonflikteErsetzen(false)
       setImportMeldung(
         fehler instanceof Error ? fehler.message : 'Das Backup konnte nicht geschrieben werden.',
       )
@@ -347,17 +387,49 @@ export function SettingsScreen() {
         titel="Backup importieren?"
         text={
           importVorschau
-            ? `Vorhandene Daten bleiben erhalten; Datensätze mit derselben ID werden durch den Stand des Backups ersetzt. Übernommen werden: ${importVorschau.text}.${
+            ? `${
+                konflikteErsetzen
+                  ? 'Kollidierende Datensätze werden durch den Stand des Backups ersetzt; die übrigen vorhandenen Daten bleiben erhalten.'
+                  : 'Vorhandene Daten bleiben erhalten; neue Datensätze werden ergänzt.'
+              } ${importUmfangText}${
                 // Eine laufende Messung wird beim Neuladen zurückgesetzt.
                 app.brauchtTakt ? ' Eine laufende Messung wird dabei unterbrochen.' : ''
               }`
             : ''
         }
-        bestaetigenLabel="Importieren"
+        bestaetigenLabel={konflikteErsetzen ? 'Ersetzen und importieren' : 'Importieren'}
         gefahr={false}
         onBestaetigen={() => void fuehreImportAus()}
-        onAbbrechen={() => setImportVorschau(null)}
-      />
+        onAbbrechen={() => {
+          setImportVorschau(null)
+          setKonflikteErsetzen(false)
+        }}
+      >
+        {importVorschau && importVorschau.konflikte.gesamt > 0 ? (
+          <div className="mt-3 rounded-xl border border-line bg-surface2 px-3 py-3">
+            {/* `status` statt `alert`: Die Vorschau ist bereits offen, die
+                Zusammenfassung soll vorgelesen, aber nicht als Fehler gewertet
+                werden. */}
+            <p role="status" className="text-sm font-medium">
+              {importVorschau.konflikte.text}
+            </p>
+            <label className="mt-2 flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={konflikteErsetzen}
+                onChange={(event) => setKonflikteErsetzen(event.currentTarget.checked)}
+                aria-describedby={konfliktHinweisId}
+                className="mt-0.5 h-4 w-4 shrink-0"
+              />
+              <span>Konflikte durch den Stand des Backups ersetzen</span>
+            </label>
+            <p id={konfliktHinweisId} className="mt-1 text-xs leading-relaxed text-muted">
+              Ohne Häkchen bleiben die lokalen Datensätze bei Konflikten unverändert. Nicht
+              kollidierende Datensätze werden in beiden Fällen übernommen.
+            </p>
+          </div>
+        ) : null}
+      </Bestaetigung>
 
       <Sheet
         open={importMeldung !== null}

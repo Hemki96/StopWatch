@@ -338,6 +338,7 @@ Details: [Oberfläche](oberflaeche.md).
 | `BroadcastChannel` nicht verfügbar | Tab wird sofort aktiv |
 | `localStorage` wirft (privater Modus) | App läuft ohne gemerkte Auswahl weiter |
 | Ungültiges Backup | Meldung mit Pfad; nichts wird geschrieben |
+| Backup-Konflikt (gleiche ID, abweichender Inhalt) | Vorschau nennt Zahl und Art; ohne ausdrückliche Entscheidung bleibt der lokale Stand |
 | Übernahme aus alter Datenbank scheitert | Konsolenwarnung; App arbeitet mit `beckenrand` weiter, nächster Start versucht es erneut |
 | Ungültige Konfiguration | Domain-Funktion gibt den alten Lauf zurück; UI zeigt den Fehler |
 
@@ -359,7 +360,8 @@ Details: [Oberfläche](oberflaeche.md).
   Origin. Der Dev-Server bleibt davon ausgenommen. Siehe
   [Bauen und Veröffentlichen](bauen-und-veroeffentlichen.md#content-security-policy).
 - CSV schützt vor Formel-Injection durch ein führendes Apostroph.
-- Das Backup wird vollständig validiert und in einer Transaktion geschrieben.
+- Das Backup wird vollständig validiert und in einer Transaktion geschrieben. Kollidierende IDs
+  werden dabei erkannt; ohne ausdrückliche Ersetzen-Entscheidung bleibt der lokale Stand.
 - Lokale Daten sind nicht verschlüsselt. Wer Gerätezugriff hat, hat Datenzugriff.
 
 ### Geteilte GitHub-Pages-Origin

@@ -92,6 +92,10 @@ _Avoid_: Event, Wettkampf, Bewerb
 Die Startliste eines Wettkampfs: pro Lauf die Bahnen und Namen. Sie wird als CSV importiert und legt Disziplinen, Läufe und Bahnen an.
 _Avoid_: Startliste, Entry List, Meldung
 
+**Import-Konflikt**:
+Ein Datensatz in einem Backup mit derselben ID wie ein lokaler Datensatz, aber abweichendem Inhalt. Standardmäßig bleibt der lokale Stand; erst eine ausdrückliche Entscheidung ersetzt ihn durch das Backup.
+_Avoid_: Duplikat, Merge-Konflikt, Überschreiben
+
 **Zielzeit**:
 Die Zeit vom Start einer Bahn bis zu ihrem letzten Anschlag. Im Wettkampfmodus genügt dafür ein Tap pro Bahn; Splits werden nicht erfasst.
 _Avoid_: Endzeit, Finish Time

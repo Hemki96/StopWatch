@@ -86,10 +86,36 @@ function lauf(id: string, satzId: string | null = 's1', nummer = 1): Lauf {
   }
 }
 
+// Erzeugt einen Lauf mit `anzahl` gültigen Anschlägen; der letzte trägt das
+// Finish. Mehr Anschläge bedeuten in den Konflikttests einen neueren Stand.
+function laufMitAnschlaegen(id: string, anzahl: number, erfasstAb = 1): Lauf {
+  const ergebnis = lauf(id)
+  ergebnis.bahnen[0]!.anschlaege = Array.from({ length: anzahl }, (_, index) => ({
+    laengeNr: index + 1,
+    splitMs: (index + 1) * 30_000,
+    erfasstAt: erfasstAb + index,
+    istFinish: index === anzahl - 1,
+  }))
+  return ergebnis
+}
+
+/** Hülle für einen Import im Test; die Bestände bleiben steuerbar. */
+function backupMit(laeufe: Lauf[]) {
+  return {
+    format: 'beckenrand-backup',
+    version: 3,
+    exportiertAm: '2026-10-29T10:00:00.000Z',
+    schwimmer: [],
+    satze: [],
+    laeufe,
+    wettkampfe: [],
+    trainings: [],
+  }
+}
+
 // Wettkampf mit festem Datum; die Beckenlänge 50 m ist die einzige gültige
 // neben 25 m.
-function wettkampf(id: string, name: string, datum = '2026-10-29'): Wettkampf {
-  return { id, name, datum, beckenlaengeM: 50, erstelltAm: 1 }
+function wettkampf(id: string, name: string, datum = '2026-10-29'): Wettkampf {  return { id, name, datum, beckenlaengeM: 50, erstelltAm: 1 }
 }
 
 // Zwei Bahnen ohne Zuordnung und ein einzelner Satz; damit ist ein Training
@@ -551,5 +577,68 @@ describe('Backup', () => {
       wettkampfe: [],
       trainings: [],
     })
+  })
+})
+
+// Konflikte beim Import: Ein vorhandener Lauf mit mehr Anschlägen darf ohne
+// ausdrückliche Entscheidung nicht durch einen älteren Backup-Stand ersetzt
+// werden. Nicht kollidierende Datensätze werden trotzdem übernommen.
+describe('Backup-Konflikte', () => {
+  it('behält einen neueren lokalen Lauf und importiert den Rest', async () => {
+    await saveLauf(laufMitAnschlaegen('l1', 2))
+    await saveLauf(laufMitAnschlaegen('l3', 1))
+
+    const ergebnis = await importBackup(
+      backupMit([laufMitAnschlaegen('l1', 1), laufMitAnschlaegen('l2', 1)]),
+    )
+
+    expect(ergebnis.gesamt).toBe(1)
+    expect(ergebnis.neuereLokale).toBe(1)
+    expect(ergebnis.eintraege).toEqual([{ bestand: 'laeufe', id: 'l1', art: 'lokalNeuer' }])
+
+    const daten = await loadAll()
+    expect(daten.laeufe.find((eintrag) => eintrag.id === 'l1')?.bahnen[0]?.anschlaege).toHaveLength(
+      2,
+    )
+    // Der neue Lauf aus dem Backup ist ergänzt, der vorhandene l3 unverändert.
+    expect(daten.laeufe.map((eintrag) => eintrag.id).sort()).toEqual(['l1', 'l2', 'l3'])
+  })
+
+  it('ersetzt den lokalen Lauf nur bei ausdrücklicher Entscheidung', async () => {
+    await saveLauf(laufMitAnschlaegen('l1', 2))
+
+    const ergebnis = await importBackup(backupMit([laufMitAnschlaegen('l1', 1)]), {
+      konflikte: 'backupErsetzen',
+    })
+
+    expect(ergebnis.gesamt).toBe(1)
+
+    const daten = await loadAll()
+    expect(daten.laeufe[0]?.bahnen[0]?.anschlaege).toHaveLength(1)
+  })
+
+  // Gleicher Inhalt ist kein Konflikt und wird ohne Meldung übernommen.
+  it('meldet bei gleichem Inhalt keinen Konflikt', async () => {
+    await saveLauf(laufMitAnschlaegen('l1', 2))
+
+    const ergebnis = await importBackup(backupMit([laufMitAnschlaegen('l1', 2)]))
+
+    expect(ergebnis).toEqual({ eintraege: [], gesamt: 0, neuereLokale: 0 })
+    const daten = await loadAll()
+    expect(daten.laeufe[0]?.bahnen[0]?.anschlaege).toHaveLength(2)
+  })
+
+  // Die Prüfung läuft innerhalb der Schreibtransaktion. Ein abweichender
+  // Datensatz wird auch dann nicht geschrieben, wenn die Vorschau ihn noch
+  // nicht kannte, weil der Bestand erst danach entstanden ist.
+  it('erkennt Konflikte erst beim Schreiben gegen den aktuellen Stand', async () => {
+    const backup = backupMit([laufMitAnschlaegen('l1', 1)])
+    await saveLauf(laufMitAnschlaegen('l1', 3))
+
+    const ergebnis = await importBackup(backup)
+
+    expect(ergebnis.gesamt).toBe(1)
+    const daten = await loadAll()
+    expect(daten.laeufe[0]?.bahnen[0]?.anschlaege).toHaveLength(3)
   })
 })

@@ -23,7 +23,17 @@ import type { Lauf, Satz, Schwimmer, Training, Wettkampf } from '../domain/types
 import { MAX_BAHNEN, MAX_REIHEN, bahnenGesamt } from '../domain/training'
 import { bahnReihe, isFinished } from '../domain/lauf'
 import { istBeckenlaenge } from '../domain/einheit'
-import { BACKUP_FORMAT, BACKUP_VERSION, pruefeBackup, type Backup } from './backup'
+import {
+  BACKUP_FORMAT,
+  BACKUP_VERSION,
+  ermittleBackupKonflikte,
+  loeseBackupKonflikte,
+  pruefeBackup,
+  type Backup,
+  type BackupBestand,
+  type BackupKonflikte,
+  type KonfliktAufloesung,
+} from './backup'
 
 /**
  * Bringt einen geladenen Lauf auf den aktuellen Stand und entschärft
@@ -416,15 +426,47 @@ export async function exportBackup(): Promise<Backup> {
 }
 
 /**
+ * Bringt die Datensätze eines geprüften Backups auf die Form, die auch beim
+ * Schreiben in der Datenbank landet.
+ *
+ * Konfliktvergleich und Import bewerten damit denselben Stand: Ein älteres
+ * Backup ohne `startversatzMs`, `plan` oder `modus` gilt nicht schon deshalb
+ * als abweichend, weil diese Felder fehlen. Die Eingabe bleibt unverändert.
+ */
+export function normalisiereBackup(bestand: BackupBestand): BackupBestand {
+  return {
+    schwimmer: bestand.schwimmer,
+    wettkampfe: bestand.wettkampfe.map(normalizeWettkampfOnLoad),
+    trainings: bestand.trainings.map(normalizeTrainingOnLoad),
+    satze: bestand.satze.map(normalizeSatzOnLoad),
+    laeufe: bestand.laeufe.map((lauf) => normalizeOnLoad(lauf)),
+  }
+}
+
+/** Optionen für `importBackup`. */
+export interface ImportOptionen {
+  /**
+   * Wie mit Kollisionen umgegangen wird. Standard ist `lokalBehalten`: Ein
+   * vorhandener Datensatz mit derselben ID wird nicht überschrieben.
+   */
+  konflikte?: KonfliktAufloesung
+}
+
+/**
  * Schreibt ein geprüftes Backup ganz oder gar nicht. Die Prüfung läuft auch
  * hier noch einmal, damit kein Aufrufer die Validierung überspringen kann.
  *
  * Verhalten:
  * - Ungültige Daten führen vor dem Öffnen der Transaktion zu einem Fehler mit
  *   der Meldung aus `pruefeBackup`; der Bestand bleibt unverändert.
- * - Geschrieben wird per `put`, also als Upsert. Vorhandene Datensätze mit
- *   gleicher `id` werden überschrieben, andere bleiben erhalten; das Backup
- *   ersetzt den Bestand nicht.
+ * - Kollidierende IDs werden erkannt: Ein vorhandener Datensatz mit gleicher
+ *   `id` und abweichendem Inhalt ist ein Konflikt. Ohne `backupErsetzen` wird
+ *   er übersprungen, damit ein älteres Backup keine neueren Messungen
+ *   zurücksetzt. Die Entscheidung wird innerhalb derselben Transaktion gegen
+ *   den dann gültigen Stand getroffen; die Vorschau kann also veralten, ohne
+ *   Daten zu verlieren.
+ * - Nicht kollidierende Datensätze werden ergänzt; das Backup ersetzt den
+ *   Bestand nicht.
  * - Reihenfolge: erst Schwimmer, Wettkämpfe und Trainings, dann Sätze, zuletzt
  *   Läufe. So existieren die Bezugsobjekte, bevor abhängige Daten geschrieben
  *   werden.
@@ -432,31 +474,59 @@ export async function exportBackup(): Promise<Backup> {
  *   Backup die aktuellen Felder erhält.
  * - Alle Stores liegen in einer Transaktion. Ein Fehler beim Schreiben bricht
  *   sie ab; IndexedDB rollt dann sämtliche Änderungen zurück.
+ *
+ * Rückgabe: die erkannten Konflikte, damit die Oberfläche die tatsächlich
+ * übersprungenen oder ersetzten Datensätze melden kann.
  */
-export async function importBackup(roh: unknown): Promise<void> {
+export async function importBackup(
+  roh: unknown,
+  optionen: ImportOptionen = {},
+): Promise<BackupKonflikte> {
   const pruefung = pruefeBackup(roh)
   if (!pruefung.ok) throw new Error(pruefung.fehler)
   const backup = pruefung.backup
+  const aufloesung = optionen.konflikte ?? 'lokalBehalten'
 
   const db = await getDb()
   const tx = db.transaction(['schwimmer', 'satz', 'lauf', 'wettkampf', 'training'], 'readwrite')
   try {
-    for (const schwimmer of backup.schwimmer) {
-      await tx.objectStore('schwimmer').put(schwimmer)
+    // Lesen und Schreiben liegen in derselben Transaktion. Der Konfliktvergleich
+    // sieht damit genau den Stand, auf den geschrieben wird, und bleibt atomar.
+    const [schwimmer, satze, laeufe, wettkampfe, trainings] = await Promise.all([
+      tx.objectStore('schwimmer').getAll(),
+      tx.objectStore('satz').getAll(),
+      tx.objectStore('lauf').getAll(),
+      tx.objectStore('wettkampf').getAll(),
+      tx.objectStore('training').getAll(),
+    ])
+    const bestand = normalisiereBackup({
+      schwimmer,
+      satze,
+      laeufe,
+      wettkampfe,
+      trainings,
+    })
+    const normalisiert = normalisiereBackup(backup)
+    const konflikte = ermittleBackupKonflikte(normalisiert, bestand)
+    const zuSchreiben = loeseBackupKonflikte(normalisiert, konflikte.eintraege, aufloesung)
+
+    for (const eintrag of zuSchreiben.schwimmer) {
+      await tx.objectStore('schwimmer').put(eintrag)
     }
-    for (const wettkampf of backup.wettkampfe) {
-      await tx.objectStore('wettkampf').put(normalizeWettkampfOnLoad(wettkampf))
+    for (const eintrag of zuSchreiben.wettkampfe) {
+      await tx.objectStore('wettkampf').put(eintrag)
     }
-    for (const training of backup.trainings) {
-      await tx.objectStore('training').put(normalizeTrainingOnLoad(training))
+    for (const eintrag of zuSchreiben.trainings) {
+      await tx.objectStore('training').put(eintrag)
     }
-    for (const satz of backup.satze) {
-      await tx.objectStore('satz').put(normalizeSatzOnLoad(satz))
+    for (const eintrag of zuSchreiben.satze) {
+      await tx.objectStore('satz').put(eintrag)
     }
-    for (const lauf of backup.laeufe) {
-      await tx.objectStore('lauf').put(normalizeOnLoad(lauf))
+    for (const eintrag of zuSchreiben.laeufe) {
+      await tx.objectStore('lauf').put(eintrag)
     }
     await tx.done
+    return konflikte
   } catch (fehler) {
     // Ein Fehler bricht die Transaktion ab; es wurde nichts teilweise
     // geschrieben. `abort` deckt auch synchrone Fehler ab, die IndexedDB nicht
