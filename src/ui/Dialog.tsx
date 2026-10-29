@@ -31,6 +31,10 @@ const stapel: symbol[] = []
 // Referenzzähler statt booleschem Flag: Erst wenn der letzte Dialog schließt,
 // wird das Scrollen der Seite wieder freigegeben.
 let scrollSperren = 0
+// Wahr, solange der von dieser Hülle angelegte History-Eintrag noch offen ist.
+// Ohne das Flag würden zwei gleichzeitig schließende Dialoge zweimal
+// `history.back()` rufen und die App hinter ihren Einstiegspunkt navigieren.
+let historyEintragOffen = false
 
 /** Sperrt das Scrollen der Seite und gibt eine Aufräumfunktion zurück. */
 function sperreScrollen(): () => void {
@@ -135,10 +139,15 @@ export function Dialog({
     // zu verlassen. Den History-Eintrag legt nur der erste geöffnete Dialog an.
     if (stapel.length === 1 && !history.state?.beckenrandDialog) {
       history.pushState({ beckenrandDialog: true }, '')
+      historyEintragOffen = true
     }
     const beiZurueck = () => {
       // Nur der oberste Dialog schließt sich; darunterliegende bleiben offen.
-      if (stapel.at(-1) === token) onCloseRef.current()
+      if (stapel.at(-1) === token) {
+        // Die Zurück-Geste hat den Eintrag bereits verbraucht.
+        historyEintragOffen = false
+        onCloseRef.current()
+      }
     }
     window.addEventListener('popstate', beiZurueck)
     vorherFokusRef.current = document.activeElement as HTMLElement | null
@@ -197,7 +206,10 @@ export function Dialog({
       // Verzögert, damit StrictMode (Effekt-Cleanup + Neuaufbau) keinen
       // Dialog schließt, der gerade wieder geöffnet wurde.
       queueMicrotask(() => {
-        if (stapel.length === 0 && history.state?.beckenrandDialog) history.back()
+        if (stapel.length === 0 && historyEintragOffen) {
+          historyEintragOffen = false
+          if (history.state?.beckenrandDialog) history.back()
+        }
       })
       stelleFokusWiederHer(vorherFokusRef.current)
     }

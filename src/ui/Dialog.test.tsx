@@ -29,6 +29,7 @@ beforeEach(() => {
   container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
+  history.replaceState(null, '')
 })
 
 afterEach(() => {
@@ -71,6 +72,39 @@ describe('Dialog', () => {
     erster.focus()
     taste('Tab', true)
     expect(document.activeElement).toBe(letzter)
+  })
+
+  // Zwei Dialoge können gleichzeitig schließen (etwa Bestätigung und Detail).
+  // Der eine angelegte History-Eintrag darf nur einmal zurückgehen; sonst
+  // landet die App hinter ihrem Einstiegspunkt auf about:blank.
+  it('geht beim gleichzeitigen Schließen zweier Dialoge nur einmal zurück', async () => {
+    const zurueck = vi.spyOn(history, 'back').mockImplementation(() => undefined)
+
+    act(() => {
+      root.render(
+        <>
+          <Sheet open titel="Detail" onClose={() => undefined}>
+            <button type="button">Detail</button>
+          </Sheet>
+          <Bestaetigung
+            open
+            titel="Löschen?"
+            text="Wirklich?"
+            bestaetigenLabel="Löschen"
+            onBestaetigen={() => undefined}
+            onAbbrechen={() => undefined}
+          />
+        </>,
+      )
+    })
+    expect(history.state).toMatchObject({ beckenrandDialog: true })
+
+    act(() => root.render(<></>))
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(zurueck).toHaveBeenCalledTimes(1)
   })
 
   // Beim Öffnen wandert der Fokus ins Panel, beim Schließen zurück zum
