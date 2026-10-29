@@ -1,0 +1,12 @@
+version: 2
+updates:
+  # Actions sind in den Workflows auf Commit-SHAs gepinnt. Dependabot zieht
+  # SHA und Versionskommentar gemeinsam nach.
+  - package-ecosystem: github-actions
+    directory: '/'
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns:
+          - '*'
