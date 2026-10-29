@@ -225,8 +225,8 @@ Der Playwright-Test `e2e/offline.spec.ts` automatisiert genau das.
 `.github/workflows/ci.yml` läuft bei jedem Pull Request und manuell:
 
 ```yaml
-- uses: actions/checkout@v7
-- uses: actions/setup-node@v7
+- uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+- uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
   with:
     node-version: 22
     cache: npm
@@ -241,6 +241,7 @@ Eigenschaften:
 - **ein** Job, damit Build und E2E denselben Stand prüfen,
 - Timeout 20 Minuten,
 - Concurrency-Gruppe pro Branch, laufende Läufe werden abgebrochen,
+- Actions auf Commit-SHAs gepinnt, Dependabot zieht SHA und Versionskommentar nach,
 - nur Lesezugriff auf Repository-Inhalte.
 
 ## Deployment
