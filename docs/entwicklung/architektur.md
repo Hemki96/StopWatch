@@ -35,7 +35,10 @@ src/
 ```
 
 Die wichtigste Regel: **`domain/` bleibt frei von React, DOM und Persistenz.** Zeit für Messungen
-wird als Parameter übergeben. Die einzigen Zeit- und Zufallszugriffe sind `newId()` (mit
+wird als Parameter übergeben. Die zweite Regel: **`ui/` importiert nichts aus `storage/`** —
+Lesen, Prüfen und Typen laufen über `app/` (etwa `app/daten.ts`), Schreiben über die
+Provider-Aktionen. ESLint prüft das mit `no-restricted-imports` in `src/ui/**`.
+Die einzigen Zeit- und Zufallszugriffe sind `newId()` (mit
 `crypto.randomUUID()` und einem Fallback) sowie `Date.now()` für Metadaten wie `erstelltAm`.
 Dadurch laufen die Unit-Tests in einer Node-Umgebung ohne DOM.
 
@@ -178,6 +181,7 @@ in kleinen Modulen unter `src/app/`:
 | Modul | Verantwortung |
 | --- | --- |
 | `einstellungen.ts` | Vorbelegung lesen, begrenzen, schreiben; Designwahl |
+| `daten.ts` | Backup erzeugen und prüfen, Speicherschutz lesen und anfordern (Fassade zu `storage/`) |
 | `aktiveLaeufe.ts` | Leiste, Migration der Einzel-ID, Bereinigung und abgeleitete Anzeige |
 | `schreibpfad.ts` | Tab-Tor, Warteschlange offener Schreibvorgänge, Fehlerbanner (`useSchreibpfad`) |
 | `laufAktionen.ts` | Messen, Anlegen, Auswählen und Löschen von Läufen und Serien |

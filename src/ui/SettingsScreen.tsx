@@ -7,23 +7,16 @@
  * Installationshinweis. Datenändernde Aktionen (Import, Löschen) sind gesperrt,
  * solange dieser Tab nicht der aktive ist (`app.tabGesperrt`), damit nur ein Tab
  * den Bestand verändert. Gelesen und geschrieben wird über `app/AppProvider`;
- * Formate und Prüfungen kommen aus export/ und storage/.
+ * Dateiformate kommen aus export/, Datenzugriffe und Prüfungen aus app/.
  */
-import { useEffect, useState } from 'react'
-import { useApp } from '../app/AppProvider'
+import { useState } from 'react'
+import { useApp, type Backup } from '../app/AppProvider'
 import { useInstallPrompt } from '../app/pwa'
 import { formatStrecke, formatTakt, lokalesDatum } from '../domain/format'
 import { einheitVon, formatBeckenlaenge } from '../domain/einheit'
 import { SCHWIMMARTEN } from '../domain/types'
 import { csvDateiname, laeufeAlsCsv } from '../export/csv'
 import { speichereDatei, waehleDatei } from '../export/datei'
-import { leseSpeicherSchutz, schuetzeSpeicher, type SpeicherSchutz } from '../storage/persistenz'
-import {
-  pruefeBackup,
-  zusammenfassungText,
-  type Backup,
-} from '../storage/backup'
-import { exportBackup } from '../storage/repository'
 import { Bestaetigung } from './Bestaetigung'
 import { KonfigurationSheet } from './KonfigurationSheet'
 import { Sheet } from './Sheet'
@@ -85,7 +78,6 @@ export function SettingsScreen() {
   const install = useInstallPrompt()
   const [sheet, setSheet] = useState(false)
   const [frageLoeschen, setFrageLoeschen] = useState(false)
-  const [speicher, setSpeicher] = useState<SpeicherSchutz>('unbekannt')
   // Import läuft in zwei Stufen: erst prüfen und als Vorschau merken, dann
   // erst nach Bestätigung schreiben. `importMeldung` zeigt Ablehnungen an.
   const [importVorschau, setImportVorschau] = useState<{ backup: Backup; text: string } | null>(
@@ -93,21 +85,16 @@ export function SettingsScreen() {
   )
   const [importMeldung, setImportMeldung] = useState<string | null>(null)
 
-  // Nur lesen, nicht anfordern: Die Anfrage beim Start erledigt main.tsx.
-  useEffect(() => {
-    void leseSpeicherSchutz().then(setSpeicher)
-  }, [])
-
   /** Fordert dauerhaften Speicher an und meldet das Ergebnis als Toast. */
   const fordereSpeicherSchutz = async () => {
-    const status = await schuetzeSpeicher()
-    setSpeicher(status)
+    const status = await app.fordereSpeicherSchutz()
     if (status === 'geschuetzt') app.zeigeToast('Speicher ist jetzt dauerhaft geschützt.')
     else if (status === 'ungeschuetzt')
       app.zeigeToast('Der Browser hat den Schutz noch nicht gewährt.')
   }
 
   const konfiguration = app.einstellungen.konfiguration
+  const speicher = app.speicherSchutz
   const einheit = einheitVon(konfiguration)
   const art = SCHWIMMARTEN.find((s) => s.wert === konfiguration.schwimmart)?.label ?? ''
   // Vorschau des nächsten Laufs: Serie nur mit Wiederholungszahl und Takt,
@@ -141,7 +128,7 @@ export function SettingsScreen() {
   /** Sichert den kompletten Bestand als JSON; das Datum steckt im Dateinamen. */
   const exportiereBackup = async () => {
     try {
-      const backup = await exportBackup()
+      const backup = await app.exportiereBackup()
       await speichereDatei(
         `beckenrand-backup-${lokalesDatum(Date.now())}.json`,
         JSON.stringify(backup, null, 2),
@@ -155,9 +142,10 @@ export function SettingsScreen() {
   /**
    * Liest eine JSON-Datei ein und prüft sie, ohne zu schreiben.
    *
-   * Nur der aktive Tab darf importieren. Erst nach `pruefeBackup` entsteht eine
-   * Vorschau; eine ungültige Datei ändert nichts und zeigt stattdessen eine
-   * Meldung. Ein Abbruch der Dateiauswahl ist kein Fehler.
+   * Nur der aktive Tab darf importieren. Erst nach der Prüfung über
+   * `app.pruefeBackupFuerImport` entsteht eine Vorschau; eine ungültige Datei
+   * ändert nichts und zeigt stattdessen eine Meldung. Ein Abbruch der
+   * Dateiauswahl ist kein Fehler.
    */
   const importiereBackup = async () => {
     if (!app.tabAktiv) return
@@ -171,14 +159,14 @@ export function SettingsScreen() {
     }
     try {
       const inhalt: unknown = JSON.parse(await datei.text())
-      const pruefung = pruefeBackup(inhalt)
+      const pruefung = app.pruefeBackupFuerImport(inhalt)
       if (!pruefung.ok) {
         setImportMeldung(pruefung.fehler)
         return
       }
       setImportVorschau({
         backup: pruefung.backup,
-        text: zusammenfassungText(pruefung.zusammenfassung),
+        text: pruefung.text,
       })
     } catch {
       setImportMeldung('Die Datei ist kein gültiges JSON.')

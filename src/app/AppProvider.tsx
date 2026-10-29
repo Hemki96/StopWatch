@@ -59,7 +59,15 @@ import {
   importBackup,
   loadAll,
 } from '../storage/repository'
-import type { Backup } from '../storage/backup'
+import {
+  erzeugeBackup,
+  fordereSchutzAn,
+  leseSchutz,
+  pruefeBackupFuerImport,
+  type Backup,
+  type BackupVorschau,
+  type SpeicherSchutz,
+} from './daten'
 import {
   begrenzeEinstellungen,
   leseEinstellungen,
@@ -89,6 +97,7 @@ import { useSchreibpfad } from './schreibpfad'
 
 export { leseEinstellungen } from './einstellungen'
 export type { Einstellungen, Theme, ThemeEinstellung } from './einstellungen'
+export type { Backup, SpeicherSchutz } from './daten'
 
 export type { AktiverEintrag } from './aktiveLaeufe'
 
@@ -117,6 +126,17 @@ export interface AppContextValue {
    * Messungen, damit eine Tab-Übergabe ihn abwartet.
    */
   importiereBackup: (backup: Backup) => Promise<void>
+  /** Erzeugt ein Backup des kompletten Bestands; geschrieben wird über `export/`. */
+  exportiereBackup: () => Promise<Backup>
+  /**
+   * Prüft einen geparsten Backup-Inhalt für die Import-Vorschau. Es wird nichts
+   * geschrieben; erst `importiereBackup` übernimmt die Daten.
+   */
+  pruefeBackupFuerImport: (inhalt: unknown) => BackupVorschau
+  /** Zuletzt gelesener Zustand des dauerhaften Speichers. */
+  speicherSchutz: SpeicherSchutz
+  /** Fordert dauerhaften Speicher an und liefert den resultierenden Zustand. */
+  fordereSpeicherSchutz: () => Promise<SpeicherSchutz>
   /** Leert alle fünf Bestände und lädt neu; ebenfalls nur im aktiven Tab. */
   loescheAlles: () => Promise<void>
   geladen: boolean
@@ -302,6 +322,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [einstellungen, setEinstellungenState] = useState<Einstellungen>(() => leseEinstellungen())
   const [toast, setToast] = useState<string | null>(null)
   const [tabRolle, setTabRolle] = useState<TabRolle>('startet')
+  // Speicherschutz ist kein Bestand, sondern eine Browser-Zusage. Der Wert wird
+  // beim Start gelesen und nach einer Anfrage aktualisiert; bis dahin gilt
+  // `unbekannt`.
+  const [speicherSchutz, setSpeicherSchutz] = useState<SpeicherSchutz>('unbekannt')
   const schreibpfad = useSchreibpfad()
   const { istAktiv, setzeAktiv, verfolge, warteAufOffene, speicherFehler, meldeFehler } =
     schreibpfad
@@ -639,6 +663,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [istAktiv, ladeDaten, verfolge])
 
   /**
+   * Fordert dauerhaften Speicher an und hält das Ergebnis im Kontext.
+   *
+   * Die Anfrage beim App-Start macht `main.tsx` unabhängig vom Rendern. Hier
+   * wird nur auf Wunsch der Einstellungen erneut gefragt; der Rückgabewert
+   * erlaubt dem Screen eine passende Meldung.
+   */
+  const fordereSpeicherSchutz = useCallback(async () => {
+    const status = await fordereSchutzAn()
+    setSpeicherSchutz(status)
+    return status
+  }, [])
+
+  /**
    * Startet die Tab-Abstimmung.
    *
    * Der Effekt läuft bewusst vor dem Lade-Effekt: Der Koordinator meldet sofort
@@ -715,6 +752,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
       abgebrochen = true
     }
   }, [ladeDaten, meldeFehler])
+
+  /**
+   * Speicherschutz einmal lesen, ohne ihn anzufordern. Die Anfrage beim Start
+   * erledigt `main.tsx`; die Einstellungen zeigen nur den Zustand an.
+   * `abgebrochen` verhindert ein Setzen nach dem Unmount (StrictMode führt den
+   * Effekt in der Entwicklung doppelt aus).
+   */
+  useEffect(() => {
+    let abgebrochen = false
+    void leseSchutz().then((status) => {
+      if (!abgebrochen) setSpeicherSchutz(status)
+    })
+    return () => {
+      abgebrochen = true
+    }
+  }, [])
 
   // Systemdesign live verfolgen. Der Listener hängt auch dann, wenn fest
   // gewählt wurde — das ist billiger als ihn ab- und anzuhängen, und `theme`
@@ -852,6 +905,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Übergabe-Variante bleibt dem Tab-Koordinator vorbehalten.
       neuLaden: () => ladeDaten(),
       importiereBackup,
+      // Backup lesen und prüfen sind reine Storage-Zugriffe; der Provider reicht
+      // sie durch, damit `ui/` nichts aus `storage/` importiert.
+      exportiereBackup: erzeugeBackup,
+      pruefeBackupFuerImport,
+      speicherSchutz,
+      fordereSpeicherSchutz,
       loescheAlles,
       schwimmer,
       satze,
@@ -918,6 +977,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setzeEinstellungen,
       ladeDaten,
       importiereBackup,
+      speicherSchutz,
+      fordereSpeicherSchutz,
       loescheAlles,
       schwimmer,
       satze,

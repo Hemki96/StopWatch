@@ -7,9 +7,10 @@
  * Rückgabe enthält entweder das typisierte Backup samt Zählung oder eine
  * Fehlermeldung mit Pfad zum ersten konkreten Problem.
  *
- * Datenfluss: `SettingsScreen` liest die Datei, parst das JSON und ruft
- * `pruefeBackup` für die Vorschau auf; erst nach Bestätigung geht dasselbe
- * Objekt an `importBackup`, das erneut prüft.
+ * Datenfluss: `SettingsScreen` liest die Datei, parst das JSON und lässt den
+ * Inhalt über `app/daten.ts` prüfen; erst nach Bestätigung geht dasselbe Objekt
+ * an den Provider (`importiereBackup`) und von dort an `importBackup`, das
+ * erneut prüft.
  *
  * Zentrale Invarianten:
  * - Jede Version von 1 bis `BACKUP_VERSION` bleibt einlesbar. Neuere
