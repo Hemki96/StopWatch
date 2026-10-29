@@ -53,16 +53,11 @@ import {
   istSerie,
   runden as rundenVon,
 } from '../domain/serie'
-import { newId } from '../domain/id'
 import { TabKoordinator, type TabRolle } from './tabKoordinator'
 import {
   clearAll,
-  deleteSchwimmer,
   importBackup,
   loadAll,
-  saveLauf,
-  saveSchwimmer,
-  saveTraining,
 } from '../storage/repository'
 import type { Backup } from '../storage/backup'
 import {
@@ -87,6 +82,7 @@ import {
   type AktiverEintrag,
 } from './aktiveLaeufe'
 import { createLaufAktionen } from './laufAktionen'
+import { createSchwimmerAktionen } from './schwimmerAktionen'
 import { createTrainingsAktionen } from './trainingsAktionen'
 import { createWettkampfAktionen } from './wettkampfAktionen'
 import { useSchreibpfad } from './schreibpfad'
@@ -766,6 +762,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
     schreibeEinstellungen(bereinigt)
   }, [])
 
+  /** Schwimmeraktionen: Stammdaten pflegen, Zuordnungen beim Löschen räumen. */
+  const schwimmerAktionen = useMemo(
+    () =>
+      createSchwimmerAktionen({
+        istAktiv,
+        verfolge,
+        schwimmerRef,
+        laeufeRef,
+        trainingsRef,
+        setSchwimmer: setSchwimmerSafe,
+        setLaeufe: setLaeufeSafe,
+        setTrainings: setTrainingsSafe,
+        getEinstellungen,
+        setzeEinstellungen,
+      }),
+    [
+      istAktiv,
+      verfolge,
+      setSchwimmerSafe,
+      setLaeufeSafe,
+      setTrainingsSafe,
+      getEinstellungen,
+      setzeEinstellungen,
+    ],
+  )
+  const { speichereSchwimmer, loescheSchwimmer } = schwimmerAktionen
+
   // Abgeleitete Anzeige. Alle drei lesen nur aus dem Bestand; es gibt keinen
   // zweiten Speicherort für „aktuell sichtbar“.
   const aktiverLauf = useMemo(
@@ -803,107 +826,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const brauchtTakt = useMemo(
     () => berechneBrauchtTakt(aktiveEintraege, laeufe),
     [aktiveEintraege, laeufe],
-  )
-
-  /**
-   * Legt einen Schwimmer an oder aktualisiert ihn (anhand von `daten.id`).
-   *
-   * Name und Notiz werden getrimmt, ein leerer Name wird abgelehnt. Die Liste
-   * bleibt nach Namen sortiert, damit die Auswahl in den Dialogen stabil ist.
-   * `erstelltAm` bleibt bei einer Bearbeitung erhalten.
-   */
-  const speichereSchwimmer = useCallback(
-    (daten: { id?: string; name: string; jahrgang: number | null; notiz: string }) => {
-      if (!istAktiv()) return null
-      const name = daten.name.trim()
-      if (!name) return null
-      const vorhanden = daten.id
-        ? schwimmerRef.current.find((s) => s.id === daten.id)
-        : undefined
-      const eintrag: Schwimmer = {
-        id: vorhanden?.id ?? newId(),
-        name,
-        jahrgang: daten.jahrgang,
-        notiz: daten.notiz.trim(),
-        erstelltAm: vorhanden?.erstelltAm ?? Date.now(),
-      }
-      setSchwimmerSafe(
-        [...schwimmerRef.current.filter((s) => s.id !== eintrag.id), eintrag].sort((a, b) =>
-          a.name.localeCompare(b.name, 'de'),
-        ),
-      )
-      verfolge(saveSchwimmer(eintrag))
-      return eintrag
-    },
-    [setSchwimmerSafe, verfolge],
-  )
-
-  /**
-   * Löscht einen Schwimmer und räumt alle Verweise darauf auf.
-   *
-   * Kein Kaskadenlöschen von Messungen: Läufe, Einstellungen und vorbereitete
-   * Trainings verlieren nur die Zuordnung, die Zeiten bleiben im Verlauf. Das
-   * ist Absicht — eine gelöschte Person darf keine Messreihe mitnehmen.
-   */
-  const loescheSchwimmer = useCallback(
-    (id: string) => {
-      if (!istAktiv()) return
-      setSchwimmerSafe(schwimmerRef.current.filter((s) => s.id !== id))
-      verfolge(deleteSchwimmer(id))
-
-      const geaenderteLaeufe: Lauf[] = []
-      const naechsteLaeufe = laeufeRef.current.map((lauf) => {
-        if (!lauf.bahnen.some((bahn) => bahn.schwimmerId === id)) return lauf
-        const geaendert: Lauf = {
-          ...lauf,
-          bahnen: lauf.bahnen.map((bahn) =>
-            bahn.schwimmerId === id ? { ...bahn, schwimmerId: null } : bahn,
-          ),
-        }
-        geaenderteLaeufe.push(geaendert)
-        return geaendert
-      })
-      if (geaenderteLaeufe.length > 0) {
-        setLaeufeSafe(naechsteLaeufe)
-        for (const lauf of geaenderteLaeufe) {
-          verfolge(saveLauf(lauf))
-        }
-      }
-
-      if (einstellungen.schwimmerProBahn.includes(id)) {
-        setzeEinstellungen({
-          ...einstellungen,
-          schwimmerProBahn: einstellungen.schwimmerProBahn.map((wert) =>
-            wert === id ? null : wert,
-          ),
-        })
-      }
-
-      // Auch vorbereitete Trainings dürfen nicht auf einen gelöschten
-      // Schwimmer zeigen; die Bahn bleibt bestehen, nur ohne Zuordnung.
-      const geaenderteTrainings: Training[] = []
-      const naechsteTrainings = trainingsRef.current.map((training) => {
-        if (!training.aktive.includes(id)) return training
-        const geaendert: Training = {
-          ...training,
-          aktive: training.aktive.map((wert) => (wert === id ? null : wert)),
-        }
-        geaenderteTrainings.push(geaendert)
-        return geaendert
-      })
-      if (geaenderteTrainings.length > 0) {
-        setTrainingsSafe(naechsteTrainings)
-        for (const training of geaenderteTrainings) verfolge(saveTraining(training))
-      }
-    },
-    [
-      einstellungen,
-      setSchwimmerSafe,
-      setLaeufeSafe,
-      setTrainingsSafe,
-      setzeEinstellungen,
-      verfolge,
-    ],
   )
 
   /**

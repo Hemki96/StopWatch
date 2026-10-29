@@ -32,11 +32,8 @@ import {
   saveSchwimmer,
   saveWettkampf,
 } from '../storage/repository'
+import type { Ref } from './ref'
 import { schwimmerIdFuer, sortiereSchwimmer } from './schwimmer'
-
-interface Ref<T> {
-  current: T
-}
 
 export interface WettkampfAktionenDeps {
   istAktiv: () => boolean
@@ -110,6 +107,14 @@ export function createWettkampfAktionen(deps: WettkampfAktionenDeps): WettkampfA
 
   function findeLauf(laufId: string): Lauf | undefined {
     return laeufeRef.current.find((eintrag) => eintrag.id === laufId)
+  }
+
+  /** Wendet eine Lauf-Funktion auf einen Heat an; Tor, Suche und Schreiben an einer Stelle. */
+  function aendereHeat(laufId: string, fn: (lauf: Lauf) => Lauf): void {
+    if (!istAktiv()) return
+    const lauf = findeLauf(laufId)
+    if (!lauf) return
+    aendereLauf(lauf, fn(lauf))
   }
 
   /**
@@ -294,53 +299,33 @@ export function createWettkampfAktionen(deps: WettkampfAktionenDeps): WettkampfA
      * Startet einen Heat. Heats stehen nicht in der Trainingsleiste; deshalb
      * geht der Start direkt über `aendereLauf`. Alle Bahnen starten gemeinsam.
      */
-    starteWettkampfLauf: (laufId, now, wallNow) => {
-      if (!istAktiv()) return
-      const lauf = findeLauf(laufId)
-      if (!lauf) return
-      aendereLauf(lauf, startAll(lauf, now, wallNow))
-    },
+    starteWettkampfLauf: (laufId, now, wallNow) =>
+      aendereHeat(laufId, (lauf) => startAll(lauf, now, wallNow)),
 
     /**
      * Tap im Wettkampf: Der erste Tap nach dem Start ist das Ziel. Das
      * Verzweigen übernimmt `tapLane` anhand von `lauf.modus`.
      */
-    tippeWettkampf: (laufId, bahnId, now, wallNow) => {
-      if (!istAktiv()) return
-      const lauf = findeLauf(laufId)
-      if (!lauf) return
-      aendereLauf(lauf, tapLane(lauf, bahnId, now, wallNow))
-    },
+    tippeWettkampf: (laufId, bahnId, now, wallNow) =>
+      aendereHeat(laufId, (lauf) => tapLane(lauf, bahnId, now, wallNow)),
 
     /** Nimmt den Zielanschlag eines Heats zurück (Fehleingabe beim Tippen). */
-    rueckgaengigWettkampf: (laufId, bahnId) => {
-      if (!istAktiv()) return
-      const lauf = findeLauf(laufId)
-      if (!lauf) return
-      aendereLauf(lauf, undoLane(lauf, bahnId))
-    },
+    rueckgaengigWettkampf: (laufId, bahnId) =>
+      aendereHeat(laufId, (lauf) => undoLane(lauf, bahnId)),
 
     /**
      * Trägt eine Zielzeit von Hand ein oder korrigiert sie. Die Zeit wird als
      * `manuell` markiert, damit sie in CSV und Bestzeiten erkennbar bleibt.
      */
-    setzeWettkampfZeit: (laufId, bahnId, splitMs) => {
-      if (!istAktiv()) return
-      const lauf = findeLauf(laufId)
-      if (!lauf) return
-      aendereLauf(lauf, setzeZielzeit(lauf, bahnId, splitMs))
-    },
+    setzeWettkampfZeit: (laufId, bahnId, splitMs) =>
+      aendereHeat(laufId, (lauf) => setzeZielzeit(lauf, bahnId, splitMs)),
 
     /**
      * Markiert eine Bahn als DNS/DNF oder hebt die Markierung auf. Die Domäne
      * lehnt gewertete Bahnen und Trainingsläufe ab.
      */
-    setzeWettkampfStatus: (laufId, bahnId, status) => {
-      if (!istAktiv()) return
-      const lauf = findeLauf(laufId)
-      if (!lauf) return
-      aendereLauf(lauf, setzeWettkampfStatusImLauf(lauf, bahnId, status))
-    },
+    setzeWettkampfStatus: (laufId, bahnId, status) =>
+      aendereHeat(laufId, (lauf) => setzeWettkampfStatusImLauf(lauf, bahnId, status)),
 
     /**
      * Setzt die Namen aller Bahnen eines Heats in einem Schritt. Unbekannte

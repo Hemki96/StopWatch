@@ -183,6 +183,7 @@ in kleinen Modulen unter `src/app/`:
 | `laufAktionen.ts` | Messen, Anlegen, Auswählen und Löschen von Läufen und Serien |
 | `wettkampfAktionen.ts` | Meldeliste, Disziplinen, Heats und Löschen von Wettkämpfen |
 | `trainingsAktionen.ts` | Trainingspläne speichern und Sätze starten |
+| `schwimmerAktionen.ts` | Schwimmer anlegen, ändern, löschen und Verweise räumen |
 | `schwimmer.ts` | Namensauflösung aus Meldelisten, stabile Sortierung |
 
 Die Aktionsmodule sind Fabriken: Sie bekommen die Ref-Spiegel und die
@@ -258,7 +259,7 @@ Zeiten:
 
 Bei gleichzeitigem Start gewinnt die **kleinere Tab-ID** (String-Vergleich). Ein aktiver Tab, der
 ein `takeover` erhält, wird sofort lesend, schließt das Schreibtor und wartet, bis keine offenen
-Schreibvorgänge mehr übrig sind (`warteAufSchreibvorgaenge`); erst dann sendet er `yield`. Das
+Schreibvorgänge mehr übrig sind (`warteAufOffene`); erst dann sendet er `yield`. Das
 Schließen vor dem Warten verhindert, dass ein Tap während der Übergabe noch einen Schreibvorgang
 startet, den der neue Tab nicht mehr sieht. Der neue Tab rechnet laufende Startzeiten anschließend
 auf seine eigene Uhr um (siehe oben).

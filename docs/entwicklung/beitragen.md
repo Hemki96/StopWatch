@@ -137,13 +137,14 @@ und spart das Speichern.
 
 ### Tab-Rolle prüfen
 
-Jede schreibende Aktion im Provider beginnt mit:
+Jede schreibende Aktion beginnt mit:
 
 ```ts
-if (!tabAktivRef.current) return
+if (!istAktiv()) return
 ```
 
-Ohne diese Prüfung kann ein lesender Tab Daten überschreiben.
+`istAktiv` kommt aus `useSchreibpfad`; ohne diese Prüfung kann ein lesender Tab
+Daten überschreiben.
 
 ## Persistenz und Kompatibilität
 
@@ -278,7 +279,7 @@ Format: kurzer Titel, Kontext, Entscheidung, Alternativen, Folgen. Beispiele:
 | Array in place sortieren | kopieren und sortieren |
 | Ein Feld speichern, aber nicht normalisieren | `normalizeOnLoad` ergänzen |
 | Backup-Feld ohne Versionssprung | Version erhöhen und alte lesen |
-| Schreibende Aktion ohne Tab-Prüfung | `tabAktivRef` prüfen |
+| Schreibende Aktion ohne Tab-Prüfung | `istAktiv()` prüfen |
 | Eigenes Modal bauen | `Dialog`/`Sheet` |
 | `any` oder `!` als Abkürzung | Guard oder Hilfsvariable |
 | Nur Farbe als Status | Text, Badge, ARIA |

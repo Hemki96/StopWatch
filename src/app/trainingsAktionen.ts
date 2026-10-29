@@ -18,12 +18,9 @@ import {
 } from '../domain/training'
 import { newId } from '../domain/id'
 import { deleteTraining, saveMehrere, saveTraining } from '../storage/repository'
+import type { Ref } from './ref'
 import { heute } from './datum'
 import type { Einstellungen } from './einstellungen'
-
-interface Ref<T> {
-  current: T
-}
 
 export interface TrainingsAktionenDeps {
   istAktiv: () => boolean

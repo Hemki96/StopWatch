@@ -15,6 +15,7 @@
  *   ein identisches Ergebnis löst keinen Schreibvorgang aus.
  */
 import {
+  type Bahn,
   type Lauf,
   type LaufKonfiguration,
   type Satz,
@@ -47,13 +48,9 @@ import {
   begrenzeWiederholungen,
   type Einstellungen,
 } from './einstellungen'
+import type { Ref } from './ref'
 import { heute } from './datum'
 import { einheitVon } from '../domain/einheit'
-
-/** Minimaler Ref-Spiegel; erfüllt die Form von `useRef`. */
-interface Ref<T> {
-  current: T
-}
 
 export interface LaufAktionenDeps {
   istAktiv: () => boolean
@@ -154,10 +151,12 @@ export function createLaufAktionen(deps: LaufAktionenDeps): LaufAktionen {
    * Schreibpfad für einen beliebigen Lauf, nicht nur den sichtbaren.
    *
    * Wird für Serienrunden, Wettkampf-Heats und Korrekturen im Lauf-Detail
-   * gebraucht. Die Tab-Rolle prüfen die Aufrufer. Wie überall gilt: kein
-   * Schreiben, wenn die Domäne denselben Lauf zurückgibt.
+   * gebraucht. Das Tor wird hier erneut geprüft, damit kein Aufrufer die
+   * Sicherheitsprüfung vergessen kann. Wie überall gilt: kein Schreiben, wenn
+   * die Domäne denselben Lauf zurückgibt.
    */
   function aendereLauf(lauf: Lauf, naechster: Lauf): void {
+    if (!istAktiv()) return
     if (naechster === lauf) return
     setLaeufe(laeufeRef.current.map((eintrag) => (eintrag.id === lauf.id ? naechster : eintrag)))
     verfolge(saveLauf(naechster))
@@ -285,34 +284,40 @@ export function createLaufAktionen(deps: LaufAktionenDeps): LaufAktionen {
     aktualisiereAktiven((eintrag) => startAll(eintrag, now, wallNow))
   }
 
-  /** Tap in der Serien-Ansicht: schließt die älteste offene Runde der Bahn. */
-  function tippeSerie(bahnIndex: number, now: number, wallNow: number): void {
-    if (!istAktiv()) return
-    const serie = holeAktiveSerie()
-    if (!serie) return
-    const ziel = serie.runden.find((runde) => {
+  /**
+   * Älteste offene, bereits gestartete Runde einer Bahn. Eine überholte Runde
+   * wird also zuerst bedient, auch wenn eine neuere schon läuft.
+   */
+  function offeneRunde(
+    runden: Lauf[],
+    bahnIndex: number,
+    now: number,
+  ): { lauf: Lauf; bahn: Bahn } | null {
+    const lauf = runden.find((runde) => {
       const bahn = runde.bahnen[bahnIndex]
       return bahn && bahn.startMs !== null && bahn.startMs <= now && !isFinished(bahn)
     })
+    const bahn = lauf?.bahnen[bahnIndex]
+    if (!lauf || !bahn) return null
+    return { lauf, bahn }
+  }
+
+  /** Tap in der Serien-Ansicht: schließt die älteste offene Runde der Bahn. */
+  function tippeSerie(bahnIndex: number, now: number, wallNow: number): void {
+    const serie = holeAktiveSerie()
+    if (!serie) return
+    const ziel = offeneRunde(serie.runden, bahnIndex, now)
     if (!ziel) return
-    const bahn = ziel.bahnen[bahnIndex]
-    if (!bahn) return
-    aendereLauf(ziel, tapLane(ziel, bahn.id, now, wallNow))
+    aendereLauf(ziel.lauf, tapLane(ziel.lauf, ziel.bahn.id, now, wallNow))
   }
 
   /** Setzt das Ziel in der Serien-Ansicht, mit derselben Auswahlregel wie `tippeSerie`. */
   function beendeSerie(bahnIndex: number, now: number, wallNow: number): void {
-    if (!istAktiv()) return
     const serie = holeAktiveSerie()
     if (!serie) return
-    const ziel = serie.runden.find((runde) => {
-      const bahn = runde.bahnen[bahnIndex]
-      return bahn && bahn.startMs !== null && bahn.startMs <= now && !isFinished(bahn)
-    })
+    const ziel = offeneRunde(serie.runden, bahnIndex, now)
     if (!ziel) return
-    const bahn = ziel.bahnen[bahnIndex]
-    if (!bahn) return
-    aendereLauf(ziel, finishLane(ziel, bahn.id, now, wallNow))
+    aendereLauf(ziel.lauf, finishLane(ziel.lauf, ziel.bahn.id, now, wallNow))
   }
 
   /**
