@@ -46,15 +46,8 @@ import {
 } from '../domain/types'
 import { einheitVon } from '../domain/einheit'
 import {
-  bahnReihe,
   createLauf,
-  finishLane,
-  hasStarted,
-  isComplete,
-  isFinished,
   istVielfacheDerBeckenlaenge,
-  korrigiereAnschlag as korrigiereAnschlagImLauf,
-  planeLauf,
   rebaseLauf,
   setzeWettkampfStatus as setzeWettkampfStatusImLauf,
   setzeZielzeit,
@@ -62,8 +55,6 @@ import {
   tapLane,
   undoLane,
   setSchwimmer as setSchwimmerOnLane,
-  updateStrecke,
-  validateKonfiguration,
 } from '../domain/lauf'
 import {
   createWettkampf,
@@ -75,11 +66,9 @@ import {
 } from '../domain/wettkampf'
 import {
   istSerie,
-  letzterAnschlag,
   runden as rundenVon,
 } from '../domain/serie'
 import {
-  MAX_BAHNEN,
   bahnenGesamt,
   beschreibeTrainingsSatz,
   neuerTrainingsSatz,
@@ -91,8 +80,6 @@ import { newId } from '../domain/id'
 import { TabKoordinator, type TabRolle } from './tabKoordinator'
 import {
   clearAll,
-  deleteLauf,
-  deleteSatzUndLaeufe,
   deleteSchwimmer,
   deleteTraining,
   deleteWettkampfUndDaten,
@@ -100,19 +87,13 @@ import {
   loadAll,
   saveLauf,
   saveMehrere,
-  saveSatz,
   saveSchwimmer,
   saveTraining,
   saveWettkampf,
 } from '../storage/repository'
 import type { Backup } from '../storage/backup'
 import {
-  STANDARD_EINSTELLUNGEN,
   begrenzeEinstellungen,
-  begrenzeReihen,
-  begrenzeTakt,
-  begrenzeVersatz,
-  begrenzeWiederholungen,
   leseEinstellungen,
   leseThemeEinstellung,
   schreibeEinstellungen,
@@ -132,6 +113,7 @@ import {
   waehleOffenenLauf,
   type AktiverEintrag,
 } from './aktiveLaeufe'
+import { createLaufAktionen } from './laufAktionen'
 import { useSchreibpfad } from './schreibpfad'
 
 export { leseEinstellungen } from './einstellungen'
@@ -294,19 +276,6 @@ function heute(): string {
   return `${d.getFullYear()}-${monat}-${tag}`
 }
 
-/**
- * Vergleicht nur die fachlich relevanten Felder einer Lauf-Konfiguration.
- * Wird beim Anlegen eines einzelnen Laufs genutzt, um einen passenden Satz des
- * Tages wiederzuverwenden, statt für jeden Lauf einen neuen Satz anzulegen.
- */
-function gleicheKonfiguration(a: LaufKonfiguration, b: LaufKonfiguration): boolean {
-  return (
-    a.beckenlaengeM === b.beckenlaengeM &&
-    a.streckeM === b.streckeM &&
-    a.schwimmart === b.schwimmart &&
-    einheitVon(a) === einheitVon(b)
-  )
-}
 
 /**
  * Löst einen Namen aus einer Meldeliste auf. Vorhandene Schwimmer werden
@@ -437,6 +406,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // normalisiert wie bisher.
   const warAktivRef = useRef(false)
   const warGesperrtRef = useRef(false)
+  // Einstellungen für Aktionen, die zwischen zwei Renders laufen. Der State
+  // bleibt die Anzeige; die Ref hält die Vorbelegung für `neuerLauf` aktuell.
+  const einstellungenRef = useRef<Einstellungen>(einstellungen)
+  const getEinstellungen = useCallback(() => einstellungenRef.current, [])
 
   // Ref und State werden ausschließlich zusammen gesetzt: Aktionen lesen die
   // Ref, das Rendern den State. Ein Auseinanderlaufen würde Taps verlieren.
@@ -500,6 +473,62 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setToast(nachricht)
     window.setTimeout(() => setToast((aktuell) => (aktuell === nachricht ? null : aktuell)), 3200)
   }, [])
+
+  /**
+   * Lauf- und Serienaktionen. Sie bekommen die Ref-Spiegel, damit mehrere Taps
+   * im selben Frame denselben Stand sehen, und bleiben über Renders stabil.
+   */
+  const laufAktionen = useMemo(
+    () =>
+      createLaufAktionen({
+        istAktiv,
+        verfolge,
+        laeufeRef,
+        satzeRef,
+        aktiveIdsRef,
+        aktiverLaufIdRef,
+        setLaeufe: setLaeufeSafe,
+        setSatze: setSatzeSafe,
+        setAktiveIds,
+        setAktivenLaufId,
+        getEinstellungen,
+        zeigeToast,
+      }),
+    [
+      istAktiv,
+      verfolge,
+      setLaeufeSafe,
+      setSatzeSafe,
+      setAktiveIds,
+      setAktivenLaufId,
+      getEinstellungen,
+      zeigeToast,
+    ],
+  )
+  const {
+    startAlle,
+    tippe,
+    tippeSerie,
+    beende,
+    beendeSerie,
+    rueckgaengig,
+    rueckgaengigSerie,
+    setzeSchwimmer,
+    setzeSchwimmerSerie,
+    setzeSchwimmerImLauf,
+    korrigiereAnschlag,
+    setzeKonfiguration,
+    neuerLauf,
+    anlegenLauf,
+    waehleLauf,
+    schliesseAktivenLauf,
+    verwerfeAktivenLauf,
+    loescheLauf,
+    loescheSatz,
+    benenneSatz,
+    aktiviereSatz,
+    aendereLauf,
+  } = laufAktionen
 
   /**
    * Lädt den kompletten Bestand und gleicht die Auswahl damit ab.
@@ -724,6 +753,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    */
   const setzeEinstellungen = useCallback((naechste: Einstellungen) => {
     const bereinigt = begrenzeEinstellungen(naechste)
+    einstellungenRef.current = bereinigt
     setEinstellungenState(bereinigt)
     schreibeEinstellungen(bereinigt)
   }, [])
@@ -765,623 +795,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const brauchtTakt = useMemo(
     () => berechneBrauchtTakt(aktiveEintraege, laeufe),
     [aktiveEintraege, laeufe],
-  )
-
-  /**
-   * Wendet eine reine Domänenfunktion auf den sichtbaren Lauf an.
-   *
-   * Der gemeinsame Schreibpfad für alle Timer-Aktionen: Rolle prüfen, aktuellen
-   * Stand aus der Ref holen, Funktion anwenden, bei echter Änderung State und
-   * Speicher nachziehen. Die Domänenfunktionen geben bei ungültigen Eingaben
-   * dasselbe Objekt zurück; `naechster === aktuell` ist deshalb die billige
-   * Prüfung auf „nichts zu tun“ und verhindert überflüssige Schreibvorgänge.
-   */
-  const aktualisiereAktiven = useCallback(
-    (fn: (lauf: Lauf) => Lauf) => {
-      if (!istAktiv()) return
-      const id = aktiverLaufIdRef.current
-      if (!id) return
-      const aktuell = laeufeRef.current.find((l) => l.id === id)
-      if (!aktuell) return
-      const naechster = fn(aktuell)
-      if (naechster === aktuell) return
-      setLaeufeSafe(laeufeRef.current.map((l) => (l.id === id ? naechster : l)))
-      verfolge(saveLauf(naechster))
-    },
-    [setLaeufeSafe, verfolge],
-  )
-
-  /**
-   * Startet den sichtbaren Lauf — bei einer Serie alle Wiederholungen auf
-   * einmal, mit vorausberechneten Startzeitpunkten.
-   *
-   * Der Serienzweig ist bewusst eigenständig (statt nur `startAll` aufzurufen),
-   * weil er mehrere Läufe gleichzeitig ändert:
-   * 1. Nur unberührte Runden (kein Start, kein Anschlag) werden neu geplant.
-   * 2. Angefangene Runden mit fehlender Startzeit werden ergänzt — der Fall
-   *    „Reload mitten in der Runde“; die fehlenden Bahnen starten jetzt (plus
-   *    ihrem Startversatz), bereits erfasste Anschläge bleiben unberührt.
-   * 3. Wird eine Runde fortgesetzt, beginnt die nächste einen Takt später,
-   *    damit der Takt ab dem tatsächlichen Neustart weiterläuft.
-   *
-   * Ist nichts zu tun (alles berührt oder bereits gestartet), kehrt die
-   * Funktion still zurück; dadurch ist „Weiter“ beliebig oft antippbar.
-   */
-  const startAlle = useCallback(
-    (now: number, wallNow: number) => {
-      if (!istAktiv()) return
-      const id = aktiverLaufIdRef.current
-      if (!id) return
-      const lauf = laeufeRef.current.find((eintrag) => eintrag.id === id)
-      if (!lauf) return
-      const satz = lauf.satzId
-        ? satzeRef.current.find((eintrag) => eintrag.id === lauf.satzId)
-        : undefined
-
-      if (istSerie(satz) && satz?.plan) {
-        const betroffen = rundenVon(laeufeRef.current, satz.id)
-        const taktMs = satz.plan.taktSek * 1000
-        const unberuehrt = betroffen.filter(
-          (runde) =>
-            !hasStarted(runde) && runde.bahnen.every((bahn) => bahn.anschlaege.length === 0),
-        )
-        // Nach einem Reload oder einem abgebrochenen Start können einzelne
-        // Bahnen einer bereits begonnenen Runde ohne Startzeit zurückbleiben.
-        // „Weiter“ muss auch diese wieder aufnehmen, nicht nur unberührte
-        // Runden planen.
-        const fehlendeStarts = betroffen.some(
-          (runde) =>
-            !isComplete(runde) &&
-            runde.bahnen.some((bahn) => bahn.startMs === null && !isFinished(bahn)),
-        )
-        if (unberuehrt.length === 0 && !fehlendeStarts) return
-
-        const betroffeneIds = new Set(betroffen.map((runde) => runde.id))
-        const unberuehrtIds = new Set(unberuehrt.map((runde) => runde.id))
-        // Eine angefangene Runde ist unvollständig, aber nicht mehr unberührt.
-        const teilweise = betroffen.some(
-          (runde) =>
-            !unberuehrtIds.has(runde.id) &&
-            !isComplete(runde) &&
-            runde.bahnen.some((bahn) => bahn.startMs === null && !isFinished(bahn)),
-        )
-        // Wird eine angefangene Runde jetzt fortgesetzt, beginnt die nächste
-        // unberührte Runde erst einen Takt später statt gleichzeitig.
-        const versatzBisNaechsterRunde = teilweise ? taktMs : 0
-        // Startzeit je noch unberührter Runde: fortlaufend ein Takt Abstand,
-        // gerechnet ab jetzt (plus Versatz, falls eine Runde fortgesetzt wird).
-        const startZeiten = new Map(
-          unberuehrt.map((runde, index) => [
-            runde.id,
-            now + versatzBisNaechsterRunde + index * taktMs,
-          ]),
-        )
-        // Sammelt nur die tatsächlich geänderten Läufe; nur sie werden
-        // geschrieben, unberührte Runden kosten keinen Schreibvorgang.
-        const geaendert: Lauf[] = []
-        const naechste = laeufeRef.current.map((eintrag) => {
-          const start = startZeiten.get(eintrag.id)
-          if (start !== undefined) {
-            // Der Wanduhr-Anker wird mitgezogen: Gemessen wird monoton, für
-            // Verlauf und CSV braucht jeder Lauf aber eine echte Uhrzeit.
-            const geplant = planeLauf(
-              eintrag,
-              start,
-              wallNow + (start - now),
-              satz.plan!.startversatzMs,
-            )
-            geaendert.push(geplant)
-            return geplant
-          }
-
-          if (
-            !betroffeneIds.has(eintrag.id) ||
-            !eintrag.bahnen.some((bahn) => bahn.startMs === null && !isFinished(bahn))
-          ) {
-            return eintrag
-          }
-
-          // Angefangene Runde: nur fehlende Bahnen bekommen eine Startzeit,
-          // ein bereits gesetzter Wanduhr-Anker bleibt erhalten.
-          const ergaenzt: Lauf = {
-            ...eintrag,
-            startWallMs: eintrag.startWallMs ?? wallNow,
-            bahnen: eintrag.bahnen.map((bahn) =>
-              bahn.startMs === null && !isFinished(bahn)
-                ? { ...bahn, startMs: now + (bahnReihe(bahn) - 1) * satz.plan!.startversatzMs }
-                : bahn,
-            ),
-          }
-          geaendert.push(ergaenzt)
-          return ergaenzt
-        })
-        setLaeufeSafe(naechste)
-        for (const eintrag of geaendert) verfolge(saveLauf(eintrag))
-        return
-      }
-
-      aktualisiereAktiven((eintrag) => startAll(eintrag, now, wallNow))
-    },
-    [aktualisiereAktiven, setLaeufeSafe, verfolge],
-  )
-
-  /** Tap auf eine Bahn: Länge abschließen oder, bei konfigurierter Strecke, das Ziel. */
-  const tippe = useCallback(
-    (bahnId: string, now: number, wallNow: number) =>
-      aktualisiereAktiven((l) => tapLane(l, bahnId, now, wallNow)),
-    [aktualisiereAktiven],
-  )
-
-  /** Setzt das Ziel einer Bahn, auch bei offener Strecke. */
-  const beende = useCallback(
-    (bahnId: string, now: number, wallNow: number) =>
-      aktualisiereAktiven((l) => finishLane(l, bahnId, now, wallNow)),
-    [aktualisiereAktiven],
-  )
-
-  /** Nimmt den letzten Anschlag einer Bahn zurück; die Domäne entscheidet, was gültig ist. */
-  const rueckgaengig = useCallback(
-    (bahnId: string) => aktualisiereAktiven((l) => undoLane(l, bahnId)),
-    [aktualisiereAktiven],
-  )
-
-  /**
-   * Schreibpfad für einen beliebigen Lauf, nicht nur den sichtbaren.
-   *
-   * Wird für Serienrunden, Wettkampf-Heats und Korrekturen im Lauf-Detail
-   * gebraucht. Die Tab-Rolle prüfen die Aufrufer. Wie überall gilt: kein
-   * Schreiben, wenn die Domäne denselben Lauf zurückgibt.
-   */
-  const aendereLauf = useCallback(
-    (lauf: Lauf, naechster: Lauf) => {
-      if (naechster === lauf) return
-      setLaeufeSafe(laeufeRef.current.map((eintrag) => (eintrag.id === lauf.id ? naechster : eintrag)))
-      verfolge(saveLauf(naechster))
-    },
-    [setLaeufeSafe, verfolge],
-  )
-
-  /**
-   * Aktuelle Serie des sichtbaren Laufs: Anker, Satz und alle Runden.
-   * `null`, wenn der sichtbare Lauf keine Serie ist oder die Daten fehlen.
-   */
-  const holeAktiveSerie = useCallback(() => {
-    const id = aktiverLaufIdRef.current
-    if (!id) return null
-    const lauf = laeufeRef.current.find((eintrag) => eintrag.id === id)
-    const satz = lauf?.satzId
-      ? satzeRef.current.find((eintrag) => eintrag.id === lauf.satzId)
-      : undefined
-    if (!lauf || !istSerie(satz) || !satz) return null
-    return { lauf, satz, runden: rundenVon(laeufeRef.current, satz.id) }
-  }, [])
-
-  /**
-   * Tap in der Serien-Ansicht: schließt die älteste offene Runde der Bahn.
-   *
-   * Gesucht wird in Rundenreihenfolge (Runde 1 zuerst) die erste Bahn, deren
-   * Start vorbei ist und die noch nicht fertig ist. Eine überholte Runde wird
-   * also zuerst bedient, auch wenn eine neuere schon läuft. Bahnen mit
-   * zukünftigem Start (`geplant`) werden ignoriert.
-   */
-  const tippeSerie = useCallback(
-    (bahnIndex: number, now: number, wallNow: number) => {
-      if (!istAktiv()) return
-      const serie = holeAktiveSerie()
-      if (!serie) return
-      const ziel = serie.runden.find((runde) => {
-        const bahn = runde.bahnen[bahnIndex]
-        return bahn && bahn.startMs !== null && bahn.startMs <= now && !isFinished(bahn)
-      })
-      if (!ziel) return
-      const bahn = ziel.bahnen[bahnIndex]
-      if (!bahn) return
-      aendereLauf(ziel, tapLane(ziel, bahn.id, now, wallNow))
-    },
-    [aendereLauf, holeAktiveSerie],
-  )
-
-  /**
-   * Setzt das Ziel in der Serien-Ansicht, mit derselben Auswahlregel wie
-   * `tippeSerie`: älteste offene, bereits gestartete Runde der Bahn.
-   */
-  const beendeSerie = useCallback(
-    (bahnIndex: number, now: number, wallNow: number) => {
-      if (!istAktiv()) return
-      const serie = holeAktiveSerie()
-      if (!serie) return
-      const ziel = serie.runden.find((runde) => {
-        const bahn = runde.bahnen[bahnIndex]
-        return bahn && bahn.startMs !== null && bahn.startMs <= now && !isFinished(bahn)
-      })
-      if (!ziel) return
-      const bahn = ziel.bahnen[bahnIndex]
-      if (!bahn) return
-      aendereLauf(ziel, finishLane(ziel, bahn.id, now, wallNow))
-    },
-    [aendereLauf, holeAktiveSerie],
-  )
-
-  /**
-   * Nimmt den letzten Anschlag einer Bahn über alle Runden hinweg zurück.
-   *
-   * Anders als beim Tippen wird hier nicht die älteste offene Runde gesucht,
-   * sondern der jüngste Anschlag: Rückgängig soll immer die zuletzt gemachte
-   * Eingabe treffen.
-   */
-  const rueckgaengigSerie = useCallback(
-    (bahnIndex: number) => {
-      if (!istAktiv()) return
-      const serie = holeAktiveSerie()
-      if (!serie) return
-      const treffer = letzterAnschlag(serie.runden, bahnIndex)
-      if (!treffer) return
-      aendereLauf(treffer.lauf, undoLane(treffer.lauf, treffer.bahn.id))
-    },
-    [aendereLauf, holeAktiveSerie],
-  )
-
-  /**
-   * Ordnet einer Bahn in allen Runden denselben Schwimmer zu.
-   *
-   * Die Zuordnung gilt zeilenweise für die ganze Serie: Sonst hätte dieselbe
-   * Schwimmerposition je Runde einen anderen Namen und Bestzeiten wären nicht
-   * mehr zuordenbar. Bereits gemessene Zeiten bleiben unverändert.
-   */
-  const setzeSchwimmerSerie = useCallback(
-    (bahnIndex: number, schwimmerId: string | null) => {
-      if (!istAktiv()) return
-      const serie = holeAktiveSerie()
-      if (!serie) return
-      const geaendert: Lauf[] = []
-      for (const runde of serie.runden) {
-        const bahn = runde.bahnen[bahnIndex]
-        if (!bahn) continue
-        const naechster = setSchwimmerOnLane(runde, bahn.id, schwimmerId)
-        if (naechster !== runde) {
-          geaendert.push(naechster)
-        }
-      }
-      if (geaendert.length === 0) return
-      const nachId = new Map(geaendert.map((lauf) => [lauf.id, lauf]))
-      setLaeufeSafe(laeufeRef.current.map((lauf) => nachId.get(lauf.id) ?? lauf))
-      for (const lauf of geaendert) verfolge(saveLauf(lauf))
-    },
-    [holeAktiveSerie, setLaeufeSafe, verfolge],
-  )
-
-  /** Ordnet dem sichtbaren Lauf eine Bahn einem Schwimmer zu. */
-  const setzeSchwimmer = useCallback(
-    (bahnId: string, schwimmerId: string | null) =>
-      aktualisiereAktiven((l) => setSchwimmerOnLane(l, bahnId, schwimmerId)),
-    [aktualisiereAktiven],
-  )
-
-  /** Bahnzuordnung in einem beliebigen Lauf, etwa beim Nachtragen im Wettkampf oder im Detail. */
-  const setzeSchwimmerImLauf = useCallback(
-    (laufId: string, bahnId: string, schwimmerId: string | null) => {
-      if (!istAktiv()) return
-      const lauf = laeufeRef.current.find((l) => l.id === laufId)
-      if (!lauf) return
-      const naechster = setSchwimmerOnLane(lauf, bahnId, schwimmerId)
-      if (naechster === lauf) return
-      setLaeufeSafe(laeufeRef.current.map((l) => (l.id === laufId ? naechster : l)))
-      verfolge(saveLauf(naechster))
-    },
-    [setLaeufeSafe, verfolge],
-  )
-
-  /**
-   * Korrigiert einen bereits erfassten Anschlag. Die Domäne prüft die
-   * Reihenfolge (kein Split hinter einem späteren) und markiert die Zeit als
-   * `manuell`, damit sie im CSV und bei Bestzeiten sichtbar bleibt.
-   */
-  const korrigiereAnschlag = useCallback(
-    (laufId: string, bahnId: string, laengeNr: number, splitMs: number) => {
-      if (!istAktiv()) return
-      const lauf = laeufeRef.current.find((l) => l.id === laufId)
-      if (!lauf) return
-      const naechster = korrigiereAnschlagImLauf(lauf, bahnId, laengeNr, splitMs)
-      if (naechster === lauf) return
-      setLaeufeSafe(laeufeRef.current.map((l) => (l.id === laufId ? naechster : l)))
-      verfolge(saveLauf(naechster))
-    },
-    [setLaeufeSafe, verfolge],
-  )
-
-  /**
-   * Ändert Strecke und Schwimmart des sichtbaren Laufs. Nur vor dem Start
-   * zulässig; die Domäne lehnt es sonst ab, indem sie denselben Lauf zurückgibt.
-   */
-  const setzeKonfiguration = useCallback(
-    (konfiguration: LaufKonfiguration) =>
-      aktualisiereAktiven((l) => updateStrecke(l, konfiguration)),
-    [aktualisiereAktiven],
-  )
-
-  /**
-   * Legt einen Lauf oder eine Serie an und macht ihn zum sichtbaren Eintrag.
-   *
-   * Ablauf:
-   * 1. Eingaben prüfen und begrenzen. Eine ungültige Konfiguration wird mit
-   *    `null` abgelehnt, ohne etwas zu schreiben.
-   * 2. Satz bestimmen: Bei mehr als einer Wiederholung entsteht immer ein neuer
-   *    Satz mit Plan. Bei einem einzelnen Lauf wird ein passender Satz des
-   *    Tages wiederverwendet, damit der Verlauf nicht pro Lauf eine eigene
-   *    Gruppe anlegt.
-   * 3. Läufe anlegen — bei einer Serie sofort alle Wiederholungen. Die
-   *    Startzeitpunkte setzt erst `startAlle`.
-   * 4. Leiste aufräumen: fertige Einträge fallen heraus, die neuen stehen vorn.
-   *
-   * Rückgabe ist die Anker-ID (erste Wiederholung) oder `null`.
-   */
-  const neuerLauf = useCallback(
-    (
-      konfiguration: LaufKonfiguration,
-      bahnen: number,
-      schwimmerProBahn: (string | null)[] = [],
-      optionen: { startversatzMs?: number; wiederholungen?: number; taktSek?: number; reihen?: number } = {},
-    ): string | null => {
-      if (!istAktiv()) return null
-      if (validateKonfiguration(konfiguration) !== null) return null
-      const anzahlBahnen = Number.isFinite(bahnen)
-        ? Math.min(MAX_BAHNEN, Math.max(1, Math.round(bahnen)))
-        : STANDARD_EINSTELLUNGEN.bahnen
-      const anzahlReihen = begrenzeReihen(optionen.reihen ?? einstellungen.reihen)
-      const datum = heute()
-      const startversatzMs = begrenzeVersatz(
-        optionen.startversatzMs ?? einstellungen.startversatzMs,
-      )
-      const wiederholungen = begrenzeWiederholungen(
-        optionen.wiederholungen ?? einstellungen.wiederholungen,
-      )
-      const taktSek = begrenzeTakt(optionen.taktSek ?? einstellungen.taktSek)
-      const geplanteSerie = wiederholungen > 1
-
-      let satzId: string | null = null
-      let neuerSatz: Satz | null = null
-      if (geplanteSerie) {
-        const satz: Satz = {
-          id: newId(),
-          datum,
-          bezeichnung: '',
-          konfiguration: { ...konfiguration },
-          plan: { wiederholungen, taktSek, startversatzMs },
-          erstelltAm: Date.now(),
-        }
-        satzId = satz.id
-        neuerSatz = satz
-        setSatzeSafe([satz, ...satzeRef.current])
-      } else {
-        // Einzelner Lauf: den letzten Satz desselben Tages mit gleicher
-        // Konfiguration weiterverwenden, statt einen neuen anzulegen. `reverse`
-        // sucht rückwärts, weil die Liste neueste Sätze vorn führt.
-        const vorhandenerSatz = [...satzeRef.current]
-          .reverse()
-          .find(
-            (satz) =>
-              satz.datum === datum &&
-              satz.plan === null &&
-              !satz.wettkampfId &&
-              gleicheKonfiguration(satz.konfiguration, konfiguration),
-          )
-        if (vorhandenerSatz) {
-          satzId = vorhandenerSatz.id
-        } else {
-          const satz: Satz = {
-            id: newId(),
-            datum,
-            bezeichnung: '',
-            konfiguration: { ...konfiguration },
-            plan: null,
-            erstelltAm: Date.now(),
-          }
-          satzId = satz.id
-          neuerSatz = satz
-          setSatzeSafe([satz, ...satzeRef.current])
-        }
-      }
-
-      // Personen werden Reihe für Reihe angelegt: erst alle Bahnen der Reihe 1,
-      // dann Reihe 2. `nummer` ist die Bahn innerhalb ihrer Reihe.
-      const gesamt = bahnenGesamt(anzahlBahnen, anzahlReihen)
-      const bahnenInit = Array.from({ length: gesamt }, (_, i) => ({
-        nummer: (i % anzahlBahnen) + 1,
-        reihe: Math.floor(i / anzahlBahnen) + 1,
-        schwimmerId: schwimmerProBahn[i] ?? null,
-      }))
-      // Bei einer Serie entstehen alle Wiederholungen sofort, aber noch ohne
-      // Startzeit. `wiederholung` ordnet jede dem Satz zu; geplant wird erst
-      // mit `startAlle`.
-      const anzahl = geplanteSerie ? wiederholungen : 1
-      const neueLaeufe = Array.from({ length: anzahl }, (_, index) =>
-        createLauf(konfiguration, bahnenInit, satzId, {
-          startversatzMs,
-          wiederholung: geplanteSerie ? index + 1 : null,
-        }),
-      )
-
-      setLaeufeSafe([...neueLaeufe, ...laeufeRef.current])
-      // Satz und Läufe gehören zusammen: Entweder ist der Lauf vollständig
-      // angelegt oder gar nicht.
-      verfolge(saveMehrere({ satze: neuerSatz ? [neuerSatz] : [], laeufe: neueLaeufe }))
-
-      // Fertig gemessene Einträge verschwinden beim Anlegen aus der Leiste,
-      // bleiben aber im Verlauf. Offene Läufe werden weitergeführt.
-      const istEintragFertig = (laufId: string): boolean => {
-        const eintrag = laeufeRef.current.find((lauf) => lauf.id === laufId)
-        if (!eintrag) return true
-        const satz = satzeRef.current.find((eintragSatz) => eintragSatz.id === eintrag.satzId)
-        if (istSerie(satz) && satz) {
-          return rundenVon(laeufeRef.current, satz.id).every(isComplete)
-        }
-        return isComplete(eintrag)
-      }
-      const behalten = aktiveIdsRef.current.filter((id) => !istEintragFertig(id))
-      const anker = neueLaeufe[0]!
-      setAktiveIds([anker.id, ...behalten])
-      setAktivenLaufId(anker.id)
-      return anker.id
-    },
-    [
-      einstellungen,
-      setAktiveIds,
-      setAktivenLaufId,
-      setLaeufeSafe,
-      setSatzeSafe,
-      verfolge,
-    ],
-  )
-
-  /** „Lauf anlegen“ mit den aktuellen Einstellungen als Vorbelegung. */
-  const anlegenLauf = useCallback(() => {
-    const werte = einstellungen
-    neuerLauf(werte.konfiguration, werte.bahnen, werte.schwimmerProBahn, {
-      startversatzMs: werte.startversatzMs,
-      wiederholungen: werte.wiederholungen,
-      taktSek: werte.taktSek,
-      reihen: werte.reihen,
-    })
-  }, [einstellungen, neuerLauf])
-
-  /**
-   * Wechselt den sichtbaren Lauf innerhalb der Leiste. IDs, die nicht in der
-   * Leiste stehen (etwa ein Wettkampf-Heat), werden ignoriert.
-   */
-  const waehleLauf = useCallback(
-    (id: string) => {
-      if (!aktiveIdsRef.current.includes(id)) return
-      setAktivenLaufId(id)
-    },
-    [setAktivenLaufId],
-  )
-
-  /**
-   * Nimmt einen Lauf aus der Leiste, ohne Daten zu löschen. Der Verlauf bleibt
-   * vollständig; danach wird der erste verbleibende Eintrag sichtbar.
-   */
-  const schliesseAktivenLauf = useCallback(() => {
-    if (!istAktiv()) return
-    const id = aktiverLaufIdRef.current
-    if (!id) return
-    const naechste = aktiveIdsRef.current.filter((eintrag) => eintrag !== id)
-    setAktiveIds(naechste)
-    setAktivenLaufId(naechste[0] ?? null)
-    zeigeToast('Lauf geschlossen.')
-  }, [setAktiveIds, setAktivenLaufId, zeigeToast])
-
-  /**
-   * Verwirft den sichtbaren Lauf samt Messwerten.
-   *
-   * Bei einer Serie werden alle Runden und der Satz gelöscht — es gibt keine
-   * halbe Serie, sonst bliebe ein Satz mit falscher Wiederholungszahl zurück.
-   * Für „nur aus der Leiste nehmen“ siehe `schliesseAktivenLauf`.
-   */
-  const verwerfeAktivenLauf = useCallback(() => {
-    if (!istAktiv()) return
-    const id = aktiverLaufIdRef.current
-    if (!id) return
-    const lauf = laeufeRef.current.find((eintrag) => eintrag.id === id)
-    const satz = lauf?.satzId
-      ? satzeRef.current.find((eintrag) => eintrag.id === lauf.satzId)
-      : undefined
-
-    if (istSerie(satz) && satz) {
-      const betroffen = rundenVon(laeufeRef.current, satz.id)
-      const ids = new Set(betroffen.map((eintrag) => eintrag.id))
-      setLaeufeSafe(laeufeRef.current.filter((eintrag) => !ids.has(eintrag.id)))
-      setSatzeSafe(satzeRef.current.filter((eintrag) => eintrag.id !== satz.id))
-      const naechste = aktiveIdsRef.current.filter((eintrag) => !ids.has(eintrag))
-      setAktiveIds(naechste)
-      setAktivenLaufId(naechste[0] ?? null)
-      verfolge(deleteSatzUndLaeufe(satz.id))
-      zeigeToast('Serie abgebrochen.')
-      return
-    }
-
-    setLaeufeSafe(laeufeRef.current.filter((eintrag) => eintrag.id !== id))
-    const naechste = aktiveIdsRef.current.filter((eintrag) => eintrag !== id)
-    setAktiveIds(naechste)
-    setAktivenLaufId(naechste[0] ?? null)
-    verfolge(deleteLauf(id))
-
-    const satzId = lauf?.satzId
-    // Ein Satz ohne Läufe wäre im Verlauf unsichtbar; er verschwindet mit
-    // seinem letzten Lauf.
-    if (satzId && !laeufeRef.current.some((eintrag) => eintrag.satzId === satzId)) {
-      setSatzeSafe(satzeRef.current.filter((eintrag) => eintrag.id !== satzId))
-      verfolge(deleteSatzUndLaeufe(satzId))
-    }
-    zeigeToast('Lauf verworfen.')
-  }, [
-    setAktiveIds,
-    setAktivenLaufId,
-    setLaeufeSafe,
-    setSatzeSafe,
-    zeigeToast,
-    verfolge,
-  ])
-
-  /**
-   * Löscht einen Lauf aus dem Verlauf (etwa eine Fehleingabe).
-   *
-   * Anders als `verwerfeAktivenLauf` wird hier gezielt eine ID angesprochen,
-   * typischerweise aus dem Verlauf. Die Leiste wird mitgepflegt; bei einer
-   * Serie übernimmt die nächste verbliebene Wiederholung den Anker.
-   */
-  const loescheLauf = useCallback(
-    (id: string) => {
-      if (!istAktiv()) return
-      const lauf = laeufeRef.current.find((eintrag) => eintrag.id === id)
-      const satz = lauf?.satzId
-        ? satzeRef.current.find((eintrag) => eintrag.id === lauf.satzId)
-        : undefined
-      const verbleibend = laeufeRef.current.filter((eintrag) => eintrag.id !== id)
-      setLaeufeSafe(verbleibend)
-      verfolge(deleteLauf(id))
-
-      // War der gelöschte Lauf der Anker einer Serie, übernimmt die nächste
-      // verbliebene Wiederholung die Rolle in der Leiste.
-      let naechsteAktive = aktiveIdsRef.current.filter((eintrag) => eintrag !== id)
-      if (naechsteAktive.length !== aktiveIdsRef.current.length && istSerie(satz) && satz) {
-        const rest = rundenVon(verbleibend, satz.id)
-        if (rest.length > 0) naechsteAktive = [rest[0]!.id, ...naechsteAktive]
-      }
-      if (naechsteAktive.length !== aktiveIdsRef.current.length) {
-        setAktiveIds(naechsteAktive)
-        if (aktiverLaufIdRef.current === id) setAktivenLaufId(naechsteAktive[0] ?? null)
-      }
-
-      // Ein Satz ohne Läufe ist unsichtbar, aber nicht weg. Er verschwindet
-      // mit seinem letzten Lauf.
-      const satzId = lauf?.satzId
-      if (satzId && !verbleibend.some((eintrag) => eintrag.satzId === satzId)) {
-        setSatzeSafe(satzeRef.current.filter((eintrag) => eintrag.id !== satzId))
-        verfolge(deleteSatzUndLaeufe(satzId))
-      }
-    },
-    [setAktiveIds, setAktivenLaufId, setLaeufeSafe, setSatzeSafe, verfolge],
-  )
-
-  /**
-   * Löscht einen Satz mit allen seinen Läufen. Wird im Verlauf verwendet, um
-   * eine ganze Gruppe zu entfernen; die Leiste wird bereinigt.
-   */
-  const loescheSatz = useCallback(
-    (id: string) => {
-      if (!istAktiv()) return
-      const betroffen = laeufeRef.current.filter((l) => l.satzId === id)
-      setSatzeSafe(satzeRef.current.filter((s) => s.id !== id))
-      setLaeufeSafe(laeufeRef.current.filter((l) => l.satzId !== id))
-      const ids = new Set(betroffen.map((lauf) => lauf.id))
-      const naechste = aktiveIdsRef.current.filter((eintrag) => !ids.has(eintrag))
-      setAktiveIds(naechste)
-      if (betroffen.some((lauf) => lauf.id === aktiverLaufIdRef.current)) {
-        setAktivenLaufId(naechste[0] ?? null)
-      }
-      verfolge(deleteSatzUndLaeufe(id))
-    },
-    [setAktiveIds, setAktivenLaufId, setLaeufeSafe, setSatzeSafe, verfolge],
   )
 
   /**
@@ -1493,19 +906,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const uebernehmen = useCallback(() => {
     koordinatorRef.current?.uebernehmen()
   }, [])
-
-  /** Benennt einen Satz um (Freitext im Verlauf). Leerer Text entfernt die Bezeichnung. */
-  const benenneSatz = useCallback(
-    (id: string, bezeichnung: string) => {
-      if (!istAktiv()) return
-      const satz = satzeRef.current.find((eintrag) => eintrag.id === id)
-      if (!satz) return
-      const naechster = { ...satz, bezeichnung: bezeichnung.trim() }
-      setSatzeSafe(satzeRef.current.map((eintrag) => (eintrag.id === id ? naechster : eintrag)))
-      verfolge(saveSatz(naechster))
-    },
-    [setSatzeSafe, verfolge],
-  )
 
   /**
    * Legt einen leeren Wettkampf an. Name und Datum werden geprüft; das Datum
@@ -1843,29 +1243,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       aendereLauf(lauf, naechster)
     },
     [aendereLauf, setSchwimmerSafe, verfolge],
-  )
-
-  /**
-   * Wählt einen bereits angelegten Satz aus, ohne gemessene Zeiten anzutasten.
-   *
-   * Bevorzugt wird eine noch offene Runde, sonst die erste. Der alte Anker
-   * derselben Serie wird aus der Leiste entfernt, damit sie dort nicht zweimal
-   * erscheint.
-   */
-  const aktiviereSatz = useCallback(
-    (satz: Satz): string | null => {
-      const runden = rundenVon(laeufeRef.current, satz.id)
-      const kandidat = runden.find((lauf) => !isComplete(lauf)) ?? runden[0]
-      if (!kandidat) return null
-      // Eine Serie ist genau ein Eintrag in der Leiste. Ein alter Anker
-      // derselben Serie wird ersetzt, nicht als zweiter Chip behalten.
-      const rundenIds = new Set(runden.map((lauf) => lauf.id))
-      const behalten = aktiveIdsRef.current.filter((id) => !rundenIds.has(id))
-      setAktiveIds([kandidat.id, ...behalten])
-      setAktivenLaufId(kandidat.id)
-      return kandidat.id
-    },
-    [setAktiveIds, setAktivenLaufId],
   )
 
   /**
