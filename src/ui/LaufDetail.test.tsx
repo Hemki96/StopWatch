@@ -117,6 +117,9 @@ describe('LaufDetail', () => {
       zeile.focus()
       zeile.click()
     })
+    // Das Detail kommt als eigener Chunk; der Test wartet auf die Dialoggrenze,
+    // statt die Ladezeit als Teil des Fokusvertrags zu prüfen.
+    await warteAuf(() => container.querySelector('[role="dialog"]') !== null)
 
     const dialog = container.querySelector<HTMLElement>('[role="dialog"]')
     expect(dialog).not.toBeNull()
@@ -157,6 +160,7 @@ describe('LaufDetail', () => {
       zeile.focus()
       zeile.click()
     })
+    await warteAuf(() => container.querySelector('[role="dialog"]') !== null)
 
     // Über dem Detail liegt die Löschbestätigung; Escape darf nur sie schließen.
     const loeschen = container.querySelector<HTMLElement>('button[aria-label="Lauf löschen"]')!

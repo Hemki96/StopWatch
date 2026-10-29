@@ -8,7 +8,7 @@
  * app/AppProvider; gelöschte Schwimmer verlieren nur die Bahnzuordnung, nicht
  * die gemessenen Zeiten.
  */
-import { useMemo, useState } from 'react'
+import { lazy, Suspense, useMemo, useState } from 'react'
 import { useApp } from '../app/AppProvider'
 import { berechnePbs, pbKey } from '../domain/analyse'
 import { formatStrecke, formatTime } from '../domain/format'
@@ -16,9 +16,18 @@ import { einheitVon, formatBeckenlaenge } from '../domain/einheit'
 import { finishMs } from '../domain/lauf'
 import { SCHWIMMARTEN, type Lauf, type Schwimmer } from '../domain/types'
 import { Bestaetigung } from './Bestaetigung'
-import { LaufDetail } from './LaufDetail'
+import { DialogLadezustand } from './Ladezustand'
 import { Sheet } from './Sheet'
 import { ChevronRightIcon, PlusIcon } from './icons'
+
+/**
+ * Das Lauf-Detail teilt sich der Schwimmer-Tab mit dem Verlauf. Der `import()`
+ * liegt in beiden Screens auf demselben Modul; Vite legt dafür einen
+ * gemeinsamen Chunk an, der erst beim Öffnen einer Bestzeit geladen wird.
+ */
+const LaufDetail = lazy(() =>
+  import('./LaufDetail').then((modul) => ({ default: modul.LaufDetail })),
+)
 
 // Formularzustand: geschlossen, neuer Schwimmer oder ein bestehender Eintrag.
 type Bearbeitung = { modus: 'neu' } | { modus: 'bearbeiten'; schwimmer: Schwimmer } | null
@@ -448,13 +457,16 @@ export function SchwimmerScreen() {
       ) : null}
 
       {/* Das Lauf-Detail liegt als Vollbild über der Liste. Der Rückweg führt
-          zu genau diesem Schwimmer; `offen` bleibt dabei unverändert. */}
+          zu genau diesem Schwimmer; `offen` bleibt dabei unverändert. Die
+          Ladefläche deckt die spätere Dialogfläche bereits ab. */}
       {offenerLauf ? (
-        <LaufDetail
-          laufId={offenerLauf}
-          onClose={() => setOffenerLauf(null)}
-          zurueck={{ label: 'Schwimmer', aria: 'Zurück zu den Schwimmern' }}
-        />
+        <Suspense fallback={<DialogLadezustand text="Lauf wird geladen …" />}>
+          <LaufDetail
+            laufId={offenerLauf}
+            onClose={() => setOffenerLauf(null)}
+            zurueck={{ label: 'Schwimmer', aria: 'Zurück zu den Schwimmern' }}
+          />
+        </Suspense>
       ) : null}
     </div>
   )
