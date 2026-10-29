@@ -59,21 +59,37 @@ export function Onboarding({ onFertig }: { onFertig: () => void }) {
   }
 
   const speichereNamen = () => {
-    const ids = Array.from({ length: bahnen }, (_, index) => {
+    // Innerhalb dieses Durchlaufs angelegte Namen sofort merken: `app.schwimmer`
+    // ist erst nach dem nächsten Rendern aktuell und würde sonst Duplikate
+    // anlegen, wenn derselbe Name auf zwei Bahnen steht.
+    const neu = new Map<string, string>()
+    return Array.from({ length: bahnen }, (_, index) => {
       const name = namen[index]?.trim()
       if (!name) return null
+      const schluessel = name.toLocaleLowerCase('de')
       const vorhanden = app.schwimmer.find(
-        (s) => s.name.toLocaleLowerCase('de') === name.toLocaleLowerCase('de'),
+        (s) => s.name.toLocaleLowerCase('de') === schluessel,
       )
       if (vorhanden) return vorhanden.id
-      return app.speichereSchwimmer({ name, jahrgang: null, notiz: '' })?.id ?? null
+      const bereitsAngelegt = neu.get(schluessel)
+      if (bereitsAngelegt) return bereitsAngelegt
+      const eintrag = app.speichereSchwimmer({ name, jahrgang: null, notiz: '' })
+      if (!eintrag) return null
+      neu.set(schluessel, eintrag.id)
+      return eintrag.id
     })
-    return ids
   }
 
   const abschliessen = () => {
     if (validateKonfiguration(konfiguration) !== null) return
-    app.setzeEinstellungen({ konfiguration, bahnen, schwimmerProBahn: speichereNamen() })
+    app.setzeEinstellungen({
+      konfiguration,
+      bahnen,
+      schwimmerProBahn: speichereNamen(),
+      startversatzMs: 0,
+      wiederholungen: 1,
+      taktSek: 120,
+    })
     onFertig()
   }
 
@@ -82,6 +98,9 @@ export function Onboarding({ onFertig }: { onFertig: () => void }) {
       konfiguration: { ...STANDARD_KONFIGURATION },
       bahnen: 6,
       schwimmerProBahn: [],
+      startversatzMs: 0,
+      wiederholungen: 1,
+      taktSek: 120,
     })
     onFertig()
   }

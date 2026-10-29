@@ -1,3 +1,12 @@
+/**
+ * Letzte Auffanglinie für Render-Fehler.
+ *
+ * Umschließt in `main.tsx` den gesamten Baum. Fängt Fehler beim Rendern, in
+ * Lifecycle-Methoden und in Konstruktoren von Kindern — nicht in Event-Handlern
+ * und nicht in asynchronen Aktionen; dort greifen die Fehlerpfade von
+ * `AppProvider`. Die Daten liegen außerhalb von React, ein Neustart der
+ * Oberfläche ist deshalb gefahrlos.
+ */
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 
 interface Props {
@@ -16,10 +25,19 @@ interface State {
 export class ErrorBoundary extends Component<Props, State> {
   state: State = { fehler: null }
 
+  /**
+   * Wechselt in den Fehlerzustand. Muss rein und ohne Seiteneffekte sein — React
+   * kann es während des Renderns aufrufen.
+   */
   static getDerivedStateFromError(fehler: Error): State {
     return { fehler }
   }
 
+  /**
+   * Protokolliert den Fehler samt Component-Stack. Bewusst nur `console.error`:
+   * Es gibt keinen Server und keine Telemetrie, die Meldung soll aber vor Ort
+   * auffindbar sein.
+   */
   componentDidCatch(fehler: Error, info: ErrorInfo): void {
     console.error('Unerwarteter Fehler in der Oberfläche:', fehler, info.componentStack)
   }

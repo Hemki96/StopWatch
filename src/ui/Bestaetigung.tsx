@@ -1,3 +1,11 @@
+/**
+ * Kurzer Bestätigungsdialog für eine einzelne Entscheidung.
+ *
+ * Baut auf `Dialog` auf (Fokus, Escape, Scroll-Sperre) und beschreibt sich als
+ * `alertdialog` mit Titel und Text. Bewusst ist „Abbrechen“ vorfokussiert, damit
+ * ein versehentliches Enter nichts löscht; die Bestätigung ist standardmäßig
+ * rot, außer bei nicht-destruktiven Aktionen wie einem Import.
+ */
 import { useId, useRef } from 'react'
 import { Dialog } from './Dialog'
 
@@ -6,20 +14,31 @@ interface BestaetigungProps {
   titel: string
   text: string
   bestaetigenLabel: string
+  /** Standard ist die rote Warnfarbe; Importe sind nicht destruktiv. */
+  gefahr?: boolean
   onBestaetigen: () => void
   onAbbrechen: () => void
 }
 
+/**
+ * Stellt eine Frage mit zwei Antworten. `onAbbrechen` läuft auch beim Klick auf
+ * den Hintergrund oder bei Escape, sodass der Dialog nie ohne Entscheidung
+ * hängen bleibt.
+ */
 export function Bestaetigung({
   open,
   titel,
   text,
   bestaetigenLabel,
+  gefahr = true,
   onBestaetigen,
   onAbbrechen,
 }: BestaetigungProps) {
+  // Ids für `aria-labelledby`/`aria-describedby`; sprechende Texte allein
+  // reichen Screenreadern nicht, sie brauchen die Verknüpfung.
   const titelId = useId()
   const textId = useId()
+  // Das Abbrechen-Feld bekommt den Startfokus (siehe Dialog).
   const abbrechenRef = useRef<HTMLButtonElement>(null)
 
   return (
@@ -41,6 +60,8 @@ export function Bestaetigung({
         {text}
       </p>
       <div className="mt-5 flex gap-2">
+        {/* Abbrechen steht links und behält den Fokus; die destruktive
+            Bestätigung ist die bewusstere zweite Handlung. */}
         <button
           ref={abbrechenRef}
           type="button"
@@ -52,7 +73,9 @@ export function Bestaetigung({
         <button
           type="button"
           onClick={onBestaetigen}
-          className="h-12 flex-1 rounded-xl bg-danger text-sm font-semibold text-white"
+          className={`h-12 flex-1 rounded-xl text-sm font-semibold ${
+            gefahr ? 'bg-danger text-white' : 'bg-accent text-accent-fg'
+          }`}
         >
           {bestaetigenLabel}
         </button>

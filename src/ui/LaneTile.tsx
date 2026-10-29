@@ -1,12 +1,26 @@
+/**
+ * Kachel einer einzelnen Bahn im Timer.
+ *
+ * Zeigt Status, Zeit und Längenfortschritt genau einer Bahn. Ein kurzer Tap
+ * setzt den Anschlag, langes Drücken nimmt die letzte Aktion zurück, der
+ * eingebettete „Ziel“-Knopf beendet eine Bahn auf offener Strecke. Die Kachel
+ * rechnet nicht selbst: Status und Zeiten kommen aus domain/lauf, die Aktionen
+ * reicht TimerScreen aus app/AppProvider herein.
+ */
 import { useRef, useState } from 'react'
 import { haptic } from '../app/haptics'
 import { useReducedMotion } from '../app/useReducedMotion'
-import { elapsedMs, finishMs, laneStatus, lastSplit, lengthCount } from '../domain/lauf'
-import { formatTime } from '../domain/format'
+import { elapsedMs, finishMs, laneStatusAt, lastSplit, lengthCount } from '../domain/lauf'
+import { formatCountdown, formatTime } from '../domain/format'
 import type { Bahn, LaufKonfiguration } from '../domain/types'
 
+/** Haltedauer in Millisekunden, ab der ein Druck als „zurücknehmen“ gilt. */
 const LANGDRUCK_MS = 450
 
+/**
+ * Statuswörter für die Screenreader-Beschriftung. Die Farbe der Kachel allein
+ * wäre für sehbeeinträchtigte Nutzer nicht lesbar.
+ */
 const STATUS_LABEL = {
   bereit: 'bereit',
   geplant: 'geplant',
@@ -14,16 +28,26 @@ const STATUS_LABEL = {
   beendet: 'im Ziel',
 } as const
 
+/** Eine Bahn mit ihrer Konfiguration sowie den Aktionen aus dem App-Kontext. */
 interface LaneTileProps {
   bahn: Bahn
   konfiguration: LaufKonfiguration
+  /** Monotone Zeit aus `useNow`; treibt Countdown und laufende Zeit. */
   now: number
   schwimmerName: string | null
+  /** Kurzer Tap: Anschlag erfassen beziehungsweise Bahn starten. */
   onTap: (bahnId: string, now: number, wallNow: number) => void
+  /** Langes Drücken: letzten Anschlag oder Start zurücknehmen. */
   onUndo: (bahnId: string) => void
+  /** „Ziel“-Knopf für offene Strecken; bei fester Strecke nicht nötig. */
   onFinish: (bahnId: string, now: number, wallNow: number) => void
 }
 
+/**
+ * Bedienfläche einer Bahn: Ein Tap ist der Anschlag, langes Drücken nimmt ihn
+ * zurück. Enter und Leertaste lösen dieselbe Aktion aus, damit die Kachel auch
+ * mit Tastatur und Screenreader bedienbar bleibt.
+ */
 export function LaneTile({
   bahn,
   konfiguration,
@@ -34,17 +58,44 @@ export function LaneTile({
   onFinish,
 }: LaneTileProps) {
   const [gedrueckt, setGedrueckt] = useState(false)
+  /** Beginn des laufenden Drucks samt Zeitstempeln und Undo-Timer. */
   const pressRef = useRef<{ perf: number; wall: number; timer: number } | null>(null)
+  // Klicks, die aus Pointer- oder Tastaturbedienung entstehen, sind bereits
+  // verarbeitet. Ein Klick ohne vorherige Eingabe kommt von VoiceOver/TalkBack.
+  const klickRef = useRef(false)
 
-  const status = laneStatus(bahn)
+  const merkeKlick = () => {
+    klickRef.current = true
+    window.setTimeout(() => {
+      klickRef.current = false
+    }, 0)
+  }
+
+  // Der Status hängt von `now` ab: Eine Bahn mit Startzeit in der Zukunft ist
+  // „geplant“ und nimmt noch keine Anschläge an.
+  const status = laneStatusAt(bahn, now)
+  // Anzahl der Längen der Strecke; `null` bedeutet offene Strecke.
   const gesamt = lengthCount(konfiguration)
-  const zeit = status === 'beendet' ? (finishMs(bahn) ?? 0) : elapsedMs(bahn, now)
+  // Große Zahl der Kachel: Zielzeit, Countdown bis zum Start oder laufende
+  // Zeit. Der Countdown wird bei 0 gekappt, damit er nicht negativ läuft.
+  const zeit =
+    status === 'beendet'
+      ? (finishMs(bahn) ?? 0)
+      : status === 'geplant'
+        ? Math.max(0, (bahn.startMs ?? now) - now)
+        : elapsedMs(bahn, now)
+  // Letzter Anschlag für die kleine Zeile unten rechts.
   const letzter = lastSplit(bahn)
+  // Auf einer unberührten Bahn gibt es nichts zurückzunehmen; dort bleibt auch
+  // der Undo-Timer aus (siehe startPress).
   const kannRueckgaengig = status !== 'bereit'
+  // Bei reduzierter Bewegung entfällt nur die Animation des Haltebalkens.
   const reduzierteBewegung = useReducedMotion()
 
   const startPress = (event: React.PointerEvent<HTMLDivElement>) => {
+    // Rechts- und Mittelklick sind keine Bedienhandlung am Beckenrand.
     if (event.pointerType === 'mouse' && event.button !== 0) return
+    klickRef.current = false
     try {
       event.currentTarget.setPointerCapture(event.pointerId)
     } catch {
@@ -70,16 +121,24 @@ export function LaneTile({
   }
 
   const endPress = () => {
+    // Der gleich folgende Klick gehört zu diesem Druck und darf nicht ein
+    // zweites Mal als Anschlag zählen.
+    merkeKlick()
     const press = pressRef.current
     if (!press) return
     window.clearTimeout(press.timer)
     pressRef.current = null
     setGedrueckt(false)
+    // Eine geplante Bahn startet zu ihrem festen Zeitpunkt; ein kurzer Tap
+    // darf den Countdown nicht vorziehen.
+    if (status === 'geplant') return
     haptic(8)
     onTap(bahn.id, press.perf, press.wall)
   }
 
   const cancelPress = () => {
+    // Ein abgebrochener Druck erzeugt unter Umständen trotzdem einen Klick.
+    merkeKlick()
     const press = pressRef.current
     if (!press) return
     window.clearTimeout(press.timer)
@@ -87,18 +146,33 @@ export function LaneTile({
     setGedrueckt(false)
   }
 
+  // Farbe und Rahmen spiegeln den Status, damit Fläche und Zeit dieselbe
+  // Semantik tragen: Akzent = läuft, grün = im Ziel, gelb = geplanter Start,
+  // neutral = bereit.
   const rand =
     status === 'laeuft'
       ? 'border-accent/70 bg-accent/10'
       : status === 'beendet'
         ? 'border-ok/50 bg-ok/10'
-        : 'border-line bg-surface'
+        : status === 'geplant'
+          ? 'border-warn/60 bg-warn/10'
+          : 'border-line bg-surface'
 
   const zeitFarbe =
-    status === 'laeuft' ? 'text-accent' : status === 'beendet' ? 'text-ok' : 'text-muted'
+    status === 'laeuft'
+      ? 'text-accent'
+      : status === 'beendet'
+        ? 'text-ok'
+        : status === 'geplant'
+          ? 'text-warn'
+          : 'text-muted'
 
+  // Gefüllte Segmente der Fortschrittsleiste: eines pro erfasstem Anschlag.
   const abgeschlosseneLaengen = bahn.anschlaege.length
 
+  // Die Kachel ist ein Knopf, weil Tap, Enter und Leertaste dieselbe Aktion
+  // auslösen. Das `aria-label` nennt Bahn, Namen und Status, weil Farbe und
+  // Zahl allein den Zustand nicht vermitteln.
   return (
     <div
       role="button"
@@ -110,12 +184,22 @@ export function LaneTile({
       onPointerUp={endPress}
       onPointerCancel={cancelPress}
       onContextMenu={(e) => e.preventDefault()}
+      onClick={(e) => {
+        // Ein Klick auf den eingebetteten "Ziel"-Knopf gehört nicht der Kachel.
+        if (e.target !== e.currentTarget) return
+        if (klickRef.current) return
+        if (status === 'geplant') return
+        haptic(8)
+        onTap(bahn.id, performance.now(), Date.now())
+      }}
       onKeyDown={(e) => {
         // Der "Ziel"-Knopf liegt in dieser Kachel. Ohne die Prüfung würde
         // Enter dort zusätzlich einen Anschlag auslösen.
         if (e.target !== e.currentTarget) return
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault()
+          if (status === 'geplant') return
+          merkeKlick()
           haptic(8)
           onTap(bahn.id, performance.now(), Date.now())
         }
@@ -123,7 +207,9 @@ export function LaneTile({
       className={`relative flex select-none flex-col justify-between overflow-hidden rounded-2xl border-2 p-3 transition-[background-color,border-color,opacity] duration-75 ${
         gedrueckt ? 'brightness-105 opacity-80' : ''
       } ${rand}`}
-      style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', touchAction: 'none' }}
+      // `pan-y` lässt die Seite scrollen, verhindert aber Doppeltipp-Zoom.
+      // `none` würde auf kleinen Displays auch das Scrollen blockieren.
+      style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', touchAction: 'pan-y' }}
     >
       <div className="flex items-center justify-between gap-2">
         <span className="rounded-md bg-surface2 px-1.5 py-0.5 text-[11px] font-bold tracking-wide text-muted">
@@ -132,24 +218,34 @@ export function LaneTile({
         <span className="truncate text-[11px] font-medium text-muted">{schwimmerName ?? ''}</span>
       </div>
 
+      {/* `clamp` hält die Zeit groß genug für den Blick aus einigen Metern,
+          ohne die Kachel auf schmalen Displays zu sprengen. */}
       <div
         className={`tabular text-center font-semibold leading-none ${zeitFarbe}`}
         style={{ fontSize: 'clamp(1.5rem, 7.6vw, 3.25rem)' }}
       >
-        {formatTime(zeit)}
+        {status === 'geplant' ? formatCountdown(zeit) : formatTime(zeit)}
       </div>
 
+      {/* Untere Zeile: links der Fortschritt, rechts entweder der Zielknopf
+          (nur offene Strecke) oder die letzte Zwischenzeit. */}
       <div className="flex items-end justify-between gap-2 text-[11px] text-muted">
         <span className="tabular">
           {status === 'beendet'
             ? 'Ziel'
-            : status === 'laeuft'
-              ? gesamt
-                ? `Länge ${Math.min(bahn.anschlaege.length + 1, gesamt)}/${gesamt}`
-                : `Länge ${bahn.anschlaege.length + 1}`
-              : 'Bereit'}
+            : status === 'geplant'
+              ? 'Start in'
+              : status === 'laeuft'
+                ? gesamt
+                  ? `Länge ${Math.min(bahn.anschlaege.length + 1, gesamt)}/${gesamt}`
+                  : `Länge ${bahn.anschlaege.length + 1}`
+                : 'Bereit'}
         </span>
 
+        {/* Nur bei offener Strecke braucht es einen eigenen Zielknopf; bei
+            fester Strecke ist der letzte Anschlag automatisch das Ziel. Der
+            Knopf stoppt Pointer- und Klickweitergabe, sonst würde das Ziel
+            zusätzlich als Anschlag auf der Kachel landen. */}
         {status === 'laeuft' && gesamt === null ? (
           <button
             type="button"
@@ -164,7 +260,9 @@ export function LaneTile({
             Ziel
           </button>
         ) : (
-          <span className="tabular">{letzter ? formatTime(letzter.splitMs) : ''}</span>
+          <span className="tabular">
+            {status === 'geplant' ? 'wartet' : letzter ? formatTime(letzter.splitMs) : ''}
+          </span>
         )}
       </div>
 
@@ -193,12 +291,14 @@ export function LaneTile({
         </span>
       ) : null}
 
+      {/* Das Overlay erscheint erst ab dem Drücken und nennt die Wirkung,
+          damit langes Drücken nicht als einfacher Anschlag missverstanden wird. */}
       {kannRueckgaengig && gedrueckt ? (
         <span
           data-haltend="true"
           className="pointer-events-none absolute inset-x-2 top-1/2 flex -translate-y-1/2 flex-col items-center gap-1 rounded-lg bg-warn px-2 py-1.5 text-center text-[10px] font-bold text-black"
         >
-          Halten: Anschlag zurücknehmen
+          {status === 'geplant' ? 'Halten: Start abbrechen' : 'Halten: Anschlag zurücknehmen'}
           {reduzierteBewegung ? null : (
             <span aria-hidden="true" className="h-[3px] w-full overflow-hidden rounded-full bg-black/25">
               <span

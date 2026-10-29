@@ -5,6 +5,12 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
   base: './',
+  server: {
+    // Build- und Testartefakte lösen keinen Reload mitten in einer Messung aus.
+    watch: {
+      ignored: ['**/dist/**', '**/coverage/**', '**/test-results/**', '**/playwright-report/**'],
+    },
+  },
   plugins: [
     react(),
     tailwindcss(),
@@ -54,5 +60,26 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html'],
+      reportsDirectory: 'coverage',
+      include: ['src/**/*.{ts,tsx}'],
+      // Die Screens werden in Playwright gegen den echten Build geprüft; die
+      // Unit-Schwelle gilt dem Zeitkern, der Persistenz und den Bausteinen.
+      exclude: [
+        'src/main.tsx',
+        'src/App.tsx',
+        'src/ui/**',
+        'src/test/**',
+        'src/**/*.d.ts',
+      ],
+      thresholds: {
+        statements: 80,
+        branches: 74,
+        functions: 85,
+        lines: 87,
+      },
+    },
   },
 })

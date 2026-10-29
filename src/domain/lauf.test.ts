@@ -4,11 +4,15 @@ import {
   elapsedMs,
   finishLane,
   finishMs,
+  hatBegonnen,
   hatLaufendeBahn,
   isFinished,
+  isStartLocked,
   isStreckeLocked,
   korrigiereAnschlag,
   laneStatus,
+  laneStatusAt,
+  planeLauf,
   pruefeAnschlagKorrektur,
   lastSplit,
   lengthCount,
@@ -272,5 +276,111 @@ describe('korrigiereAnschlag', () => {
     expect(pruefeAnschlagKorrektur(lauf, bahnId, 2, 10_000)).not.toBeNull()
     expect(korrigiereAnschlag(lauf, bahnId, 1, 61_000)).toBe(lauf)
     expect(pruefeAnschlagKorrektur(lauf, bahnId, 1, 31_000)).toBeNull()
+  })
+})
+
+describe('Startversatz', () => {
+  function gestaffelt(anzahl = 3, versatzMs = 10_000): Lauf {
+    return createLauf(
+      K100,
+      Array.from({ length: anzahl }, (_, i) => ({ nummer: i + 1 })),
+      null,
+      { startversatzMs: versatzMs },
+    )
+  }
+
+  it('startet die Bahnen im festen Abstand', () => {
+    const lauf = startAll(gestaffelt(3), 1000, 5000)
+    expect(lauf.bahnen.map((b) => b.startMs)).toEqual([1000, 11_000, 21_000])
+    expect(lauf.startWallMs).toBe(5000)
+    expect(lauf.startversatzMs).toBe(10_000)
+  })
+
+  it('meldet eine Bahn vor ihrem Start als geplant', () => {
+    const lauf = startAll(gestaffelt(2), 1000, 5000)
+    expect(laneStatusAt(lauf.bahnen[0]!, 500)).toBe('geplant')
+    expect(laneStatusAt(lauf.bahnen[0]!, 1000)).toBe('laeuft')
+    expect(laneStatusAt(lauf.bahnen[1]!, 5000)).toBe('geplant')
+    expect(laneStatusAt(lauf.bahnen[1]!, 11_000)).toBe('laeuft')
+  })
+
+  it('ignoriert Taps, bevor die Bahn startet', () => {
+    const lauf = startAll(gestaffelt(2), 1000, 5000)
+    const unveraendert = tapLane(lauf, lauf.bahnen[1]!.id, 5000, 6000)
+    expect(unveraendert).toBe(lauf)
+
+    const getippt = tapLane(lauf, lauf.bahnen[1]!.id, 12_000, 13_000)
+    expect(bahn(getippt, 1).anschlaege).toHaveLength(1)
+    expect(bahn(getippt, 1).anschlaege[0]?.splitMs).toBe(1000)
+  })
+
+  it('hält den Lauf aktiv, solange eine Bahn geplant ist', () => {
+    const lauf = startAll(gestaffelt(2), 1000, 5000)
+    expect(hatLaufendeBahn(lauf)).toBe(true)
+  })
+
+  it('setzt mit planeLauf alle Starts neu', () => {
+    const lauf = planeLauf(gestaffelt(3), 0, 1000, 5000)
+    expect(lauf.bahnen.map((b) => b.startMs)).toEqual([0, 5000, 10_000])
+    expect(lauf.startWallMs).toBe(1000)
+    expect(lauf.startversatzMs).toBe(5000)
+  })
+
+  it('sperrt den Start nach dem ersten Start', () => {
+    const lauf = gestaffelt(2)
+    expect(isStartLocked(lauf)).toBe(false)
+    expect(isStartLocked(startAll(lauf, 1000, 5000))).toBe(true)
+  })
+})
+
+describe('hatBegonnen', () => {
+  it('zählt eine noch in der Zukunft liegende Runde nicht', () => {
+    const lauf = startAll(
+      createLauf(K100, [{ nummer: 1 }, { nummer: 2 }], null, { startversatzMs: 10_000 }),
+      0,
+      1000,
+    )
+    expect(hatBegonnen(lauf, 999)).toBe(false)
+    expect(hatBegonnen(lauf, 1000)).toBe(true)
+  })
+
+  it('zählt einen vorbereiteten Lauf ohne Start nicht', () => {
+    expect(hatBegonnen(laufMit(K100, 2), 10_000)).toBe(false)
+  })
+
+  it('zählt einen Anschlag auch ohne gültige Startzeit', () => {
+    const lauf = laufMit(K100, 1)
+    lauf.bahnen[0]!.anschlaege.push({
+      laengeNr: 1,
+      splitMs: 30_000,
+      erfasstAt: 1,
+      istFinish: false,
+    })
+    expect(hatBegonnen(lauf, 0)).toBe(true)
+  })
+
+  it('zeigt spätere Wiederholungen erst mit dem ersten Anschlag', () => {
+    const lauf = planeLauf(
+      createLauf(K100, [{ nummer: 1 }], null, { wiederholung: 2 }),
+      0,
+      1000,
+    )
+    expect(hatBegonnen(lauf, 5000)).toBe(false)
+    lauf.bahnen[0]!.anschlaege.push({
+      laengeNr: 1,
+      splitMs: 30_000,
+      erfasstAt: 1,
+      istFinish: false,
+    })
+    expect(hatBegonnen(lauf, 5000)).toBe(true)
+  })
+
+  it('zeigt einen gestarteten Wettkampf-Heat auch ab Lauf 2 sofort', () => {
+    const lauf = startAll(
+      createLauf(K100, [{ nummer: 1 }], null, { modus: 'wettkampf', wiederholung: 2 }),
+      0,
+      1000,
+    )
+    expect(hatBegonnen(lauf, 1000)).toBe(true)
   })
 })

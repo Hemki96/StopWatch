@@ -1,26 +1,66 @@
+/**
+ * Rahmen der App: Ladephase, Onboarding, Hinweisbanner und die sechs Bereiche.
+ *
+ * `App` entscheidet anhand von `geladen` und dem Onboarding-Merkmal, was
+ * gerendert wird, und hält den aktiven Tab als lokalen State. Alle Daten kommen
+ * aus `useApp()`; PWA-Themen (Update, Offline, Tab-Rolle) werden hier nur
+ * angezeigt, nicht verwaltet.
+ *
+ * Wichtig: Der aktive Tab wird nicht gespeichert und steht nicht in der URL.
+ * Nach einem Neustart beginnt die App im Timer. Screens werden beim Tab-Wechsel
+ * ausgehängt — laufende Messungen dürfen deshalb nicht in den Screens liegen,
+ * sondern im Provider.
+ */
 import { useEffect, useState } from 'react'
 import { useApp } from './app/AppProvider'
 import { useOnlineStatus, useServiceWorkerUpdate } from './app/pwa'
-import { hatLaufendeBahn } from './domain/lauf'
 import { HistoryScreen } from './ui/HistoryScreen'
 import { Onboarding } from './ui/Onboarding'
 import { SchwimmerScreen } from './ui/SchwimmerScreen'
 import { SettingsScreen } from './ui/SettingsScreen'
 import { SpeicherBanner } from './ui/SpeicherBanner'
 import { TimerScreen } from './ui/TimerScreen'
-import { GearIcon, HistoryIcon, PeopleIcon, TimerIcon, XIcon } from './ui/icons'
+import { TrainingScreen } from './ui/TrainingScreen'
+import { WettkampfScreen } from './ui/WettkampfScreen'
+import {
+  GearIcon,
+  HistoryIcon,
+  PeopleIcon,
+  TimerIcon,
+  TrainingIcon,
+  TrophyIcon,
+  XIcon,
+} from './ui/icons'
 
-type Tab = 'timer' | 'verlauf' | 'schwimmer' | 'einstellungen'
+/** Die sechs Bereiche. Die IDs sind zugleich die Schlüssel in `TABS`. */
+type Tab = 'timer' | 'training' | 'wettkampf' | 'verlauf' | 'schwimmer' | 'einstellungen'
 
+/**
+ * Navigationsreihenfolge der unteren Leiste. Die Reihenfolge ist bewusst fest
+ * (Messung zuerst) und muss zum `grid-cols-6` der Navigation passen.
+ */
 const TABS = [
   { id: 'timer' as const, label: 'Timer', Icon: TimerIcon },
+  { id: 'training' as const, label: 'Training', Icon: TrainingIcon },
+  { id: 'wettkampf' as const, label: 'Wettkampf', Icon: TrophyIcon },
   { id: 'verlauf' as const, label: 'Verlauf', Icon: HistoryIcon },
   { id: 'schwimmer' as const, label: 'Schwimmer', Icon: PeopleIcon },
   { id: 'einstellungen' as const, label: 'Mehr', Icon: GearIcon },
 ]
 
+/**
+ * Merker für das Onboarding. Bewusst nur ein Wert (`fertig`) statt eines
+ * Zeitstempels: Es gibt keine Versionierung der Einführung, und ein fehlender
+ * Wert genügt als „noch nicht gesehen“.
+ */
 const ONBOARDING_KEY = 'beckenrand.onboarding'
 
+/**
+ * Liest das Onboarding-Merkmal einmalig beim Start.
+ *
+ * Ohne lesbaren `localStorage` gilt das Onboarding als erledigt: Sonst würde es
+ * bei jedem Start erneut erscheinen, weil es sich nicht dauerhaft merken lässt.
+ */
 function onboardingGemerkt(): boolean {
   try {
     return localStorage.getItem(ONBOARDING_KEY) === 'fertig'
@@ -29,23 +69,46 @@ function onboardingGemerkt(): boolean {
   }
 }
 
+/**
+ * Wurzelkomponente der Oberfläche.
+ *
+ * Drei Ausgabezustände in fester Reihenfolge: Ladeansicht (bis IndexedDB
+ * gelesen ist), Onboarding (nur beim ersten Start) und der eigentliche Rahmen
+ * mit Kopfzeilen-Bannern, aktivem Screen und Tab-Leiste. Der Toast liegt
+ * außerhalb der Screens und bleibt dauerhaft im DOM.
+ *
+ * Aktionen sind nur in dem Tab wirksam, der die Messung hält; die passende
+ * Sperre setzt der Provider. Diese Komponente verlässt sich darauf und zeigt
+ * bei `tabGesperrt` nur den Hinweis mit „Hier weiterarbeiten“.
+ */
 export default function App() {
   const {
     geladen,
     toast,
-    aktiverLauf,
     speicherFehler,
     laeufe,
     schwimmer,
     tabGesperrt,
     tabAktiv,
     uebernehmen,
+    brauchtTakt,
   } = useApp()
   const [tab, setTab] = useState<Tab>('timer')
   const [onboardingFertig, setOnboardingFertig] = useState(onboardingGemerkt)
+  const [ladeHinweis, setLadeHinweis] = useState(false)
   const update = useServiceWorkerUpdate()
   const online = useOnlineStatus()
 
+  // Ein blockiertes IndexedDB-Upgrade (älterer Tab noch offen) würde sonst
+  // dauerhaft bei „Wird geladen …“ stehen.
+  useEffect(() => {
+    if (geladen) return
+    const timer = window.setTimeout(() => setLadeHinweis(true), 5000)
+    return () => window.clearTimeout(timer)
+  }, [geladen])
+
+  // Merkt den Abschluss für künftige Starts. Der State ist die Wahrheit für
+  // diese Sitzung, der Speicher nur die Erinnerung darüber hinaus.
   const merkeOnboarding = () => {
     try {
       localStorage.setItem(ONBOARDING_KEY, 'fertig')
@@ -67,22 +130,40 @@ export default function App() {
     }
   }, [geladen, onboardingFertig, laeufe.length, schwimmer.length])
 
-  // Nur eine tatsächlich laufende Bahn hält ein Update zurück. Ein angelegter
+  // Jede laufende oder geplante Bahn hält ein Update zurück. Ein angelegter
   // oder vollständig beendeter Lauf kostet beim Neuladen nichts.
-  const laufLaeuft = hatLaufendeBahn(aktiverLauf)
+  const laufLaeuft = brauchtTakt
 
   if (!geladen) {
     return (
-      <div className="grid h-dvh place-items-center bg-bg text-sm text-muted">
-        Wird geladen …
+      <div className="safe-x grid h-dvh place-items-center bg-bg px-8 text-center text-sm text-muted">
+        <div className="max-w-xs">
+          <p>Wird geladen …</p>
+          {ladeHinweis ? (
+            <div role="status" className="mt-4 space-y-3">
+              <p className="leading-relaxed">
+                Das dauert länger als erwartet. Ist Beckenrand noch in einem anderen Tab geöffnet?
+                Schließe ihn und lade die Seite neu.
+              </p>
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="h-11 w-full rounded-xl bg-accent text-sm font-semibold text-accent-fg"
+              >
+                Neu laden
+              </button>
+            </div>
+          ) : null}
+        </div>
       </div>
     )
   }
 
   if (!onboardingFertig) {
     return (
-      <div className="h-dvh bg-bg text-fg">
-        <main className="mx-auto h-full max-w-lg">
+      <div className="safe-x flex h-dvh flex-col bg-bg text-fg">
+        {speicherFehler ? <SpeicherBanner sichtbar /> : null}
+        <main className="mx-auto min-h-0 w-full max-w-lg flex-1 rail:max-w-xl">
           <Onboarding onFertig={merkeOnboarding} />
         </main>
       </div>
@@ -90,7 +171,12 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-dvh flex-col bg-bg text-fg" data-tab-status={tabAktiv ? 'aktiv' : tabGesperrt ? 'gesperrt' : 'startet'}>
+    // `data-tab-status` ist die Bereitschaftsanzeige für die E2E-Tests: Aktionen
+    // sind erst wirksam, wenn dieser Tab die Messung hält.
+    <div
+      className="safe-x flex h-dvh flex-col bg-bg text-fg"
+      data-tab-status={tabAktiv ? 'aktiv' : tabGesperrt ? 'gesperrt' : 'startet'}
+    >
       {update.verfuegbar ? (
         <div
           role="status"
@@ -104,6 +190,8 @@ export default function App() {
           <button
             type="button"
             onClick={update.neuLaden}
+            // Ein Reload mitten in der Messung würde laufende Bahnen auf
+            // „bereit“ zurücksetzen; deshalb erst nach dem Lauf erlaubt.
             disabled={laufLaeuft}
             className="rounded-full bg-accent px-3 py-1 font-medium text-accent-fg disabled:opacity-40"
           >
@@ -149,41 +237,60 @@ export default function App() {
         </p>
       ) : null}
 
-      <main className="min-h-0 flex-1">
-        {tab === 'timer' && <TimerScreen />}
-        {tab === 'verlauf' && <HistoryScreen />}
-        {tab === 'schwimmer' && <SchwimmerScreen />}
-        {tab === 'einstellungen' && <SettingsScreen />}
-      </main>
+      {/* Nur der gewählte Screen ist montiert. Alles, was einen Tab-Wechsel
+          überleben muss, liegt im Provider; lokale Formularstände gehen
+          bewusst verloren. */}
+      <div className="flex min-h-0 flex-1 flex-col rail:flex-row">
+        <main className="order-first min-h-0 flex-1 overflow-hidden rail:order-none">
+          {/* Auf dem Tablet wächst der Inhalt nicht über eine lesbare Breite
+              hinaus; auf dem Handy bleibt die volle Breite. */}
+          <div className="mx-auto h-full w-full max-w-5xl">
+            {tab === 'timer' && <TimerScreen />}
+            {tab === 'training' && <TrainingScreen onZumTimer={() => setTab('timer')} />}
+            {tab === 'wettkampf' && <WettkampfScreen />}
+            {tab === 'verlauf' && <HistoryScreen />}
+            {tab === 'schwimmer' && <SchwimmerScreen />}
+            {tab === 'einstellungen' && <SettingsScreen />}
+          </div>
+        </main>
 
-      <nav aria-label="Bereiche" className="border-t border-line bg-surface">
-        <div className="grid grid-cols-4">
-          {TABS.map(({ id, label, Icon }) => {
-            const aktiv = tab === id
-            return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setTab(id)}
-                aria-current={aktiv ? 'page' : undefined}
-                className={`flex min-h-14 flex-col items-center justify-center gap-1 pb-[max(env(safe-area-inset-bottom),0.35rem)] pt-2 text-[11px] font-medium transition-colors ${
-                  aktiv ? 'text-accent' : 'text-muted'
-                }`}
-              >
-                <Icon className="h-6 w-6" />
-                {label}
-              </button>
-            )
-          })}
-        </div>
-      </nav>
+        {/* Handy: untere Leiste. Tablet: schmale Leiste links, damit die
+            Messfläche die volle Höhe behält. Die DOM-Reihenfolge bleibt für
+            Tastatur und Screenreader in beiden Fällen gleich. */}
+        <nav
+          aria-label="Bereiche"
+          className="order-last border-t border-line bg-surface rail:order-first rail:w-24 rail:shrink-0 rail:border-r rail:border-t-0"
+        >
+          <div className="mx-auto grid w-full max-w-lg grid-cols-6 rail:max-w-none rail:grid-cols-1 rail:gap-1 rail:px-2 rail:py-4">
+            {TABS.map(({ id, label, Icon }) => {
+              const aktiv = tab === id
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setTab(id)}
+                  aria-current={aktiv ? 'page' : undefined}
+                  className={`flex min-h-14 flex-col items-center justify-center gap-1 pb-[max(env(safe-area-inset-bottom),0.35rem)] pt-2 text-[11px] font-medium transition-colors short:min-h-12 short:flex-row short:gap-1.5 short:py-1 short:text-xs rail:min-h-16 rail:flex-col rail:gap-1.5 rail:rounded-xl rail:py-2 rail:pb-2 rail:pt-2 ${
+                    aktiv
+                      ? 'text-accent rail:bg-accent/10'
+                      : 'text-muted rail:hover:bg-surface2'
+                  }`}
+                >
+                  <Icon className="h-6 w-6" />
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+        </nav>
+      </div>
 
       {/* Bleibt dauerhaft im DOM, sonst kündigen Screenreader den Toast nicht an. */}
       <div
         role="status"
         aria-live="polite"
         aria-atomic="true"
-        className="pointer-events-none fixed inset-x-0 bottom-24 z-50 flex justify-center px-4"
+        className="pointer-events-none fixed inset-x-0 bottom-24 z-50 flex justify-center px-4 rail:bottom-8"
       >
         {toast ? (
           <div className="rounded-full bg-fg px-4 py-2 text-sm font-medium text-bg shadow-xl">

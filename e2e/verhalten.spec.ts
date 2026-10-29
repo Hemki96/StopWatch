@@ -29,6 +29,16 @@ test('Long-Press nimmt den letzten Anschlag zurück', async ({ page }) => {
   await expect(bahn).toContainText('Länge 1/2')
 })
 
+test('Screenreader-Klick löst einen Anschlag aus', async ({ page }) => {
+  await oeffneApp(page)
+  await page.getByRole('button', { name: 'Start', exact: true }).tap()
+
+  const bahn = page.getByRole('button', { name: BAHN1 })
+  await bahn.dispatchEvent('click')
+
+  await expect(bahn).toHaveAttribute('data-anschlaege', '1')
+})
+
 test('Offene Strecke: Ziel beendet die Bahn, weitere Taps ändern nichts', async ({ page }) => {
   await oeffneApp(page)
 

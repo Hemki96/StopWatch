@@ -1,6 +1,25 @@
+/**
+ * Monotone Zeit für die Anzeige.
+ *
+ * Liefert den zuletzt abgetasteten `performance.now()`-Wert und aktualisiert ihn
+ * pro Animationsframe, aber nur solange `aktiv` gilt. `performance.now()` ist
+ * monoton und unabhängig von der Systemuhr; dafür ist der Wert nach einem
+ * Reload wertlos — deshalb werden laufende Bahnen beim Laden zurückgesetzt.
+ *
+ * `requestAnimationFrame` statt `setInterval`: Der Browser drosselt oder
+ * pausiert es im Hintergrund, was hier richtig ist (nichts zu sehen). Beim
+ * Zurückkehren wird sofort neu abgetastet, sodass die aus Zeitstempeln
+ * rekonstruierte Zeit trotz Pause stimmt.
+ */
 import { useEffect, useState } from 'react'
 
-/** Liefert eine laufend aktualisierte monotone Zeit, aber nur solange `aktiv` gilt. */
+/**
+ * Laufend aktualisierte monotone Zeit, aber nur solange `aktiv` gilt.
+ *
+ * Bei `aktiv === false` wird kein Frame angefordert und der letzte Wert
+ * eingefroren. Der Cleanup bricht den laufenden Frame ab; der Tick plant immer
+ * genau einen nächsten Frame, damit nie mehrere Schleifen parallel laufen.
+ */
 export function useNow(aktiv: boolean): number {
   const [now, setNow] = useState(() => performance.now())
 

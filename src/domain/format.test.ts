@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  formatCountdown,
   formatDelta,
   formatStrecke,
+  formatTakt,
   formatTime,
   parseTime,
   truncateToHundredths,
@@ -46,6 +48,23 @@ describe('formatStrecke', () => {
     expect(formatStrecke(100)).toBe('100 m')
     expect(formatStrecke(1500)).toBe('1.500 m')
     expect(formatStrecke(null)).toBe('offene Strecke')
+  })
+})
+
+describe('formatCountdown', () => {
+  it('zeigt Zehntel und Minuten', () => {
+    expect(formatCountdown(7_400)).toBe('7,4')
+    expect(formatCountdown(0)).toBe('0,0')
+    expect(formatCountdown(67_400)).toBe('1:07,4')
+    expect(formatCountdown(-500)).toBe('0,0')
+  })
+})
+
+describe('formatTakt', () => {
+  it('formatiert Sekunden als mm:ss', () => {
+    expect(formatTakt(120)).toBe('02:00')
+    expect(formatTakt(90)).toBe('01:30')
+    expect(formatTakt(5)).toBe('00:05')
   })
 })
 

@@ -1,7 +1,20 @@
+/**
+ * Dekorative SVG-Symbole der Oberfläche.
+ *
+ * Alle Icons teilen Raster (24 × 24), Strichstärke und Farbe (`currentColor`),
+ * bekommen ihre Größe über `className` und sind per `aria-hidden` aus dem
+ * Vorlesetext heraus. Die Bedeutung trägt immer der Knopf oder Text daneben,
+ * nie das Symbol allein.
+ */
 interface IconProps {
+  /** Größe und Farbe kommen aus Utility-Klassen der aufrufenden Stelle. */
   className?: string
 }
 
+/**
+ * Gemeinsame SVG-Attribute. `currentColor` bindet die Strichfarbe an die
+ * Textfarbe, `aria-hidden` hält das Symbol aus dem Vorlesetext.
+ */
 function base(className?: string) {
   return {
     className,
@@ -15,6 +28,7 @@ function base(className?: string) {
   }
 }
 
+/** Stoppuhr; Tab „Timer“. */
 export function TimerIcon({ className }: IconProps) {
   return (
     <svg {...base(className)}>
@@ -26,6 +40,31 @@ export function TimerIcon({ className }: IconProps) {
   )
 }
 
+/** Notizblock; Tab „Training“. */
+export function TrainingIcon({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <rect x="4" y="3" width="16" height="18" rx="2" />
+      <path d="M8 8h8M8 12h8M8 16h5" />
+    </svg>
+  )
+}
+
+/** Pokal; Tab „Wettkampf“. */
+export function TrophyIcon({ className }: IconProps) {
+  return (
+    <svg {...base(className)}>
+      <path d="M8 4h8v4a4 4 0 0 1-8 0V4Z" />
+      <path d="M8 5H5a3 3 0 0 0 3 3" />
+      <path d="M16 5h3a3 3 0 0 1-3 3" />
+      <path d="M12 12v4" />
+      <path d="M9 20h6" />
+      <path d="M9 16h6v4H9z" />
+    </svg>
+  )
+}
+
+/** Uhr mit rückwärts gerichtetem Pfeil; Tab „Verlauf“. */
 export function HistoryIcon({ className }: IconProps) {
   return (
     <svg {...base(className)}>
@@ -36,6 +75,7 @@ export function HistoryIcon({ className }: IconProps) {
   )
 }
 
+/** Zwei Personen; Tab „Schwimmer“. */
 export function PeopleIcon({ className }: IconProps) {
   return (
     <svg {...base(className)}>
@@ -47,6 +87,7 @@ export function PeopleIcon({ className }: IconProps) {
   )
 }
 
+/** Zahnrad; Tab „Mehr“ mit den Einstellungen. */
 export function GearIcon({ className }: IconProps) {
   return (
     <svg {...base(className)}>
@@ -56,6 +97,7 @@ export function GearIcon({ className }: IconProps) {
   )
 }
 
+/** Plus; neuen Schwimmer anlegen. */
 export function PlusIcon({ className }: IconProps) {
   return (
     <svg {...base(className)}>
@@ -64,6 +106,7 @@ export function PlusIcon({ className }: IconProps) {
   )
 }
 
+/** Pfeil nach links; „zurück zum Verlauf“. */
 export function ChevronLeftIcon({ className }: IconProps) {
   return (
     <svg {...base(className)}>
@@ -72,6 +115,7 @@ export function ChevronLeftIcon({ className }: IconProps) {
   )
 }
 
+/** Pfeil nach rechts; kennzeichnet eine Zeile, die sich öffnen lässt. */
 export function ChevronRightIcon({ className }: IconProps) {
   return (
     <svg {...base(className)}>
@@ -80,6 +124,7 @@ export function ChevronRightIcon({ className }: IconProps) {
   )
 }
 
+/** Papierkorb; Löschen von Lauf, Satz, Training oder Runde. */
 export function TrashIcon({ className }: IconProps) {
   return (
     <svg {...base(className)}>
@@ -90,6 +135,7 @@ export function TrashIcon({ className }: IconProps) {
   )
 }
 
+/** Pfeil in ein Fach; CSV-Export und Backup sichern. */
 export function DownloadIcon({ className }: IconProps) {
   return (
     <svg {...base(className)}>
@@ -100,6 +146,7 @@ export function DownloadIcon({ className }: IconProps) {
   )
 }
 
+/** Pfeil aus dem Fach; Meldelisten-Import und Backup einlesen. */
 export function UploadIcon({ className }: IconProps) {
   return (
     <svg {...base(className)}>
@@ -110,6 +157,7 @@ export function UploadIcon({ className }: IconProps) {
   )
 }
 
+/** Sonne; helles Design. */
 export function SunIcon({ className }: IconProps) {
   return (
     <svg {...base(className)}>
@@ -119,6 +167,7 @@ export function SunIcon({ className }: IconProps) {
   )
 }
 
+/** Mond; dunkles Design. */
 export function MoonIcon({ className }: IconProps) {
   return (
     <svg {...base(className)}>
@@ -127,6 +176,7 @@ export function MoonIcon({ className }: IconProps) {
   )
 }
 
+/** Stift; Zielzeit nachträglich eintragen oder Anschlag korrigieren. */
 export function PencilIcon({ className }: IconProps) {
   return (
     <svg {...base(className)}>
@@ -136,6 +186,7 @@ export function PencilIcon({ className }: IconProps) {
   )
 }
 
+/** Haken; bestätigte Auswahl. */
 export function CheckIcon({ className }: IconProps) {
   return (
     <svg {...base(className)}>
@@ -144,6 +195,7 @@ export function CheckIcon({ className }: IconProps) {
   )
 }
 
+/** Kreuz; Sheet oder Hinweis schließen sowie fertigen Lauf abtreten. */
 export function XIcon({ className }: IconProps) {
   return (
     <svg {...base(className)}>

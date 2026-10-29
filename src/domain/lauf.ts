@@ -1,3 +1,24 @@
+/**
+ * Zeitkern eines Laufs: Start, Anschlag, Finish, Undo und Korrektur.
+ *
+ * Hier entstehen aus Taps messbare Zeiten. Alle Funktionen sind rein: Sie
+ * bekommen die aktuelle Zeit als Argument (`now` aus `performance.now()` für
+ * Messungen, `wallNow` aus `Date.now()` für den Wanduhr-Anker) und geben einen
+ * neuen `Lauf` zurück. Ohne Wirkung kommt dasselbe Objekt zurück — daran
+ * erkennt die Oberfläche, dass nichts zu speichern ist.
+ *
+ * Zentrale Invarianten: `startMs` wird pro Bahn höchstens einmal gesetzt,
+ * `anschlaege` sind kumulativ ab Start der Bahn und nach `laengeNr` aufsteigend,
+ * höchstens der letzte Anschlag trägt `istFinish`. Weil die Zeit aus
+ * Zeitstempeln rekonstruiert wird, hängt sie weder am Rendering noch an einem
+ * Timer; nach einem Reload sind `performance.now()`-Werte wertlos und werden
+ * von der Persistenz zurückgesetzt.
+ *
+ * Zusammenhang: `serie.ts` fasst mehrere Läufe zu Runden zusammen,
+ * `training.ts` erzeugt sie aus einem Plan, `wettkampf.ts` nutzt denselben
+ * Lauf-Typ mit `modus: 'wettkampf'`.
+ */
+
 import { formatTime } from './format'
 import { newId } from './id'
 import type {
@@ -6,31 +27,46 @@ import type {
   BahnStatus,
   Lauf,
   LaufKonfiguration,
+  LaufModus,
   Schwimmart,
 } from './types'
 
+/** Eingabe für `createLauf`: Bahnnummer und optionale Schwimmerzuordnung. */
 export interface BahnInit {
   nummer: number
   schwimmerId?: string | null
 }
 
+/** Optionale Felder beim Anlegen eines Laufs. Fehlende Werte werden normalisiert. */
 export interface LaufOptionen {
   startversatzMs?: number
   wiederholung?: number | null
+  modus?: LaufModus
 }
 
+/** Vorgabe für neue Läufe, wenn der Trainer nichts anderes gewählt hat. */
 export const STANDARD_KONFIGURATION: LaufKonfiguration = {
   beckenlaengeM: 50,
   streckeM: 100,
   schwimmart: 'freistil',
 }
 
-/** Anzahl der Längen, die eine Strecke umfasst. `null` bei offener Strecke. */
+/**
+ * Strecke in Längen umgerechnet. Bei offener Strecke gibt es keine feste
+ * Ziel-Länge, deshalb `null`.
+ */
 export function lengthCount(konfiguration: LaufKonfiguration): number | null {
   if (konfiguration.streckeM === null) return null
   return Math.round(konfiguration.streckeM / konfiguration.beckenlaengeM)
 }
 
+/**
+ * Prüft eine Streckenkonfiguration und liefert eine deutsche Fehlermeldung oder
+ * `null`, wenn alles gültig ist. Eine offene Strecke ist immer gültig.
+ *
+ * Geprüft wird nur die Strecke: Dass die Beckenlänge 25 oder 50 m ist, sichert
+ * bereits der Typ `Beckenlaenge` ab.
+ */
 export function validateKonfiguration(konfiguration: LaufKonfiguration): string | null {
   if (konfiguration.streckeM === null) return null
   if (!Number.isFinite(konfiguration.streckeM) || konfiguration.streckeM <= 0) {
@@ -42,6 +78,14 @@ export function validateKonfiguration(konfiguration: LaufKonfiguration): string 
   return null
 }
 
+/**
+ * Legt einen neuen, noch nicht gestarteten Lauf an. Alle Bahnen sind „bereit“
+ * (`startMs: null`) und haben keine Anschläge.
+ *
+ * `startversatzMs` wird auf eine ganze, nicht negative Zahl gerundet;
+ * unbrauchbare Werte (fehlend, `NaN`) werden zu 0. `modus` ist `training`,
+ * solange nichts anderes angegeben ist, `wiederholung` bleibt sonst `null`.
+ */
 export function createLauf(
   konfiguration: LaufKonfiguration,
   bahnen: BahnInit[],
@@ -53,8 +97,11 @@ export function createLauf(
     satzId,
     konfiguration: { ...konfiguration },
     startWallMs: null,
-    startversatzMs: Math.max(0, Math.round(optionen.startversatzMs ?? 0)),
+    startversatzMs: Number.isFinite(optionen.startversatzMs)
+      ? Math.max(0, Math.round(optionen.startversatzMs ?? 0))
+      : 0,
     wiederholung: optionen.wiederholung ?? null,
+    modus: optionen.modus ?? 'training',
     bahnen: bahnen.map((b) => ({
       id: newId(),
       nummer: b.nummer,
@@ -65,11 +112,24 @@ export function createLauf(
   }
 }
 
+/**
+ * True, wenn die Bahn einen Finish-Anschlag hat. Ein Finish beendet die Bahn;
+ * weitere Taps ändern dann nichts mehr.
+ */
 export function isFinished(bahn: Bahn): boolean {
   return bahn.anschlaege.some((a) => a.istFinish)
 }
 
-/** Zeitunabhängiger Status: kennt kein „geplant“, weil dafür `now` fehlt. */
+/** True, wenn der Lauf im Wettkampfmodus gemessen wird (ein Tap = Ziel). */
+export function istWettkampfLauf(lauf: Lauf): boolean {
+  return lauf.modus === 'wettkampf'
+}
+
+/**
+ * Status ohne Zeitbezug: kennt kein „geplant“, weil dafür `now` fehlt. Eine
+ * Bahn mit Startzeit in der Zukunft gilt hier als laufend; für die Anzeige mit
+ * Countdown ist `laneStatusAt` die richtige Wahl.
+ */
 export function laneStatus(bahn: Bahn): BahnStatus {
   if (isFinished(bahn)) return 'beendet'
   if (bahn.startMs === null) return 'bereit'
@@ -87,6 +147,7 @@ export function laneStatusAt(bahn: Bahn, now: number): BahnStatus {
   return 'laeuft'
 }
 
+/** Verstrichene Zeit seit dem Start der Bahn; vor dem Start und bei negativem Abstand 0. */
 export function elapsedMs(bahn: Bahn, now: number): number {
   if (bahn.startMs === null) return 0
   return Math.max(0, now - bahn.startMs)
@@ -103,10 +164,19 @@ export function lastSplit(bahn: Bahn): Anschlag | null {
   return bahn.anschlaege.at(-1) ?? null
 }
 
+/** Sucht eine Bahn per ID; `undefined`, wenn sie nicht (mehr) existiert. */
 export function findBahn(lauf: Lauf, bahnId: string): Bahn | undefined {
   return lauf.bahnen.find((b) => b.id === bahnId)
 }
 
+/**
+ * Wendet eine Änderung auf genau eine Bahn an, ohne den Rest anzufassen.
+ *
+ * Die Funktion erwartet, dass `update` bei fehlender Änderung dieselbe
+ * Bahn-Referenz zurückgibt. Nur so lässt sich erkennen, ob überhaupt etwas
+ * passiert ist: Dann kommt der ursprüngliche `Lauf` zurück, sonst ein neuer mit
+ * ausgetauschtem Bahnen-Array.
+ */
 function updateBahn(lauf: Lauf, bahnId: string, update: (bahn: Bahn) => Bahn): Lauf {
   let changed = false
   const bahnen = lauf.bahnen.map((bahn) => {
@@ -118,11 +188,19 @@ function updateBahn(lauf: Lauf, bahnId: string, update: (bahn: Bahn) => Bahn): L
   return changed ? { ...lauf, bahnen } : lauf
 }
 
-/** Startet eine Bahn. Bereits gestartete oder beendete Bahnen bleiben unverändert. */
+/**
+ * Startet eine Bahn. Bereits gestartete oder beendete Bahnen bleiben unverändert.
+ *
+ * `startWallMs` wird nur gesetzt, wenn der Lauf noch keinen Anker hat: Der erste
+ * Start eines Laufs bestimmt die Wanduhr-Zeit, die im Verlauf und im CSV steht.
+ * Die Startzeit selbst kommt aus `now` (monotone Uhr) und ist damit unabhängig
+ * von einer Zeitumstellung.
+ */
 export function startLane(lauf: Lauf, bahnId: string, now: number, wallNow: number): Lauf {
   const next = updateBahn(lauf, bahnId, (bahn) =>
     bahn.startMs === null ? { ...bahn, startMs: now } : bahn,
   )
+  // Keine Änderung (unbekannte oder bereits gestartete Bahn): Anker nicht anfassen.
   if (next === lauf) return lauf
   return { ...next, startWallMs: lauf.startWallMs ?? wallNow }
 }
@@ -131,6 +209,10 @@ export function startLane(lauf: Lauf, bahnId: string, now: number, wallNow: numb
  * Setzt die Startzeitpunkte einer unberührten Bahnfolge: Bahn 1 bei `startMs`,
  * jede weitere um `versatzMs` später. Der Versatz wird am Lauf gespeichert,
  * damit ein Neustart derselben Bahnen dieselbe Staffelung ergibt.
+ *
+ * Achtung: Bereits gesetzte Startzeiten werden überschrieben. Aufrufer müssen
+ * sicherstellen, dass die Bahnen noch unberührt sind; `AppProvider` plant so
+ * nur unberührte Serienrunden.
  */
 export function planeLauf(
   lauf: Lauf,
@@ -138,7 +220,8 @@ export function planeLauf(
   wallStartMs: number,
   versatzMs: number = lauf.startversatzMs ?? 0,
 ): Lauf {
-  const abstand = Math.max(0, Math.round(versatzMs))
+  // Versatz normalisieren wie in `createLauf`: ganzzahlig und nicht negativ.
+  const abstand = Number.isFinite(versatzMs) ? Math.max(0, Math.round(versatzMs)) : 0
   return {
     ...lauf,
     startversatzMs: abstand,
@@ -150,12 +233,22 @@ export function planeLauf(
   }
 }
 
-/** Startet alle noch nicht gestarteten Bahnen, gestaffelt um den Startversatz. */
+/**
+ * Startet alle noch nicht gestarteten Bahnen, gestaffelt um den Startversatz.
+ *
+ * Der Versatz richtet sich nach der Bahnposition (`index`) und dem übergebenen
+ * `now`, nicht nach dem tatsächlichen Start der Vorgängerbahn: Bahn 2 bekommt
+ * `now + Versatz`, auch wenn Bahn 1 schon vorher einzeln gestartet wurde. Der
+ * Wanduhr-Anker bleibt erhalten, wenn er bereits gesetzt ist; ist nichts zu tun,
+ * kommt derselbe Lauf zurück.
+ */
 export function startAll(lauf: Lauf, now: number, wallNow: number): Lauf {
-  const versatz = Math.max(0, lauf.startversatzMs ?? 0)
+  const versatz = Number.isFinite(lauf.startversatzMs)
+    ? Math.max(0, Math.round(lauf.startversatzMs ?? 0))
+    : 0
   let changed = false
   const bahnen = lauf.bahnen.map((bahn, index) => {
-    if (bahn.startMs !== null) return bahn
+    if (bahn.startMs !== null || isFinished(bahn)) return bahn
     changed = true
     return { ...bahn, startMs: now + index * versatz }
   })
@@ -167,16 +260,28 @@ export function startAll(lauf: Lauf, now: number, wallNow: number): Lauf {
  * Der zentrale Bedienschritt auf einer Kachel:
  * noch nicht gestartet → starten, läuft → Anschlag erfassen, beendet → nichts.
  * Eine geplante Bahn ignoriert Taps, bis ihr Startzeitpunkt erreicht ist.
+ *
+ * Die Reihenfolge der Prüfungen ist wichtig: Zuerst wird gestartet, dann der
+ * Countdown geprüft, dann das Finish. So startet der erste Tap eine bereite
+ * Bahn, ohne dass ein Anschlag entsteht.
  */
 export function tapLane(lauf: Lauf, bahnId: string, now: number, wallNow: number): Lauf {
   const bahn = findBahn(lauf, bahnId)
   if (!bahn) return lauf
   if (bahn.startMs === null) return startLane(lauf, bahnId, now, wallNow)
+  // Geplante Bahn (Startversatz): Der Tap wird ignoriert, bis der
+  // Startzeitpunkt erreicht ist.
   if (now < bahn.startMs) return lauf
   if (isFinished(bahn)) return lauf
 
+  // Im Wettkampf ist der erste Tap nach dem Start bereits das Ziel. Splits
+  // pro Länge wären am Beckenrand eine zusätzliche Fehlerquelle.
+  if (istWettkampfLauf(lauf)) return finishLane(lauf, bahnId, now, wallNow)
+
   const gesamt = lengthCount(lauf.konfiguration)
   const laengeNr = bahn.anschlaege.length + 1
+  // Bei fester Strecke ist der letzte Anschlag das Ziel; bei offener Strecke
+  // bleibt jeder Anschlag ein Split und das Ziel wird explizit gesetzt.
   const istFinish = gesamt !== null && laengeNr >= gesamt
   const anschlag: Anschlag = {
     laengeNr,
@@ -188,15 +293,21 @@ export function tapLane(lauf: Lauf, bahnId: string, now: number, wallNow: number
 }
 
 /**
- * Beendet eine Bahn explizit. Nur bei offener Strecke nötig — bei konfigurierter
- * Strecke ergibt sich das Finish aus dem letzten Anschlag.
+ * Beendet eine Bahn explizit. Nur bei offener Strecke und im Wettkampf nötig —
+ * bei konfigurierter Trainingsstrecke ergibt sich das Finish aus dem letzten
+ * Anschlag, dort ist der Aufruf wirkungslos.
+ *
+ * Verlangt eine gestartete, noch offene Bahn mit `now >= startMs`; sonst kommt
+ * der Lauf unverändert zurück. Der neue Anschlag trägt `istFinish: true`.
  */
 export function finishLane(lauf: Lauf, bahnId: string, now: number, wallNow: number): Lauf {
-  if (lengthCount(lauf.konfiguration) !== null) return lauf
+  if (lengthCount(lauf.konfiguration) !== null && !istWettkampfLauf(lauf)) return lauf
   const bahn = findBahn(lauf, bahnId)
   if (!bahn || bahn.startMs === null || now < bahn.startMs || isFinished(bahn)) return lauf
 
   const anschlag: Anschlag = {
+    // Auch bei offener Strecke fortlaufend nummeriert; die Länge ist hier nur
+    // die Reihenfolge der Anschläge, keine Metermarke.
     laengeNr: bahn.anschlaege.length + 1,
     splitMs: Math.max(0, now - bahn.startMs),
     erfasstAt: wallNow,
@@ -205,10 +316,67 @@ export function finishLane(lauf: Lauf, bahnId: string, now: number, wallNow: num
   return updateBahn(lauf, bahnId, (b) => ({ ...b, anschlaege: [...b.anschlaege, anschlag] }))
 }
 
-/** Macht die letzte Aktion einer Bahn rückgängig: Anschlag löschen, sonst Start zurücknehmen. */
+/**
+ * Trägt im Wettkampf eine Zielzeit von Hand ein oder korrigiert sie. Das ist
+ * der Ausweg, wenn ein Tap danebenging oder eine Zeit aus dem Protokoll
+ * nachgetragen wird. Die Zeit wird immer als `manuell` markiert.
+ *
+ * Gibt es bereits ein Finish, werden nur `splitMs`, `erfasstAt` und `manuell`
+ * ersetzt; `laengeNr` und `istFinish` bleiben, es entsteht kein zweiter
+ * Anschlag. Sonst wird ein neuer Finish-Anschlag mit der nächsten LängenNummer
+ * angehängt. Eine Startzeit ist nicht nötig, damit sich eine nie gestartete Bahn
+ * nachtragen lässt. Ungültige Zeiten (`NaN`, negativ) und Trainingsläufe geben
+ * den Lauf unverändert zurück; die Zeit wird auf ganze Millisekunden
+ * abgeschnitten.
+ */
+export function setzeZielzeit(
+  lauf: Lauf,
+  bahnId: string,
+  splitMs: number,
+  erfasstAt: number = Date.now(),
+): Lauf {
+  if (!istWettkampfLauf(lauf)) return lauf
+  if (!Number.isFinite(splitMs) || splitMs < 0) return lauf
+  const bahn = findBahn(lauf, bahnId)
+  if (!bahn) return lauf
+
+  const zeit = Math.trunc(splitMs)
+  const vorhanden = bahn.anschlaege.find((anschlag) => anschlag.istFinish)
+  if (vorhanden) {
+    return updateBahn(lauf, bahnId, (b) => ({
+      ...b,
+      anschlaege: b.anschlaege.map((anschlag) =>
+        // Nur den Finish-Anschlag ersetzen; Zwischenzeiten bleiben unberührt.
+        anschlag === vorhanden
+          ? { ...anschlag, splitMs: zeit, erfasstAt, manuell: true }
+          : anschlag,
+      ),
+    }))
+  }
+
+  const naechsteLaenge = (bahn.anschlaege.at(-1)?.laengeNr ?? 0) + 1
+  const anschlag: Anschlag = {
+    laengeNr: naechsteLaenge,
+    splitMs: zeit,
+    erfasstAt,
+    istFinish: true,
+    manuell: true,
+  }
+  return updateBahn(lauf, bahnId, (b) => ({ ...b, anschlaege: [...b.anschlaege, anschlag] }))
+}
+
+/**
+ * Macht die letzte Aktion einer Bahn rückgängig: Anschlag löschen, sonst Start
+ * zurücknehmen. Eine unberührte Bahn bleibt unverändert.
+ *
+ * `startWallMs` des Laufs wird bewusst nicht zurückgesetzt — der Wanduhr-Anker
+ * gehört zum Lauf, nicht zur einzelnen Bahn. Undo entfernt immer genau einen
+ * Schritt, damit ein versehentlicher Doppeltap korrigierbar bleibt.
+ */
 export function undoLane(lauf: Lauf, bahnId: string): Lauf {
   return updateBahn(lauf, bahnId, (bahn) => {
     if (bahn.anschlaege.length > 0) {
+      // Ein Finish verliert damit auch seinen Status: Die Bahn läuft wieder.
       return { ...bahn, anschlaege: bahn.anschlaege.slice(0, -1) }
     }
     if (bahn.startMs !== null) {
@@ -218,12 +386,21 @@ export function undoLane(lauf: Lauf, bahnId: string): Lauf {
   })
 }
 
+/**
+ * Ordnet einer Bahn einen Schwimmer zu oder entfernt die Zuordnung (`null`).
+ * Ohne echte Änderung kommt derselbe Lauf zurück.
+ */
 export function setSchwimmer(lauf: Lauf, bahnId: string, schwimmerId: string | null): Lauf {
   return updateBahn(lauf, bahnId, (bahn) =>
     bahn.schwimmerId === schwimmerId ? bahn : { ...bahn, schwimmerId },
   )
 }
 
+/**
+ * Ändert die Schwimmart des Laufs. Der zugehörige `Satz` wird nicht
+ * mitgeschrieben: Für Anzeige und Bestzeiten zählt die Konfiguration im Lauf.
+ * Die Strecke bleibt unverändert, deshalb ist keine Sperre nötig.
+ */
 export function setSchwimmart(lauf: Lauf, schwimmart: Schwimmart): Lauf {
   if (lauf.konfiguration.schwimmart === schwimmart) return lauf
   return { ...lauf, konfiguration: { ...lauf.konfiguration, schwimmart } }
@@ -233,6 +410,10 @@ export function setSchwimmart(lauf: Lauf, schwimmart: Schwimmart): Lauf {
  * Prüft eine nachträgliche Korrektur. Splits sind kumulativ; eine Korrektur darf
  * die Reihenfolge nicht brechen, aber sie verschiebt keine folgenden Zeiten
  * (keine Kaskade).
+ *
+ * Rückgabe ist eine deutsche Meldung für die Oberfläche oder `null`. Der
+ * Anschlag wird über `laengeNr` gesucht, nicht über den Array-Index, damit die
+ * Prüfung zur Anzeige passt.
  */
 export function pruefeAnschlagKorrektur(
   lauf: Lauf,
@@ -260,6 +441,9 @@ export function pruefeAnschlagKorrektur(
  * Korrigiert genau einen Anschlag. Das Finish-Flag des Anschlags bleibt
  * erhalten; ein Zwischenanschlag wird nie zum Finish. Die Korrektur wird als
  * `manuell` markiert, damit CSV und Bestzeiten nachvollziehbar bleiben.
+ *
+ * Schlägt `pruefeAnschlagKorrektur` fehl, kommt der Lauf unverändert zurück. Die
+ * Zeit wird auf ganze Millisekunden abgeschnitten, passend zur Anzeige.
  */
 export function korrigiereAnschlag(
   lauf: Lauf,
@@ -288,6 +472,15 @@ export function isStartLocked(lauf: Lauf): boolean {
   return lauf.bahnen.some((bahn) => bahn.startMs !== null || bahn.anschlaege.length > 0)
 }
 
+/**
+ * Ändert Beckenlänge, Strecke und Schwimmart gemeinsam. Das ist nur vor dem
+ * ersten Anschlag möglich (`isStreckeLocked`) und nur mit gültiger
+ * Konfiguration; sonst bleibt der Lauf unverändert.
+ *
+ * Ein bereits gestarteter, aber noch nicht angeschlagener Lauf darf die Strecke
+ * noch wechseln: Die Startzeit bleibt gültig, nur die Zahl der Längen ändert
+ * sich.
+ */
 export function updateStrecke(
   lauf: Lauf,
   konfiguration: LaufKonfiguration,
@@ -313,7 +506,29 @@ export function hatLaufendeBahn(lauf: Lauf | null | undefined): boolean {
   return lauf?.bahnen.some((bahn) => bahn.startMs !== null && !isFinished(bahn)) ?? false
 }
 
-/** True, sobald mindestens eine Bahn gestartet oder geplant ist. */
+/** True, sobald mindestens eine Bahn gestartet oder geplant ist (`startMs` gesetzt). */
 export function hasStarted(lauf: Lauf): boolean {
   return lauf.bahnen.some((bahn) => bahn.startMs !== null)
+}
+
+/**
+ * True, sobald ein Lauf im Verlauf auftauchen soll. Maßgeblich ist die
+ * Wanduhr (`startWallMs`), nicht `performance.now()`: Nur die Wanduhr ist
+ * zwischen Tabs und nach einem Reload vergleichbar.
+ *
+ * Die erste Wiederholung einer Serie erscheint schon mit ihrem Start, damit
+ * ein laufender Lauf ohne Anschläge nicht aus dem Verlauf verschwindet.
+ * Spätere Wiederholungen erscheinen erst mit dem ersten Anschlag — sonst
+ * würden nach einem langen Reload alle nur geplanten Runden als
+ * „unvollständig“ auftauchen.
+ *
+ * Ohne zweites Argument wird die aktuelle Wanduhr (`Date.now()`) verwendet.
+ */
+export function hatBegonnen(lauf: Lauf, wallNow: number = Date.now()): boolean {
+  if (lauf.bahnen.some((bahn) => bahn.anschlaege.length > 0)) return true
+  if (lauf.startWallMs === null || lauf.startWallMs > wallNow) return false
+  // Im Wettkampf ist `wiederholung` die Laufnummer, nicht die Runde einer
+  // Serie. Ein gestarteter Heat gehört deshalb sofort in den Verlauf.
+  if (lauf.modus === 'wettkampf') return true
+  return lauf.wiederholung === null || lauf.wiederholung === 1
 }

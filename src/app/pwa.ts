@@ -1,9 +1,24 @@
+/**
+ * PWA-Schicht: Service Worker, Update-Hinweis, Online-Status und Installation.
+ *
+ * Die Hooks enthalten keine Fachlogik. Sie kapseln Browser-Eigenheiten:
+ * - Der Service Worker wird pro Seitenaufruf genau einmal registriert; neue
+ *   Versionen melden sich über ein Listener-Set, weil mehrere Stellen den
+ *   Update-Zustand lesen können.
+ * - Updates werden nur angekündigt, nie selbst eingespielt, damit sich die App
+ *   nicht mitten in einer Messung neu lädt.
+ * - Einen Installationsdialog bieten nur manche Browser an; iOS braucht eine
+ *   Anleitung. Beides wird hier einheitlich als `InstallState` angeboten.
+ */
 import { useCallback, useEffect, useState } from 'react'
 import { registerSW } from 'virtual:pwa-register'
 
 /** Wird gerufen, sobald eine neue Version bereitsteht. */
 type UpdateListener = () => void
 
+// Modulzustand, bewusst außerhalb von React: Er überlebt ein erneutes Mounten
+// (StrictMode) und verhindert eine zweite Registrierung. Das Set entkoppelt den
+// einzelnen Service-Worker-Callback von den Hooks, die ihn abfragen.
 const updateListener = new Set<UpdateListener>()
 
 let registrierungGestartet = false
@@ -36,6 +51,11 @@ function starteServiceWorker(): void {
   }
 }
 
+/**
+ * Rückgabe von `useServiceWorkerUpdate`: ob eine Version wartet und wie man
+ * damit umgeht. `spaeter` blendet nur den Hinweis aus; die wartende Version
+ * bleibt installiert, bis der Nutzer neu lädt.
+ */
 export interface UpdateState {
   /** Eine neue Version liegt bereit und wartet auf Aktivierung. */
   verfuegbar: boolean
@@ -45,6 +65,18 @@ export interface UpdateState {
   spaeter: () => void
 }
 
+/**
+ * Beobachtet, ob eine neue App-Version bereitsteht.
+ *
+ * Lifecycle: Der Effekt registriert den Service Worker (idempotent im Modul)
+ * und hängt sich an das Listener-Set. Zusätzlich wird bei jedem Wechsel in den
+ * Vordergrund aktiv nach einer Aktualisierung gesucht — am Beckenrand bleibt
+ * die App lange offen und würde sonst nie nachsehen. Cleanup entfernt Listener
+ * und Sichtbarkeits-Handler, damit ein Unmount keine Zustände mehr setzt.
+ *
+ * Rückgabe ist stabil (`useCallback`), damit der Aufrufer sie in
+ * Abhängigkeitslisten verwenden kann.
+ */
 export function useServiceWorkerUpdate(): UpdateState {
   const [verfuegbar, setVerfuegbar] = useState(false)
 
@@ -57,7 +89,13 @@ export function useServiceWorkerUpdate(): UpdateState {
     // Vordergrund deshalb aktiv nach einer neuen Version suchen.
     const beiSichtbarkeit = () => {
       if (document.visibilityState !== 'visible') return
-      void navigator.serviceWorker.getRegistration().then((registration) => registration?.update())
+      // Ohne Service-Worker-Unterstützung gibt es nichts zu prüfen; ein
+      // direkter Zugriff würde hier bei jedem Tab-Wechsel werfen.
+      if (!('serviceWorker' in navigator) || !navigator.serviceWorker?.getRegistration) return
+      void navigator.serviceWorker
+        .getRegistration()
+        .then((registration) => registration?.update())
+        .catch(() => undefined)
     }
     document.addEventListener('visibilitychange', beiSichtbarkeit)
 
@@ -68,6 +106,8 @@ export function useServiceWorkerUpdate(): UpdateState {
   }, [])
 
   const neuLaden = useCallback(() => {
+    // `true` bedeutet „Seite neu laden“, sobald der neue Worker übernimmt.
+    // Fehlt der Aktualisierer (kein Service Worker), bleibt der Aufruf wirkungslos.
     void aktualisiereServiceWorker?.(true)
   }, [])
 
@@ -76,6 +116,13 @@ export function useServiceWorkerUpdate(): UpdateState {
   return { verfuegbar, neuLaden, spaeter }
 }
 
+/**
+ * Meldet, ob der Browser online ist. Nur ein Hinweis für die Kopfzeile: Die App
+ * arbeitet vollständig lokal und braucht keine Verbindung.
+ *
+ * Startwert ist `navigator.onLine`; danach folgen die `online`/`offline`-
+ * Ereignisse des Fensters. Ohne `navigator` (SSR, Tests) gilt „online“.
+ */
 export function useOnlineStatus(): boolean {
   const [online, setOnline] = useState(() =>
     typeof navigator === 'undefined' ? true : navigator.onLine,
@@ -95,15 +142,25 @@ export function useOnlineStatus(): boolean {
   return online
 }
 
+/**
+ * Nicht standardisiertes `beforeinstallprompt`-Ereignis. Es existiert nur in
+ * Chromium-Browsern; über `prompt()` öffnet sich der echte Installationsdialog,
+ * `userChoice` löst mit der Entscheidung auf.
+ */
 interface InstallPromptEvent extends Event {
   prompt: () => Promise<void>
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
 }
 
+/**
+ * Erkennt, ob die App bereits als installierte App läuft (eigener Fensterrahmen).
+ * Zwei Wege, weil ältere iOS-Versionen `display-mode` nicht auswerten und nur
+ * `navigator.standalone` setzen.
+ */
 function laeuftAlsApp(): boolean {
   if (typeof window === 'undefined') return false
   const eigenstaendig = (window.navigator as Navigator & { standalone?: boolean }).standalone
-  return window.matchMedia('(display-mode: standalone)').matches || eigenstaendig === true
+  return window.matchMedia?.('(display-mode: standalone)').matches === true || eigenstaendig === true
 }
 
 /** iPadOS meldet sich als Mac — erkennbar an den Touch-Punkten. */
@@ -114,6 +171,11 @@ function istAppleMobil(): boolean {
   return /macintosh/i.test(ua) && navigator.maxTouchPoints > 1
 }
 
+/**
+ * Rückgabe von `useInstallPrompt`. `anleitung` ist der Text für Browser ohne
+ * Installationsdialog; die Oberfläche zeigt ihn, solange die App weder
+ * installiert ist noch ein Dialog angeboten wird.
+ */
 export interface InstallState {
   /** App läuft bereits als installierte App (eigener Fensterrahmen). */
   installiert: boolean
@@ -124,6 +186,18 @@ export interface InstallState {
   anleitung: string
 }
 
+/**
+ * Bietet die Installation an, soweit der Browser das unterstützt.
+ *
+ * Lifecycle: Der Effekt fängt `beforeinstallprompt` ab (Standardverhalten
+ * unterdrücken, Ereignis merken), beobachtet `appinstalled` und Änderungen der
+ * Anzeigeart (`display-mode: standalone`). Cleanup entfernt alle Listener.
+ *
+ * Randfälle: Der Prompt ist nach einem Aufruf verbraucht und wird deshalb auch
+ * bei Ablehnung verworfen. Wirft der Browser beim Öffnen, bleibt die Anleitung
+ * sichtbar. `istAppleMobil` wird nur einmal bestimmt, weil sich die Plattform
+ * während einer Sitzung nicht ändert.
+ */
 export function useInstallPrompt(): InstallState {
   const [prompt, setPrompt] = useState<InstallPromptEvent | null>(null)
   const [installiert, setInstalliert] = useState(laeuftAlsApp)
@@ -131,6 +205,8 @@ export function useInstallPrompt(): InstallState {
 
   useEffect(() => {
     const beiPrompt = (event: Event) => {
+      // Standardverhalten unterdrücken: Der Hinweis soll in der App erscheinen,
+      // nicht als Leiste des Browsers.
       event.preventDefault()
       setPrompt(event as InstallPromptEvent)
     }
@@ -138,27 +214,32 @@ export function useInstallPrompt(): InstallState {
       setPrompt(null)
       setInstalliert(true)
     }
-    const medien = window.matchMedia('(display-mode: standalone)')
+    const medien = window.matchMedia?.('(display-mode: standalone)')
     const beiAnzeigeart = () => setInstalliert(laeuftAlsApp())
 
     window.addEventListener('beforeinstallprompt', beiPrompt)
     window.addEventListener('appinstalled', beiInstalliert)
-    medien.addEventListener('change', beiAnzeigeart)
+    medien?.addEventListener('change', beiAnzeigeart)
 
     return () => {
       window.removeEventListener('beforeinstallprompt', beiPrompt)
       window.removeEventListener('appinstalled', beiInstalliert)
-      medien.removeEventListener('change', beiAnzeigeart)
+      medien?.removeEventListener('change', beiAnzeigeart)
     }
   }, [])
 
   const installiere = useCallback(async () => {
     if (!prompt) return
-    await prompt.prompt()
-    const { outcome } = await prompt.userChoice
-    // Der Prompt ist danach verbraucht, auch wenn abgelehnt wurde.
-    setPrompt(null)
-    if (outcome === 'accepted') setInstalliert(true)
+    try {
+      await prompt.prompt()
+      const { outcome } = await prompt.userChoice
+      if (outcome === 'accepted') setInstalliert(true)
+    } catch {
+      // Der Browser kann den Dialog verweigern; die Anleitung bleibt sichtbar.
+    } finally {
+      // Der Prompt ist danach verbraucht, auch wenn er abgelehnt wurde.
+      setPrompt(null)
+    }
   }, [prompt])
 
   const anleitung = appleMobil

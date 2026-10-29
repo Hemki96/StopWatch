@@ -34,7 +34,7 @@ describe('laeufeAlsCsv', () => {
 
     expect(zeilen).toHaveLength(3)
     expect(zeilen[0]).toBe(
-      'satz;datum;beckenlaenge_m;strecke_m;schwimmart;bahn;schwimmer;laenge_nr;split_ms;split_formatiert;ist_finish;manuell',
+      'satz;datum;beckenlaenge_m;strecke_m;schwimmart;bahn;schwimmer;laenge_nr;split_ms;split_formatiert;ist_finish;manuell;wiederholung;wiederholungen;takt_s;startversatz_ms',
     )
     expect(zeilen[1]).toContain('1;31250;00:31,25;0;0')
     expect(zeilen[2]).toContain('2;64000;01:04,00;1;0')
@@ -55,6 +55,21 @@ describe('laeufeAlsCsv', () => {
 
     const csv = laeufeAlsCsv([lauf], [satz], schwimmer)
     expect(csv).toContain('1;;1;30000')
+  })
+})
+
+describe('Formelschutz im CSV', () => {
+  it('entschärft Zellen, die Excel als Formel ausführen würde', () => {
+    const csv = laeufeAlsCsv(
+      [laufMitZweiLaengen()],
+      [{ ...satz, bezeichnung: '-Test' }],
+      [{ ...schwimmer[0]!, name: '=1+1' }],
+    )
+
+    expect(csv).toContain("'-Test")
+    expect(csv).toContain("'=1+1")
+    expect(csv).not.toContain(';-Test')
+    expect(csv).not.toContain(';=1+1')
   })
 })
 

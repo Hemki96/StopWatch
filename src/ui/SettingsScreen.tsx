@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useApp } from '../app/AppProvider'
 import { useInstallPrompt } from '../app/pwa'
-import { formatStrecke } from '../domain/format'
+import { formatStrecke, formatTakt, lokalesDatum } from '../domain/format'
 import { SCHWIMMARTEN } from '../domain/types'
 import { csvDateiname, laeufeAlsCsv } from '../export/csv'
 import { speichereDatei, waehleDatei } from '../export/datei'
@@ -27,18 +27,21 @@ function Zeile({
   onClick,
   icon,
   gefahr,
+  disabled,
 }: {
   label: string
   wert?: string
   onClick: () => void
   icon?: React.ReactNode
   gefahr?: boolean
+  disabled?: boolean
 }) {
   return (
     <button
       type="button"
+      disabled={disabled}
       onClick={onClick}
-      className="flex w-full items-center gap-3 border-b border-line px-4 py-3.5 text-left last:border-b-0"
+      className="flex w-full items-center gap-3 border-b border-line px-4 py-3.5 text-left last:border-b-0 disabled:opacity-40"
     >
       {icon ? <span className="text-muted">{icon}</span> : null}
       <span className="flex-1">
@@ -74,22 +77,43 @@ export function SettingsScreen() {
 
   const konfiguration = app.einstellungen.konfiguration
   const art = SCHWIMMARTEN.find((s) => s.wert === konfiguration.schwimmart)?.label ?? ''
+  const naechsterLauf = [
+    app.einstellungen.wiederholungen > 1
+      ? `${app.einstellungen.wiederholungen}×${formatStrecke(konfiguration.streckeM)}`
+      : formatStrecke(konfiguration.streckeM),
+    art,
+    app.einstellungen.startversatzMs > 0
+      ? `${app.einstellungen.startversatzMs / 1000} s Versatz`
+      : null,
+    app.einstellungen.wiederholungen > 1
+      ? `Takt ${formatTakt(app.einstellungen.taktSek)}`
+      : null,
+  ]
+    .filter((teil): teil is string => teil !== null)
+    .join(' · ')
 
   const exportiereCsv = () => {
     const csv = laeufeAlsCsv(app.laeufe, app.satze, app.schwimmer)
-    void speichereDatei(csvDateiname(), csv, 'text/csv;charset=utf-8')
-  }
-
-  const exportiereBackup = async () => {
-    const backup = await exportBackup()
-    await speichereDatei(
-      `beckenrand-backup-${new Date().toISOString().slice(0, 10)}.json`,
-      JSON.stringify(backup, null, 2),
-      'application/json',
+    void speichereDatei(csvDateiname(), csv, 'text/csv;charset=utf-8').catch(() =>
+      app.zeigeToast('Export fehlgeschlagen.'),
     )
   }
 
+  const exportiereBackup = async () => {
+    try {
+      const backup = await exportBackup()
+      await speichereDatei(
+        `beckenrand-backup-${lokalesDatum(Date.now())}.json`,
+        JSON.stringify(backup, null, 2),
+        'application/json',
+      )
+    } catch {
+      app.zeigeToast('Backup konnte nicht erstellt werden.')
+    }
+  }
+
   const importiereBackup = async () => {
+    if (app.tabGesperrt) return
     const datei = await waehleDatei('application/json')
     if (!datei) return
     try {
@@ -109,7 +133,7 @@ export function SettingsScreen() {
   }
 
   const fuehreImportAus = async () => {
-    if (!importVorschau) return
+    if (!importVorschau || app.tabGesperrt) return
     const { backup, text } = importVorschau
     try {
       await importBackup(backup)
@@ -174,7 +198,7 @@ export function SettingsScreen() {
         <Karte>
           <Zeile
             label={`${konfiguration.beckenlaengeM} m-Becken · ${app.einstellungen.bahnen} Bahnen`}
-            wert={`${formatStrecke(konfiguration.streckeM)} · ${art}`}
+            wert={naechsterLauf}
             onClick={() => setSheet(true)}
           />
         </Karte>
@@ -199,6 +223,7 @@ export function SettingsScreen() {
             label="Backup einlesen"
             onClick={() => void importiereBackup()}
             icon={<UploadIcon className="h-5 w-5" />}
+            disabled={app.tabGesperrt}
           />
           <Zeile
             label={speicher === 'geschuetzt' ? 'Speicher geschützt' : 'Speicher dauerhaft sichern'}
@@ -215,6 +240,7 @@ export function SettingsScreen() {
             label="Alle Daten löschen"
             onClick={() => setFrageLoeschen(true)}
             gefahr
+            disabled={app.tabGesperrt}
           />
         </Karte>
 
@@ -265,10 +291,13 @@ export function SettingsScreen() {
         titel="Backup importieren?"
         text={
           importVorschau
-            ? `Vorhandene Daten bleiben erhalten. Übernommen werden: ${importVorschau.text}.`
+            ? `Vorhandene Daten bleiben erhalten. Übernommen werden: ${importVorschau.text}.${
+                app.brauchtTakt ? ' Eine laufende Messung wird dabei unterbrochen.' : ''
+              }`
             : ''
         }
         bestaetigenLabel="Importieren"
+        gefahr={false}
         onBestaetigen={() => void fuehreImportAus()}
         onAbbrechen={() => setImportVorschau(null)}
       />
@@ -294,13 +323,17 @@ export function SettingsScreen() {
       <Bestaetigung
         open={frageLoeschen}
         titel="Alle Daten löschen?"
-        text="Schwimmer, Läufe und Sätze werden dauerhaft von diesem Gerät entfernt."
+        text={`Schwimmer, Trainings, Wettkämpfe, Läufe und Sätze werden dauerhaft von diesem Gerät entfernt.${
+          app.brauchtTakt ? ' Eine laufende Messung wird dabei beendet.' : ''
+        }`}
         bestaetigenLabel="Alles löschen"
         onBestaetigen={() => {
           setFrageLoeschen(false)
+          if (app.tabGesperrt) return
           void clearAll()
             .then(() => app.neuLaden())
             .then(() => app.zeigeToast('Alle Daten gelöscht.'))
+            .catch(() => app.zeigeToast('Löschen fehlgeschlagen. Bitte die App neu laden.'))
         }}
         onAbbrechen={() => setFrageLoeschen(false)}
       />

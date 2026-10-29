@@ -1,9 +1,14 @@
 import { useApp } from '../app/AppProvider'
+import { formatTakt } from '../domain/format'
 import { isStreckeLocked, validateKonfiguration } from '../domain/lauf'
+import { istSerie, warnungSeriePlan } from '../domain/serie'
 import { SCHWIMMARTEN, type Beckenlaenge, type LaufKonfiguration, type Schwimmart } from '../domain/types'
+import { Chip, Feld } from './Felder'
 import { Sheet } from './Sheet'
 
 const STRECKEN = [50, 100, 200, 400, 800, 1500] as const
+const VERSATZE = [0, 5_000, 10_000, 15_000, 20_000, 30_000] as const
+const TAKTE = [60, 75, 90, 105, 120, 135, 150, 180, 240] as const
 
 interface KonfigurationSheetProps {
   open: boolean
@@ -11,56 +16,45 @@ interface KonfigurationSheetProps {
   modus: 'einstellungen' | 'lauf'
 }
 
-function Feld({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <section className="mb-5">
-      <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted">{label}</h3>
-      {children}
-      {hint ? <p className="mt-2 text-xs text-muted">{hint}</p> : null}
-    </section>
-  )
-}
-
-function Chip({
-  aktiv,
-  disabled,
-  onClick,
-  children,
-}: {
-  aktiv: boolean
-  disabled?: boolean
-  onClick: () => void
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className={`h-11 min-w-11 rounded-xl border px-3 text-sm font-semibold transition-colors disabled:opacity-40 ${
-        aktiv
-          ? 'border-accent bg-accent text-accent-fg'
-          : 'border-line bg-surface2 text-fg'
-      }`}
-    >
-      {children}
-    </button>
-  )
-}
-
 export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetProps) {
   const app = useApp()
   const lauf = app.aktiverLauf
+  const satz = app.aktiverSatz
+  const serie = modus === 'lauf' && istSerie(satz)
+  const plan = serie ? (satz?.plan ?? null) : null
   const konfiguration: LaufKonfiguration =
     modus === 'lauf' && lauf ? lauf.konfiguration : app.einstellungen.konfiguration
-  const gesperrt = modus === 'lauf' && lauf ? isStreckeLocked(lauf) : false
+  const gesperrt = modus === 'lauf' && lauf ? isStreckeLocked(lauf) || serie : false
   const fehler = validateKonfiguration(konfiguration)
+
+  const startversatzMs =
+    modus === 'lauf' && lauf ? (plan?.startversatzMs ?? lauf.startversatzMs) : app.einstellungen.startversatzMs
+  const wiederholungen =
+    modus === 'lauf' ? (serie ? (plan?.wiederholungen ?? 1) : 1) : app.einstellungen.wiederholungen
+  const taktSek =
+    modus === 'lauf' ? (serie ? (plan?.taktSek ?? 120) : 120) : app.einstellungen.taktSek
+  const taktOptionen = Array.from(new Set<number>([...TAKTE, taktSek])).sort((a, b) => a - b)
+  const versatzOptionen = Array.from(new Set<number>([...VERSATZE, startversatzMs])).sort(
+    (a, b) => a - b,
+  )
+  const warnung =
+    modus === 'einstellungen' && wiederholungen > 1
+      ? warnungSeriePlan(
+          { wiederholungen, taktSek, startversatzMs },
+          app.einstellungen.bahnen,
+        )
+      : null
 
   const aendere = (teil: Partial<LaufKonfiguration>) => {
     const naechste = { ...konfiguration, ...teil }
     if (validateKonfiguration(naechste) !== null) return
     if (modus === 'lauf') app.setzeKonfiguration(naechste)
     else app.setzeEinstellungen({ ...app.einstellungen, konfiguration: naechste })
+  }
+
+  const setzeEinstellung = (teil: Partial<typeof app.einstellungen>) => {
+    if (modus === 'lauf') return
+    app.setzeEinstellungen({ ...app.einstellungen, ...teil })
   }
 
   const setzeBeckenlaenge = (beckenlaengeM: Beckenlaenge) => {
@@ -92,9 +86,11 @@ export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetP
       <Feld
         label="Strecke"
         hint={
-          gesperrt
-            ? 'Gesperrt, sobald der erste Anschlag erfasst wurde.'
-            : 'Bei offener Strecke bestimmt ein eigener Knopf auf der Kachel das Ziel.'
+          serie
+            ? 'Bei einer Serie nach dem Anlegen gesperrt.'
+            : gesperrt
+              ? 'Gesperrt, sobald der erste Anschlag erfasst wurde.'
+              : 'Bei offener Strecke bestimmt ein eigener Knopf auf der Kachel das Ziel.'
         }
       >
         <div className="flex flex-wrap gap-2">
@@ -124,12 +120,82 @@ export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetP
             <Chip
               key={wert}
               aktiv={konfiguration.schwimmart === wert}
+              disabled={gesperrt}
               onClick={() => aendere({ schwimmart: wert as Schwimmart })}
             >
               {label}
             </Chip>
           ))}
         </div>
+      </Feld>
+
+      <Feld
+        label="Startversatz"
+        hint={
+          modus === 'lauf'
+            ? 'Fest beim Anlegen. Ändern unter „Nächster Lauf“.'
+            : 'Bahn 1 startet sofort, jede weitere um diesen Abstand später.'
+        }
+      >
+        <div className="flex flex-wrap gap-2">
+          {versatzOptionen.map((wert) => (
+            <Chip
+              key={wert}
+              aktiv={startversatzMs === wert}
+              disabled={modus === 'lauf'}
+              onClick={() => setzeEinstellung({ startversatzMs: wert })}
+            >
+              {wert === 0 ? 'aus' : `${wert / 1000} s`}
+            </Chip>
+          ))}
+        </div>
+      </Feld>
+
+      <Feld
+        label="Serie"
+        hint="1 = einzelner Lauf. Bei mehreren startet die nächste Runde im festen Takt."
+      >
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            aria-label="Weniger Wiederholungen"
+            disabled={modus === 'lauf' || wiederholungen <= 1}
+            onClick={() => setzeEinstellung({ wiederholungen: wiederholungen - 1 })}
+            className="h-12 w-12 rounded-xl border border-line bg-surface2 text-xl font-bold disabled:opacity-40"
+          >
+            −
+          </button>
+          <span className="tabular w-12 text-center text-2xl font-semibold">{wiederholungen}×</span>
+          <button
+            type="button"
+            aria-label="Mehr Wiederholungen"
+            disabled={modus === 'lauf' || wiederholungen >= 20}
+            onClick={() => setzeEinstellung({ wiederholungen: wiederholungen + 1 })}
+            className="h-12 w-12 rounded-xl border border-line bg-surface2 text-xl font-bold disabled:opacity-40"
+          >
+            +
+          </button>
+        </div>
+
+        {wiederholungen > 1 ? (
+          <div className="mt-3">
+            <p className="mb-2 text-xs text-muted">Takt (Start zu Start)</p>
+            <div className="flex flex-wrap gap-2">
+              {taktOptionen.map((wert) => (
+                <Chip
+                  key={wert}
+                  aktiv={taktSek === wert}
+                  disabled={modus === 'lauf'}
+                  onClick={() => setzeEinstellung({ taktSek: wert })}
+                >
+                  {formatTakt(wert)}
+                </Chip>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {warnung ? <p className="mt-2 text-xs text-warn">{warnung}</p> : null}
       </Feld>
 
       {modus === 'einstellungen' ? (
@@ -171,12 +237,16 @@ export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetP
       {modus === 'lauf' && lauf ? (
         <Feld label="Schwimmer">
           <div className="space-y-2">
-            {lauf.bahnen.map((bahn) => (
+            {lauf.bahnen.map((bahn, index) => (
               <div key={bahn.id} className="flex items-center gap-3">
                 <span className="tabular w-6 text-sm text-muted">{bahn.nummer}</span>
                 <select
                   value={bahn.schwimmerId ?? ''}
-                  onChange={(e) => app.setzeSchwimmer(bahn.id, e.target.value || null)}
+                  onChange={(e) =>
+                    serie
+                      ? app.setzeSchwimmerSerie(index, e.target.value || null)
+                      : app.setzeSchwimmer(bahn.id, e.target.value || null)
+                  }
                   aria-label={`Schwimmer für Bahn ${bahn.nummer}`}
                   className="h-11 flex-1 rounded-xl border border-line bg-surface2 px-3 text-sm"
                 >

@@ -119,6 +119,36 @@ describe('TabKoordinator', () => {
     b.stop()
   })
 
+  it('übergibt auch dann, wenn offene Schreibvorgänge scheitern', async () => {
+    const bus = new TestBus()
+    const a = new TabKoordinator({
+      tabId: 'a',
+      kanal: bus.factoryFuer('a'),
+      onRolle: () => undefined,
+      vorUebergabe: async () => {
+        throw new Error('Schreiben fehlgeschlagen')
+      },
+    })
+    const b = new TabKoordinator({
+      tabId: 'b',
+      kanal: bus.factoryFuer('b'),
+      onRolle: () => undefined,
+    })
+    a.start()
+    vi.advanceTimersByTime(400)
+    b.start()
+
+    b.uebernehmen()
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(b.aktuelleRolle).toBe('aktiv')
+    expect(a.aktuelleRolle).toBe('gesperrt')
+    a.stop()
+    b.stop()
+  })
+
   it('gibt nach dem Schließen des aktiven Tabs wieder frei', () => {
     const { a, b } = zweiTabs()
     a.start()
@@ -144,6 +174,19 @@ describe('TabKoordinator', () => {
     vi.advanceTimersByTime(6000)
     expect(b.aktuelleRolle).toBe('aktiv')
     b.stop()
+  })
+
+  it('bleibt bedienbar, wenn der Kanal nicht geöffnet werden kann', () => {
+    const a = new TabKoordinator({
+      tabId: 'a',
+      kanal: () => {
+        throw new Error('kein BroadcastChannel')
+      },
+      onRolle: () => undefined,
+    })
+    a.start()
+    expect(a.aktuelleRolle).toBe('aktiv')
+    a.stop()
   })
 
   it('bleibt ohne BroadcastChannel bedienbar', () => {
