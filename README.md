@@ -19,7 +19,8 @@ Ein **Lauf** besteht aus bis zu zehn **Bahnen**. „Start alle“ gibt allen Bah
 ```bash
 npm install
 npm run dev          # http://localhost:5173
-npm test             # Unit-Tests des Zeitkerns
+npm test             # Unit-Tests (Zeitkern, Dialoge, Backup-Prüfung, Tabs)
+npm run test:e2e     # Playwright gegen Dev-Server und Produktions-Build
 npm run build        # Typprüfung + Produktions-Build mit Service Worker
 ```
 
@@ -33,9 +34,9 @@ src/
     lauf.ts        Start, Anschlag, Finish, Undo, Streckenprüfung
     format.ts      Zeitformatierung und Abschneiden auf Hundertstel
     analyse.ts     Bestzeiten, Deltas, Pace
-  storage/       IndexedDB (idb), Schema und Repositories
-  app/           React-Kontext, Persistenz, Hooks (useNow, useWakeLock)
-  ui/            Screens und Komponenten
+  storage/       IndexedDB (idb), Schema, Repositories und Backup-Prüfung
+  app/           React-Kontext, Tab-Abstimmung, Hooks (useNow, useWakeLock)
+  ui/            Screens und Komponenten (Dialoge, Onboarding, Lauf-Detail)
   export/        CSV und Datei-Ausgabe
 ```
 
@@ -45,7 +46,9 @@ Der Zeitkern ist frei von Seiteneffekten: `startAll(lauf, now, wallNow)` bekommt
 
 - **Kein Hintergrundbetrieb mit Eingaben.** Eine PWA kann auf iOS keine Taps annehmen, während sie im Hintergrund ist. Die verstrichene Zeit bleibt trotzdem korrekt, weil sie aus Zeitstempeln rekonstruiert wird. Siehe `docs/adr/0001-pwa-statt-native.md`.
 - **Ein Gerät, kein Sync.** Keine Anmeldung, keine Cloud. Sicherung nur über JSON-Backup.
+- **Ein aktiver Tab.** Genau ein Tab hält die Messung; ein zweiter zeigt einen Hinweis und ist bis „Hier weiterarbeiten“ nur lesend. Der aktive Lauf geht bei der Übergabe nicht verloren, weil jeder Anschlag sofort gespeichert wird. Ohne `BroadcastChannel` verhält sich die App wie früher bedienbar.
 - **Neustart mitten im Lauf.** `performance.now()` ist nach einem Reload wertlos; laufende Bahnen werden beim Laden auf „bereit“ zurückgesetzt, bereits erfasste Zeiten bleiben im Verlauf. Die App weist darauf hin.
+- **Korrekturen sind sichtbar.** Anschläge lassen sich im Lauf-Detail nachträglich korrigieren. Korrigierte Zeiten tragen `manuell` (auch im CSV), damit eine Bestzeit nicht unbemerkt von Hand entsteht.
 
 ## Dokumentation
 

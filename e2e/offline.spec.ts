@@ -1,0 +1,42 @@
+import { expect, test } from '@playwright/test'
+import { oeffneApp } from './helfer'
+
+/**
+ * Läuft gegen den gebauten Stand (`npm run build` + `npm run preview`).
+ * Der Dev-Server registriert keinen Service Worker und kann das nicht prüfen.
+ */
+test('App lädt offline aus dem Service-Worker-Cache, der Lauf bleibt sichtbar', async ({
+  page,
+  context,
+}) => {
+  await oeffneApp(page)
+
+  // Ohne aktiven Service Worker ist der Test wertlos.
+  await page.waitForFunction(async () => {
+    if (!('serviceWorker' in navigator)) return false
+    const registrierung = await navigator.serviceWorker.getRegistration()
+    return registrierung?.active !== null && registrierung?.active !== undefined
+  })
+
+  const cachesGefuellt = await page.evaluate(async () => {
+    const namen = await caches.keys()
+    let eintraege = 0
+    for (const name of namen) {
+      const cache = await caches.open(name)
+      eintraege += (await cache.keys()).length
+    }
+    return eintraege
+  })
+  expect(cachesGefuellt).toBeGreaterThan(0)
+
+  await page.getByRole('button', { name: 'Start', exact: true }).tap()
+  await page.getByRole('button', { name: /^Bahn 1, läuft$/ }).tap()
+  await expect(page.locator('[data-anschlaege="1"]')).toBeVisible()
+
+  await context.setOffline(true)
+  await page.reload()
+
+  // Die App rendert aus dem Cache; der angelegte Lauf ist weiterhin da.
+  await expect(page.getByRole('button', { name: /^Bahn 1, bereit$/ })).toBeVisible()
+  await expect(page.getByText('Nächster Lauf')).toHaveCount(0)
+})
