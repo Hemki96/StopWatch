@@ -130,6 +130,16 @@ Bahn startet nur diese. Das ist die Ausnahme; der übliche Weg ist **Start alle*
 | **läuft** | laufende Zeit | `Länge 2/4`, letzter Split |
 | **beendet** | Zielzeit | `Ziel` |
 
+### Statuszeile und Laufzeit
+
+Unter den Bahnen steht die Statuszeile mit dem Fortschritt, z. B. `2 von 6 im Ziel`. Bei einem
+einzelnen Lauf ergänzt sie die **Laufzeit** ab dem ersten Start (`· Laufzeit 01:23,45`). Sie
+berücksichtigt den Startversatz: Reihe 2 startet später, die Laufzeit beginnt trotzdem mit Reihe 1.
+Nach dem letzten Ziel bleibt der Wert stehen; er zählt nicht weiter.
+
+Eine Serie behält ihre Rundenanzeige (`3 von 5 Runden vollständig`) und zeigt keine zusätzliche
+Laufzeit.
+
 ## Rückgängig machen
 
 Langes Drücken (etwa 0,45 s) auf einer Bahn nimmt die letzte Aktion zurück:
@@ -192,7 +202,8 @@ lassen sich nicht in einen anderen Lauf übertragen.
   ihren Start wartet, fordert die App einen **Wake Lock** an und hält den Bildschirm nach
   Möglichkeit wach.
 - Kann der Browser den Wake Lock nicht halten, erscheint unter dem Timer ein gelber Hinweis:
-  „Display-Sperre nicht aktiv — Bildschirm kann sich ausschalten.“
+  „Display-Sperre nicht aktiv — Bildschirm kann sich ausschalten.“ Die Statuszeile mit der Laufzeit
+  wird dabei ebenfalls gelb, damit der Zusammenhang sichtbar bleibt.
 - Die App nimmt **keine Eingaben im Hintergrund** an. Wird das Display gesperrt oder die App
   verlassen, fehlen die Tipps aus dieser Zeit. Die bereits erfassten Zeiten bleiben korrekt.
 - Der Wake Lock wird erst wieder angefordert, wenn die App sichtbar ist. Ein Wechsel in eine andere

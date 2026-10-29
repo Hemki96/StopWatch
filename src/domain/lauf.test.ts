@@ -32,6 +32,7 @@ import {
   planeLauf,
   pruefeAnschlagKorrektur,
   lastSplit,
+  laufzeitMs,
   lengthCount,
   reihenVon,
   startAll,
@@ -243,6 +244,50 @@ describe('elapsedMs', () => {
     expect(elapsedMs(bahn(lauf), 9999)).toBe(0)
     const gestartet = startLane(lauf, bahn(lauf).id, 1000, 1)
     expect(elapsedMs(bahn(gestartet), 3500)).toBe(2500)
+  })
+})
+
+// Die Laufzeit beginnt beim ersten Start und friert nach dem letzten Ziel ein.
+// Der Startversatz der Reihen gehört zur Laufzeit, nicht zu einer eigenen Uhr.
+describe('laufzeitMs', () => {
+  it('ist null, solange keine Bahn gestartet ist', () => {
+    expect(laufzeitMs(laufMit(K100, 2), 5000)).toBeNull()
+  })
+
+  it('beginnt beim ersten Start und zählt die verstrichene Zeit', () => {
+    const lauf = laufMit(K100, 2)
+    const gestartet = startAll(lauf, 1000, 1)
+    expect(laufzeitMs(gestartet, 12_500)).toBe(11_500)
+  })
+
+  it('berücksichtigt den Startversatz der Reihen', () => {
+    const lauf = {
+      ...createLauf(
+        K100,
+        [
+          { nummer: 1, reihe: 1 },
+          { nummer: 1, reihe: 2 },
+        ],
+      ),
+      startversatzMs: 5000,
+    }
+    const gestartet = startAll(lauf, 1000, 1)
+    // Reihe 2 startet 5 s später; die Laufzeit beginnt trotzdem mit Reihe 1.
+    expect(bahn(gestartet, 1).startMs).toBe(6000)
+    expect(laufzeitMs(gestartet, 11_000)).toBe(10_000)
+  })
+
+  it('friert beim letzten Ziel ein', () => {
+    const start = laufMit(K100, 2)
+    const erste = bahn(start, 0).id
+    const zweite = bahn(start, 1).id
+    let lauf = startAll(start, 1000, 1)
+    // Bahn 1 ist nach 60 s im Ziel (zwei Längen), Bahn 2 nach 75 s.
+    lauf = tapLane(tapLane(tapLane(lauf, erste, 31_000, 2), erste, 61_000, 3), zweite, 46_000, 2)
+    lauf = tapLane(lauf, zweite, 76_000, 3)
+    expect(isFinished(bahn(lauf, 1))).toBe(true)
+    // Weit nach dem letzten Ziel bleibt der Wert stehen.
+    expect(laufzeitMs(lauf, 200_000)).toBe(75_000)
   })
 })
 

@@ -13,13 +13,14 @@ import { useState } from 'react'
 import { useApp, type AktiverEintrag } from '../app/AppProvider'
 import { useNow } from '../app/useNow'
 import { useWakeLock } from '../app/useWakeLock'
-import { formatCountdown, formatStrecke, formatTakt } from '../domain/format'
+import { formatCountdown, formatStrecke, formatTakt, formatTime } from '../domain/format'
 import {
   bahnenNachReihen,
   hasStarted,
   isComplete,
   isFinished,
   laneStatusAt,
+  laufzeitMs,
   lengthCount,
   reihenVon,
 } from '../domain/lauf'
@@ -360,6 +361,10 @@ export function TimerScreen() {
   const offeneStrecke = lengthCount(lauf.konfiguration) === null
   // Fortschritt einer Serie zählt vollständige Runden, nicht einzelne Bahnen.
   const fortschritt = serie ? serieFortschritt(runden) : null
+  // Laufzeit eines einzelnen Laufs ab dem ersten Start; bei einer Serie
+  // übernimmt die Serien-Ansicht ihre Rundenanzeige, dort bleibt die Zeile
+  // unverändert. Nach dem letzten Ziel friert der Wert ein.
+  const laufzeit = serie ? null : laufzeitMs(lauf, now)
   const plan = satz?.plan ?? null
   // Runde, die laut Uhr gerade im Becken ist; mindestens 1, damit die Anzeige
   // schon vor dem ersten Start „Runde 1“ zeigt.
@@ -553,10 +558,16 @@ export function TimerScreen() {
           </button>
         ) : alleBeendet ? (
           <div className="space-y-2">
-            <p className="text-center text-xs font-semibold text-ok">
+            <p className="tabular text-center text-xs font-semibold text-ok">
               {serie && fortschritt
                 ? `Serie beendet · ${fortschritt.gesamt} Runden`
                 : `Alle ${lauf.bahnen.length} im Ziel`}
+              {!serie && laufzeit !== null ? (
+                <span data-laufzeit={Math.round(laufzeit)}>
+                  {' · Laufzeit '}
+                  {formatTime(laufzeit)}
+                </span>
+              ) : null}
             </p>
             <button
               type="button"
@@ -575,6 +586,15 @@ export function TimerScreen() {
                 {serie && fortschritt
                   ? `${fortschritt.fertig} von ${fortschritt.gesamt} Runden vollständig`
                   : `${imZiel} von ${lauf.bahnen.length} im Ziel`}
+                {/* Zusätzlich zur Fortschrittsanzeige die verstrichene Laufzeit.
+                    `data-laufzeit` macht sie für den e2e-Test prüfbar, ohne vom
+                    formatierten Text abzuhängen. */}
+                {laufzeit !== null ? (
+                  <span data-laufzeit={Math.round(laufzeit)}>
+                    {' · Laufzeit '}
+                    {formatTime(laufzeit)}
+                  </span>
+                ) : null}
               </p>
               {/* Ein Hinweis zur Zeit: Wake-Lock, fehlende Starts, offene
                   Strecke oder der normale Ablauf. */}

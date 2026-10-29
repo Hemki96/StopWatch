@@ -198,6 +198,34 @@ export function finishMs(bahn: Bahn): number | null {
   return finish ? finish.splitMs : null
 }
 
+/**
+ * Verstrichene Laufzeit eines Laufs ab dem ersten Start.
+ *
+ * Grundlage ist die früheste Startzeit aller Bahnen. Damit beginnt die Zeit
+ * beim ersten Start und enthält den Startversatz der übrigen Reihen, statt für
+ * jede Reihe neu zu beginnen. Solange nicht alle Bahnen im Ziel sind, läuft die
+ * Anzeige mit `now` weiter; nach dem letzten Ziel bleibt der Wert stehen und
+ * ändert sich nicht mehr mit der Uhr.
+ *
+ * `null`, solange keine Bahn gestartet ist — ohne Start gibt es keine Laufzeit.
+ * Eine Bahn ohne Startzeit zählt beim Einfrieren nicht mit; ihr fehlt der
+ * Bezugspunkt.
+ */
+export function laufzeitMs(lauf: Lauf, now: number): number | null {
+  const starts = lauf.bahnen
+    .map((bahn) => bahn.startMs)
+    .filter((start): start is number => start !== null)
+  if (starts.length === 0) return null
+  const beginn = Math.min(...starts)
+  // Nur wenn jede Bahn ein Finish hat, friert die Anzeige ein. Eine offene
+  // Bahn hält sie am Laufen, auch wenn andere schon im Ziel sind.
+  if (!lauf.bahnen.every(isFinished)) return Math.max(0, now - beginn)
+  const letztesZiel = Math.max(
+    ...lauf.bahnen.map((bahn) => (bahn.startMs ?? beginn) + (finishMs(bahn) ?? 0)),
+  )
+  return Math.max(0, letztesZiel - beginn)
+}
+
 /** Letzter Anschlag, unabhängig davon ob er das Finish ist. */
 export function lastSplit(bahn: Bahn): Anschlag | null {
   return bahn.anschlaege.at(-1) ?? null
