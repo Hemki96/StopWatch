@@ -237,7 +237,9 @@ Sofort handeln:
 3. Privaten Modus verlassen, Speicherplatz freigeben, blockierte Website-Daten erlauben.
 4. App neu laden und erneut prüfen.
 
-Ohne funktionierenden Speicher gehen die Daten beim Schließen verloren.
+Ohne funktionierenden Speicher gehen die Daten beim Schließen verloren. Das Banner kann wieder
+verschwinden, wenn ein späterer Schreibvorgang gelingt; verlass dich darauf aber nicht, sondern
+sichere die Daten.
 
 ### Das Backup wird abgelehnt
 

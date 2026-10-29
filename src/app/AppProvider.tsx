@@ -267,7 +267,7 @@ function setzeStatusleistenStil(theme: Theme): void {
  *
  * Fehlerbehandlung: Ein Lesefehler beim Start ergibt eine leere, aber
  * bedienbare App mit Banner; Schreibfehler setzen dasselbe Banner, werden aber
- * gesammelt gemeldet (siehe `useSchreibpfad`).
+ * gesammelt gemeldet und vorher kurz erneut versucht (siehe `useSchreibpfad`).
  */
 export function AppProvider({ children }: { children: ReactNode }) {
   // ---- Zustandsgruppen -----------------------------------------------------
@@ -621,8 +621,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!istAktiv()) {
         throw new Error('Nur der aktive Tab darf ein Backup importieren.')
       }
-      const vorgang = importBackup(backup).then(() => ladeDaten())
-      verfolge(vorgang)
+      const vorgang = verfolge(() => importBackup(backup).then(() => ladeDaten()))
       await vorgang
     },
     [istAktiv, ladeDaten, verfolge],
@@ -633,8 +632,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!istAktiv()) {
       throw new Error('Nur der aktive Tab darf alle Daten löschen.')
     }
-    const vorgang = clearAll().then(() => ladeDaten())
-    verfolge(vorgang)
+    const vorgang = verfolge(() => clearAll().then(() => ladeDaten()))
     await vorgang
   }, [istAktiv, ladeDaten, verfolge])
 

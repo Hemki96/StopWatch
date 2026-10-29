@@ -66,12 +66,14 @@ automatisch. Drei Zustände:
 Der Schutz ist **kein Backup**. Er schützt nicht vor „Websitedaten löschen“, Geräteverlust oder
 einem Browserwechsel.
 
-Schlägt das Schreiben in IndexedDB fehl, erscheint dauerhaft ein rotes Banner:
+Schlägt das Schreiben in IndexedDB fehl, versucht die App es kurz erneut. Bleibt der Fehler
+bestehen (etwa weil der Speicher voll ist), erscheint ein rotes Banner:
 
 > Kein Speicher verfügbar — Daten gehen beim Schließen verloren.
 
-In diesem Zustand die App nicht schließen, sondern zuerst ein Backup versuchen und die Ursache
-beheben (Speicherplatz, privater Modus, blockierte Website-Daten).
+Gelingt ein späterer Schreibvorgang, verschwindet das Banner wieder. Solange es steht, die App
+nicht schließen, sondern zuerst ein Backup versuchen und die Ursache beheben (Speicherplatz,
+privater Modus, blockierte Website-Daten).
 
 ## CSV oder Backup?
 
