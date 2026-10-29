@@ -1,12 +1,14 @@
 /**
- * Zentraler Zustand der App und einzige Schreibstelle zum lokalen Speicher.
+ * Zentraler Zustand der App: Kontext-Assembly, Tab-Rolle, Laden und Toast.
  *
  * Verantwortlichkeiten:
  * - Bestand aus IndexedDB laden (beim Start und nach einer Tab-Übergabe).
  * - Einstellungen, Schwimmer, Sätze, Läufe, Trainings und Wettkämpfe halten
  *   sowie die Liste der aktiven Läufe und den sichtbaren Lauf.
- * - Alle Aktionen ausführen: Sie rechnen über den reinen Zeitkern in `domain/`
- *   und schreiben das Ergebnis sofort weg.
+ * - Die Fachmodule verdrahten: `laufAktionen`, `wettkampfAktionen` und
+ *   `trainingsAktionen` bekommen die Ref-Spiegel und schreiben über
+ *   `useSchreibpfad`; `aktiveLaeufe` und `einstellungen` liefern Lesen und
+ *   Normalisierung. Der Provider selbst hält nur noch den Rahmen.
  * - Mit anderen Tabs über `TabKoordinator` abstimmen. Nur der aktive Tab
  *   schreibt; alle anderen sind lesend.
  *
@@ -43,10 +45,7 @@ import {
   type Wettkampf,
   type WettkampfStatus,
 } from '../domain/types'
-import {
-  createLauf,
-  rebaseLauf,
-} from '../domain/lauf'
+import { rebaseLauf } from '../domain/lauf'
 import {
   type WettkampfPlan,
 } from '../domain/wettkampf'
@@ -54,24 +53,14 @@ import {
   istSerie,
   runden as rundenVon,
 } from '../domain/serie'
-import {
-  bahnenGesamt,
-  beschreibeTrainingsSatz,
-  neuerTrainingsSatz,
-  neuesTraining,
-  pruefeTraining,
-  pruefeTrainingsSatz,
-} from '../domain/training'
 import { newId } from '../domain/id'
 import { TabKoordinator, type TabRolle } from './tabKoordinator'
 import {
   clearAll,
   deleteSchwimmer,
-  deleteTraining,
   importBackup,
   loadAll,
   saveLauf,
-  saveMehrere,
   saveSchwimmer,
   saveTraining,
 } from '../storage/repository'
@@ -98,6 +87,7 @@ import {
   type AktiverEintrag,
 } from './aktiveLaeufe'
 import { createLaufAktionen } from './laufAktionen'
+import { createTrainingsAktionen } from './trainingsAktionen'
 import { createWettkampfAktionen } from './wettkampfAktionen'
 import { useSchreibpfad } from './schreibpfad'
 
@@ -247,19 +237,6 @@ export interface AppContextValue {
 // `null` als Startwert ist Absicht: `useApp` erkennt daran einen fehlenden
 // Provider und kann eine klare Meldung werfen, statt `undefined` zu liefern.
 const AppContext = createContext<AppContextValue | null>(null)
-
-/**
- * Heutiges Datum als `YYYY-MM-DD` in lokaler Zeit.
- *
- * Bewusst nicht `toISOString()`: Das liefert UTC und würde am Abend bereits den
- * Folgetag erzeugen. Sätze werden über dieses Datum gruppiert.
- */
-function heute(): string {
-  const d = new Date()
-  const monat = `${d.getMonth() + 1}`.padStart(2, '0')
-  const tag = `${d.getDate()}`.padStart(2, '0')
-  return `${d.getFullYear()}-${monat}-${tag}`
-}
 
 
 /**
@@ -525,6 +502,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setzeWettkampfStatus,
     setzeWettkampfNamen,
   } = wettkampfAktionen
+
+  /** Trainingsaktionen: Pläne anlegen, speichern und starten. */
+  const trainingsAktionen = useMemo(
+    () =>
+      createTrainingsAktionen({
+        istAktiv,
+        verfolge,
+        laeufeRef,
+        satzeRef,
+        trainingsRef,
+        aktiveIdsRef,
+        setLaeufe: setLaeufeSafe,
+        setSatze: setSatzeSafe,
+        setTrainings: setTrainingsSafe,
+        setAktiveIds,
+        setAktivenLaufId,
+        getEinstellungen,
+        startAlle,
+        aktiviereSatz,
+      }),
+    [
+      istAktiv,
+      verfolge,
+      setLaeufeSafe,
+      setSatzeSafe,
+      setTrainingsSafe,
+      setAktiveIds,
+      setAktivenLaufId,
+      getEinstellungen,
+      startAlle,
+      aktiviereSatz,
+    ],
+  )
+  const { anlegeTraining, speichereTraining, loescheTraining, starteTrainingsSatz } =
+    trainingsAktionen
 
   /**
    * Lädt den kompletten Bestand und gleicht die Auswahl damit ab.
@@ -903,182 +915,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     koordinatorRef.current?.uebernehmen()
   }, [])
 
-  /**
-   * Legt ein neues Training aus den aktuellen Einstellungen an.
-   *
-   * Es startet mit einem vorbereiteten Satz, damit die Vorbereitung nicht mit
-   * einem leeren Formular beginnt. Gemessen wird nichts; Läufe entstehen erst
-   * beim Start eines Trainingssatzes.
-   */
-  const anlegeTraining = useCallback((): string | null => {
-    if (!istAktiv()) return null
-    const werte = einstellungen
-    const training = neuesTraining({
-      datum: heute(),
-      bahnen: werte.bahnen,
-      reihen: werte.reihen,
-      aktive: werte.schwimmerProBahn,
-      saetze: [
-        neuerTrainingsSatz({
-          konfiguration: { ...werte.konfiguration },
-          wiederholungen: werte.wiederholungen,
-          taktSek: werte.taktSek,
-          startversatzMs: werte.startversatzMs,
-        }),
-      ],
-    })
-    setTrainingsSafe([training, ...trainingsRef.current])
-    verfolge(saveTraining(training))
-    return training.id
-  }, [einstellungen, setTrainingsSafe, verfolge])
-
-  /**
-   * Speichert einen Trainingsplan (neu oder geändert).
-   *
-   * Ungültige Pläne werden verworfen, nicht teilweise übernommen. `pruefeTraining`
-   * prüft Struktur (ID, Datumsformat, Bahnenzahl, Aktive, 1..20 gültige Sätze),
-   * aber nicht, ob ein Satz schon gestartet ist — das entscheidet die
-   * Oberfläche anhand des Fortschritts.
-   */
-  const speichereTraining = useCallback(
-    (training: Training) => {
-      if (!istAktiv()) return
-      if (pruefeTraining(training) !== null) return
-      const vorhanden = trainingsRef.current.some((eintrag) => eintrag.id === training.id)
-      setTrainingsSafe(
-        vorhanden
-          ? trainingsRef.current.map((eintrag) =>
-              eintrag.id === training.id ? training : eintrag,
-            )
-          : [training, ...trainingsRef.current],
-      )
-      verfolge(saveTraining(training))
-    },
-    [setTrainingsSafe, verfolge],
-  )
-
-  /**
-   * Löscht nur den Trainingsplan. Bereits gestartete Sätze und ihre Läufe
-   * bleiben im Verlauf — das Training ist Vorbereitung, nicht der Besitz der
-   * Messungen.
-   */
-  const loescheTraining = useCallback(
-    (id: string) => {
-      if (!istAktiv()) return
-      setTrainingsSafe(trainingsRef.current.filter((eintrag) => eintrag.id !== id))
-      verfolge(deleteTraining(id))
-    },
-    [setTrainingsSafe, verfolge],
-  )
-
-  /**
-   * Startet einen vorbereiteten Trainingssatz oder wählt ihn erneut aus.
-   *
-   * Erster Aufruf: Aus dem Trainingssatz entstehen ein `Satz` und — bei
-   * mehreren Wiederholungen — alle Läufe auf einmal. Bahnenzahl und Aktive
-   * werden aus dem Training kopiert; spätere Änderungen am Training schreiben
-   * gemessene Läufe nicht um. Die Zuordnung `training.gestartet` merkt sich die
-   * Satz-ID und macht den Aufruf idempotent: Ein zweiter Tap startet keine
-   * zweite Messung, sondern wählt den bestehenden Satz über `aktiviereSatz`.
-   *
-   * Der Satz bekommt nur dann einen Plan, wenn es mehr als eine Wiederholung
-   * gibt; ein einzelner Lauf bleibt ein normaler Lauf.
-   *
-   * Reihenfolge am Ende ist wichtig: erst State und Persistenz, dann Leiste,
-   * dann `startAlle(now, …)`. So plant `startAlle` exakt die neuen Läufe mit
-   * demselben Zeitstempel, ohne dass ein Render dazwischenkommt.
-   *
-   * Rückgabe ist die Anker-ID oder `null` bei ungültigem Plan.
-   */
-  const starteTrainingsSatz = useCallback(
-    (
-      trainingId: string,
-      trainingsSatzId: string,
-      now: number,
-      wallNow: number,
-    ): string | null => {
-      if (!istAktiv()) return null
-      const training = trainingsRef.current.find((eintrag) => eintrag.id === trainingId)
-      const eintrag = training?.saetze.find((satz) => satz.id === trainingsSatzId)
-      if (!training || !eintrag) return null
-      if (pruefeTrainingsSatz(eintrag) !== null) return null
-
-      // Schon gestartet? Dann nur auswählen — sonst entstünde eine zweite
-      // Messung für denselben Trainingssatz.
-      const vorhandenerSatz = training.gestartet[eintrag.id]
-        ? satzeRef.current.find((satz) => satz.id === training.gestartet[eintrag.id])
-        : undefined
-      if (vorhandenerSatz) return aktiviereSatz(vorhandenerSatz)
-
-      const satz: Satz = {
-        id: newId(),
-        datum: training.datum,
-        bezeichnung: eintrag.bezeichnung.trim() || beschreibeTrainingsSatz(eintrag),
-        konfiguration: { ...eintrag.konfiguration },
-        plan:
-          eintrag.wiederholungen > 1
-            ? {
-                wiederholungen: eintrag.wiederholungen,
-                taktSek: eintrag.taktSek,
-                startversatzMs: eintrag.startversatzMs,
-              }
-            : null,
-        erstelltAm: Date.now(),
-      }
-      // Aktive und Bahnenzahl werden kopiert, nicht referenziert: Änderungen am
-      // Training gelten nur für noch nicht gestartete Sätze. Die Personen sind
-      // Reihe für Reihe abgelegt; `nummer` zählt innerhalb der Reihe.
-      const bahnenInit = Array.from(
-        { length: bahnenGesamt(training.bahnen, training.reihen) },
-        (_, index) => ({
-          nummer: (index % training.bahnen) + 1,
-          reihe: Math.floor(index / training.bahnen) + 1,
-          schwimmerId: training.aktive[index] ?? null,
-        }),
-      )
-      const neueLaeufe = Array.from({ length: eintrag.wiederholungen }, (_, index) =>
-        createLauf(eintrag.konfiguration, bahnenInit, satz.id, {
-          startversatzMs: eintrag.startversatzMs,
-          wiederholung: satz.plan ? index + 1 : null,
-        }),
-      )
-      const anker = neueLaeufe[0]
-      if (!anker) return null
-
-      const naechstesTraining: Training = {
-        ...training,
-        gestartet: { ...training.gestartet, [eintrag.id]: satz.id },
-      }
-      setSatzeSafe([satz, ...satzeRef.current])
-      setLaeufeSafe([...neueLaeufe, ...laeufeRef.current])
-      setTrainingsSafe(
-        trainingsRef.current.map((kandidat) =>
-          kandidat.id === training.id ? naechstesTraining : kandidat,
-        ),
-      )
-      // Satz, Trainingsverweis und Läufe gehören zusammen. Eine Transaktion
-      // verhindert den Zustand „gestartet, aber ohne Läufe“ nach einem Abbruch.
-      verfolge(saveMehrere({ satze: [satz], trainings: [naechstesTraining], laeufe: neueLaeufe }))
-
-      setAktiveIds([...new Set([anker.id, ...aktiveIdsRef.current])])
-      setAktivenLaufId(anker.id)
-      // Erst anlegen, dann mit demselben Zeitstempel starten: Ein Takt von
-      // mehreren Wiederholungen wird wie im Timer vorausberechnet.
-      startAlle(now, wallNow)
-      return anker.id
-    },
-    [
-      aktiviereSatz,
-      setAktiveIds,
-      setAktivenLaufId,
-      setLaeufeSafe,
-      setSatzeSafe,
-      setTrainingsSafe,
-      startAlle,
-      verfolge,
-    ],
-  )
-
   // Der Kontextwert wird memoisiert: Screens rendern nur neu, wenn sich Daten
   // oder Aktionen wirklich geändert haben. Alle Aktionen sind `useCallback`-
   // stabil; die Abhängigkeitsliste muss trotzdem jede davon enthalten, sonst
@@ -1216,7 +1052,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       speichereTraining,
       loescheTraining,
       starteTrainingsSatz,
-      uebernehmen,
     ],
   )
 
