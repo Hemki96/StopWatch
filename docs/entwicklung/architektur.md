@@ -349,6 +349,10 @@ Details: [Oberfläche](oberflaeche.md).
 
 ## Performance
 
+- Der Timer liegt im Start-Chunk; alle anderen Screens kommen per `React.lazy` erst beim ersten
+  Tab-Wechsel nach. Die schweren Unteransichten des Verlaufs (Analyse, Lauf-Detail) haben eigene
+  Chunks und werden erst beim Öffnen geladen. Der Service Worker precacht sie trotzdem vollständig,
+  die Offline-Fähigkeit bleibt also unverändert.
 - Kein Render-Loop ohne aktive Bahn.
 - Zeitstrings werden beim Rendern berechnet; es gibt keine gespeicherten Anzeigewerte.
 - Serien mit 20 Runden und 10 Bahnen erzeugen 200 Läufe, aber nur eine Zeile pro Bahn in der

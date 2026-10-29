@@ -7,19 +7,31 @@
  * den ganzen Satz samt Läufen. Die Daten kommen aus app/AppProvider, die
  * Zeit- und Vollständigkeitsprüfungen aus domain/lauf und domain/analyse.
  */
-import { useMemo, useState } from 'react'
+import { lazy, Suspense, useMemo, useState } from 'react'
 import { useApp } from '../app/AppProvider'
 import { hatBegonnen, isComplete } from '../domain/lauf'
 import { istAnalyseSatzAusRunden, schnellsteZeit } from '../domain/analyse'
 import { formatStrecke, formatTakt, formatTime } from '../domain/format'
 import { einheitVon } from '../domain/einheit'
 import { SCHWIMMARTEN, type Lauf, type SatzPlan } from '../domain/types'
-import { AnalyseScreen } from './AnalyseScreen'
 import { Bestaetigung } from './Bestaetigung'
 import { ChevronRightIcon, TrashIcon } from './icons'
-import { LaufDetail } from './LaufDetail'
+import { BereichLadezustand, DialogLadezustand } from './Ladezustand'
 import { MehrLaden, SAETZE_JE_SEITE } from './MehrLaden'
 import { laeufeNachSatz } from './analyseMemo'
+
+/**
+ * Analyse und Lauf-Detail sind die beiden schweren Unteransichten des
+ * Verlaufs. Sie werden erst geladen, wenn der Nutzer sie öffnet: Die Analyse
+ * bringt die Auswertungslogik mit, das Detail Export und Korrektur. Beide
+ * bleiben offline verfügbar, weil der Service Worker auch diese Chunks precacht.
+ */
+const AnalyseScreen = lazy(() =>
+  import('./AnalyseScreen').then((modul) => ({ default: modul.AnalyseScreen })),
+)
+const LaufDetail = lazy(() =>
+  import('./LaufDetail').then((modul) => ({ default: modul.LaufDetail })),
+)
 
 /** Tagesdatum der Gruppenüberschrift, deutsch und kurz. */
 const datumFormat = new Intl.DateTimeFormat('de-DE', {
@@ -191,7 +203,11 @@ export function HistoryScreen() {
         </div>
       </header>
 
-      {bereich === 'analyse' ? <AnalyseScreen /> : (
+      {bereich === 'analyse' ? (
+        <Suspense fallback={<BereichLadezustand text="Analyse wird geladen …" />}>
+          <AnalyseScreen />
+        </Suspense>
+      ) : (
       <div className="flex-1 overflow-y-auto px-4 pb-8 pt-3 rail:px-6">
         {gruppen.length === 0 ? (
           <p className="mt-16 text-center text-sm text-muted">
@@ -331,9 +347,13 @@ export function HistoryScreen() {
       )}
 
       {/* Das Detail liegt als Vollbild über dem Verlauf; Schließen setzt nur
-          die Auswahl zurück, die Liste bleibt gemountet. */}
+          die Auswahl zurück, die Liste bleibt gemountet. Der Chunk wird erst
+          beim ersten Öffnen geladen; bis dahin hält die Ladefläche den Fokus
+          beim auslösenden Lauf und die Fläche stabil. */}
       {bereich === 'verlauf' && offenerLauf ? (
-        <LaufDetail laufId={offenerLauf} onClose={() => setOffenerLauf(null)} />
+        <Suspense fallback={<DialogLadezustand text="Lauf wird geladen …" />}>
+          <LaufDetail laufId={offenerLauf} onClose={() => setOffenerLauf(null)} />
+        </Suspense>
       ) : null}
 
       {/* Löschen eines Satzes entfernt auch seine Läufe; der Dialog nennt die

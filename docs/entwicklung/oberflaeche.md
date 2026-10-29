@@ -24,6 +24,9 @@ Handy                              Tablet
 
 - Die Navigation hat sechs Einträge. Auf dem Handy liegt sie unten und verteilt sich auf sechs
   gleich breite Spalten; auf dem Tablet wird daraus eine schmale Leiste links.
+- Nur der Timer wird mit dem Start-Chunk geladen. Die übrigen Bereiche kommen per `React.lazy`
+  beim ersten Aufruf nach; währenddessen zeigt die Inhaltsfläche einen Status statt eines leeren
+  Bereichs. Der aktive Tab, die Navigation und Dialoge bleiben dabei montiert.
 - Jeder Screen füllt die Höhe (`h-full`), hat einen festen Kopf, einen scrollenden Inhalt und
   meistens eine feste Aktionsleiste am unteren Rand.
 - Die Aktionsleiste respektiert `env(safe-area-inset-bottom)`, im Querformat zusätzlich

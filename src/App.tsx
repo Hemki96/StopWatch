@@ -9,20 +9,17 @@
  * Wichtig: Der aktive Tab wird nicht gespeichert und steht nicht in der URL.
  * Nach einem Neustart beginnt die App im Timer. Screens werden beim Tab-Wechsel
  * ausgehängt — laufende Messungen dürfen deshalb nicht in den Screens liegen,
- * sondern im Provider.
+ * sondern im Provider. Der Timer ist der einzige statisch geladene Screen; alle
+ * übrigen Bereiche kommen per `React.lazy` nach.
  */
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { useApp } from './app/AppProvider'
 import { leseTextMitRueckfall, schreibeText } from './app/lokalSpeicher'
 import { useOnlineStatus, useServiceWorkerUpdate } from './app/pwa'
-import { HistoryScreen } from './ui/HistoryScreen'
+import { BereichLadezustand } from './ui/Ladezustand'
 import { Onboarding } from './ui/Onboarding'
-import { SchwimmerScreen } from './ui/SchwimmerScreen'
-import { SettingsScreen } from './ui/SettingsScreen'
 import { SpeicherBanner } from './ui/SpeicherBanner'
 import { TimerScreen } from './ui/TimerScreen'
-import { TrainingScreen } from './ui/TrainingScreen'
-import { WettkampfScreen } from './ui/WettkampfScreen'
 import {
   GearIcon,
   HistoryIcon,
@@ -48,6 +45,31 @@ const TABS = [
   { id: 'schwimmer' as const, label: 'Schwimmer', Icon: PeopleIcon },
   { id: 'einstellungen' as const, label: 'Mehr', Icon: GearIcon },
 ]
+
+/**
+ * Alle Bereiche außer dem Timer werden erst beim ersten Aufruf geladen.
+ *
+ * Der Timer bleibt der sofortige Einstieg, weil die Messung ohne Nachladen
+ * beginnen muss. Jeder `import()` wird zu einem eigenen Chunk; der Service
+ * Worker precacht wegen `globPatterns` in `vite.config.ts` trotzdem alle.
+ * `Onboarding` bleibt statisch, weil es beim allerersten Start sofort
+ * erscheinen muss.
+ */
+const TrainingScreen = lazy(() =>
+  import('./ui/TrainingScreen').then((modul) => ({ default: modul.TrainingScreen })),
+)
+const WettkampfScreen = lazy(() =>
+  import('./ui/WettkampfScreen').then((modul) => ({ default: modul.WettkampfScreen })),
+)
+const HistoryScreen = lazy(() =>
+  import('./ui/HistoryScreen').then((modul) => ({ default: modul.HistoryScreen })),
+)
+const SchwimmerScreen = lazy(() =>
+  import('./ui/SchwimmerScreen').then((modul) => ({ default: modul.SchwimmerScreen })),
+)
+const SettingsScreen = lazy(() =>
+  import('./ui/SettingsScreen').then((modul) => ({ default: modul.SettingsScreen })),
+)
 
 /**
  * Merker für das Onboarding. Bewusst nur ein Wert (`fertig`) statt eines
@@ -237,12 +259,17 @@ export default function App() {
           {/* Auf dem Tablet wächst der Inhalt nicht über eine lesbare Breite
               hinaus; auf dem Handy bleibt die volle Breite. */}
           <div className="mx-auto h-full w-full max-w-5xl">
-            {tab === 'timer' && <TimerScreen />}
-            {tab === 'training' && <TrainingScreen onZumTimer={() => setTab('timer')} />}
-            {tab === 'wettkampf' && <WettkampfScreen />}
-            {tab === 'verlauf' && <HistoryScreen />}
-            {tab === 'schwimmer' && <SchwimmerScreen />}
-            {tab === 'einstellungen' && <SettingsScreen />}
+            {/* Der Fallback füllt dieselbe Fläche wie der Screen; der aktive
+                Tab bleibt in `App` und die Navigation montiert, damit ein
+                Wechsel während des Ladens weder Zustand noch Fokus verliert. */}
+            <Suspense fallback={<BereichLadezustand />}>
+              {tab === 'timer' && <TimerScreen />}
+              {tab === 'training' && <TrainingScreen onZumTimer={() => setTab('timer')} />}
+              {tab === 'wettkampf' && <WettkampfScreen />}
+              {tab === 'verlauf' && <HistoryScreen />}
+              {tab === 'schwimmer' && <SchwimmerScreen />}
+              {tab === 'einstellungen' && <SettingsScreen />}
+            </Suspense>
           </div>
         </main>
 
