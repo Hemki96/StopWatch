@@ -180,7 +180,8 @@ in kleinen Modulen unter `src/app/`:
 
 | Modul | Verantwortung |
 | --- | --- |
-| `einstellungen.ts` | Vorbelegung lesen, begrenzen, schreiben; Designwahl |
+| `einstellungen.ts` | Vorbelegung lesen, begrenzen, schreiben |
+| `theme.ts` | Designwahl lesen und schreiben, Systemauflösung, DOM- und Browser-Chrome-Spiegelung (`useTheme`) |
 | `daten.ts` | Backup erzeugen und prüfen, Speicherschutz lesen und anfordern (Fassade zu `storage/`) |
 | `aktiveLaeufe.ts` | Leiste, Migration der Einzel-ID, Bereinigung und abgeleitete Anzeige |
 | `schreibpfad.ts` | Tab-Tor, Warteschlange offener Schreibvorgänge, Wiederholung, Fehlerbanner (`useSchreibpfad`) |

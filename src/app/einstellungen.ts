@@ -1,12 +1,13 @@
 /**
- * Vorbelegung des nächsten Laufs und Designwahl — lesen, begrenzen, schreiben.
+ * Vorbelegung des nächsten Laufs — lesen, begrenzen, schreiben.
  *
- * Beide leben in `localStorage`, nicht in IndexedDB, und sind deshalb bewusst
- * nicht Teil des JSON-Backups. Jedes Feld wird einzeln geprüft: Ein kaputter
- * Teil fällt auf seinen Standardwert zurück, statt alle Einstellungen zu
- * verwerfen. Die Grenzen gelten beim Lesen **und** beim Schreiben, weil der
- * Provider die einzige Schreibstelle ist und sich nicht darauf verlassen darf,
- * dass jeder Aufrufer brav validiert.
+ * Die Einstellungen leben in `localStorage`, nicht in IndexedDB, und sind
+ * deshalb bewusst nicht Teil des JSON-Backups. Die Designwahl liegt im eigenen
+ * Modul `theme.ts`. Jedes Feld wird einzeln geprüft: Ein kaputter Teil fällt auf
+ * seinen Standardwert zurück, statt alle Einstellungen zu verwerfen. Die Grenzen
+ * gelten beim Lesen **und** beim Schreiben, weil der Provider die einzige
+ * Schreibstelle ist und sich nicht darauf verlassen darf, dass jeder Aufrufer
+ * brav validiert.
  */
 import {
   SCHWIMMARTEN,
@@ -18,15 +19,6 @@ import { einheitVon } from '../domain/einheit'
 import { istVielfacheDerBeckenlaenge } from '../domain/lauf'
 import { MAX_BAHNEN, MAX_REIHEN, bahnenGesamt } from '../domain/training'
 import { leseText, schreibeText } from './lokalSpeicher'
-
-/** Das tatsächlich angewendete Design. */
-export type Theme = 'dark' | 'light'
-
-/**
- * Die gespeicherte Wahl. `system` folgt der Betriebssystem-Einstellung und wird
- * erst über `theme` im Kontext in ein konkretes `Theme` aufgelöst.
- */
-export type ThemeEinstellung = Theme | 'system'
 
 /**
  * Vorbelegung für den nächsten Lauf.
@@ -68,12 +60,11 @@ export const STANDARD_EINSTELLUNGEN: Einstellungen = {
 }
 
 /**
- * Logische `localStorage`-Schlüssel der Einstellungen und der Designwahl.
- * `lokalSpeicher` ergänzt den Namensraum und liest den früheren Schlüssel als
- * Rückfall (siehe `storage/namensraum.ts`).
+ * Logischer `localStorage`-Schlüssel der Einstellungen. `lokalSpeicher` ergänzt
+ * den Namensraum und liest den früheren Schlüssel als Rückfall (siehe
+ * `storage/namensraum.ts`).
  */
 const EINSTELLUNGEN_KEY = 'einstellungen'
-const THEME_KEY = 'theme'
 
 /**
  * Bringt eine beliebige gespeicherte Bahnbelegung auf genau `anzahl` Plätze.
@@ -232,22 +223,4 @@ export function leseEinstellungen(): Einstellungen {
 /** Speichert die bereits begrenzte Einstellung. */
 export function schreibeEinstellungen(einstellungen: Einstellungen): void {
   schreibeText(EINSTELLUNGEN_KEY, JSON.stringify(einstellungen))
-}
-
-/**
- * Liest die Designwahl. Unbekannte oder fehlende Werte ergeben `system`, damit
- * eine ältere oder manipulierte Einstellung nie zu einem unsichtbaren Design
- * führt.
- */
-export function leseThemeEinstellung(): ThemeEinstellung {
-  const gespeichert = leseText(THEME_KEY)
-  if (gespeichert === 'light' || gespeichert === 'dark' || gespeichert === 'system') {
-    return gespeichert
-  }
-  return 'system'
-}
-
-/** Speichert die Designwahl; `system` bleibt als solches gemerkt. */
-export function schreibeThemeEinstellung(einstellung: ThemeEinstellung): void {
-  schreibeText(THEME_KEY, einstellung)
 }
