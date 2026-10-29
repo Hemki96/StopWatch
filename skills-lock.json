@@ -31,6 +31,12 @@
       "skillPath": "skills/engineering/codebase-design/SKILL.md",
       "computedHash": "b2888e4f4e8c0af3bfd557575a64b905c44e6248c3101d72077816882b3a92b9"
     },
+    "design-mobile-apps": {
+      "source": "designed-by-ai/skills",
+      "sourceType": "github",
+      "skillPath": "skills/design-mobile-apps/SKILL.md",
+      "computedHash": "6d6ed68c53ac9f5564aea489ededb387b8cdf29ffa6f78f2a1fa449f86f19e16"
+    },
     "diagnosing-bugs": {
       "source": "mattpocock/skills",
       "sourceType": "github",
@@ -91,6 +97,13 @@
       "skillPath": "skills/engineering/improve-codebase-architecture/SKILL.md",
       "computedHash": "ac2c94885f34ff8492dc12aa4543182f661f32ea1722b8d6b6c2c7045af33ae3"
     },
+    "ios-design": {
+      "source": "uizze.sh",
+      "sourceUrl": "https://uizze.sh/",
+      "sourceType": "well-known",
+      "computedHash": "5db10aea0f95d69a54cabcfae129ea0e7069b7022de967b2a04acdd9fa1be050",
+      "wellKnownDigest": "sha256:8db9f7cafeda65751e88fcbc1c9e4fc3f93803a438c30fe8e3fc8b00773417bd"
+    },
     "loop-me": {
       "source": "mattpocock/skills",
       "sourceType": "github",
@@ -114,6 +127,19 @@
       "sourceType": "github",
       "skillPath": "skills/engineering/prototype/SKILL.md",
       "computedHash": "d3fc74689bd993e39c44bfae510d014eecffbeec2922764b065377fd1327c0f6"
+    },
+    "pwa-development": {
+      "source": "jwynia/agent-skills",
+      "ref": "main",
+      "sourceType": "github",
+      "skillPath": "skills/tech/frontend/pwa/pwa-development/SKILL.md",
+      "computedHash": "b2ef095d9ab54b7686bb07e9681ccbbe6af5889e806ee2231650c9e6c9089e1f"
+    },
+    "pwa-expert": {
+      "source": "curiositech/some_claude_skills",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/pwa-expert/SKILL.md",
+      "computedHash": "357605ed4dfc22f7e701c3465a90d0442c14498868504ae5f7bc12c276d2ff01"
     },
     "research": {
       "source": "mattpocock/skills",
@@ -187,6 +213,13 @@
       "skillPath": "skills/engineering/triage/SKILL.md",
       "computedHash": "a683e69163e23630f39c05a50fb9d83a3795a6a6fbd317357669e082cd43a158"
     },
+    "ui-taste": {
+      "source": "uizze.sh",
+      "sourceUrl": "https://uizze.sh/",
+      "sourceType": "well-known",
+      "computedHash": "b9d9f1f68d2db3316639cf77ad74dae34a2ed2ffb90845e5de6c592095c78a3d",
+      "wellKnownDigest": "sha256:120fd3e899db255454fff61b7e8c22757524ffe31101a22d19346708bd20c4b9"
+    },
     "wait-what": {
       "source": "mattpocock/skills",
       "sourceType": "github",
@@ -198,6 +231,18 @@
       "sourceType": "github",
       "skillPath": "skills/engineering/wayfinder/SKILL.md",
       "computedHash": "71d1296ae9f1ea0397f385f72d11ca3473827f5d067df4d06c58eb03377a57ce"
+    },
+    "web-design-guidelines": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/web-design-guidelines/SKILL.md",
+      "computedHash": "f3bc47f890f42a44db1007ab390709ec368e4b8c089baee6b0007182236ac474"
+    },
+    "web-pwa-offline-first": {
+      "source": "agents-inc/skills",
+      "sourceType": "github",
+      "skillPath": "src/skills/web-pwa-offline-first/SKILL.md",
+      "computedHash": "cd1cb478e54797e2614454895b0684a123c1e09bf165c417c2a9f0768fbbbff7"
     },
     "wizard": {
       "source": "mattpocock/skills",
