@@ -7,7 +7,7 @@
  * rechnet mit `laneStatusAt`, `elapsedMs` und `finishMs` aus domain/lauf;
  * Platz und Rückstand liefert der Screen aus domain/wettkampf.
  */
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { haptic } from '../app/haptics'
 import { useReducedMotion } from '../app/useReducedMotion'
 import { elapsedMs, finishMs, laneStatusAt } from '../domain/lauf'
@@ -79,6 +79,16 @@ export function WettkampfLane({
   // VoiceOver/TalkBack; Pointer- und Tastaturklicks sind bereits verarbeitet.
   const klickRef = useRef(false)
   const reduzierteBewegung = useReducedMotion()
+
+  // Ein laufender Langdruck darf nach dem Unmount keinen Anschlag mehr
+  // zurücknehmen (Tab-Wechsel während des Haltens).
+  useEffect(
+    () => () => {
+      const press = pressRef.current
+      if (press) window.clearTimeout(press.timer)
+    },
+    [],
+  )
 
   /** Markiert den Klick für den laufenden Task, damit `onClick` ihn ignoriert. */
   const merkeKlick = () => {
@@ -194,6 +204,7 @@ export function WettkampfLane({
       data-wettkampf-status={status ?? undefined}
       data-platz={platz ?? undefined}
       aria-label={aria}
+      aria-keyshortcuts={kannRueckgaengig ? 'Backspace Delete' : undefined}
       onPointerDown={startPress}
       onPointerUp={endPress}
       onPointerCancel={cancelPress}
@@ -219,6 +230,11 @@ export function WettkampfLane({
           merkeKlick()
           haptic(8)
           onTap(bahn.id, performance.now(), Date.now())
+        }
+        // Tastatur-Äquivalent zum langen Drücken (siehe LaneTile).
+        if ((event.key === 'Backspace' || event.key === 'Delete') && kannRueckgaengig) {
+          event.preventDefault()
+          onUndo(bahn.id)
         }
       }}
       className={`relative flex select-none items-center gap-3 overflow-hidden rounded-2xl border-2 p-3 transition-[background-color,border-color,opacity] duration-75 ${

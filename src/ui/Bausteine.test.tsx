@@ -91,10 +91,10 @@ describe('Feld und Chip', () => {
     mitHinweis.unmount()
   })
 
-  // Der aktive Zustand ist nur über Farbklassen sichtbar; die Assertions
-  // sichern deshalb die Tailwind-Token, nicht bloß `aria-pressed` (das es
-  // bewusst nicht gibt, weil der Aufrufer die Auswahl führt).
-  it('färbt den aktiven Chip und meldet Klicks', () => {
+  // Der aktive Zustand ist über Farbe *und* `aria-pressed` erkennbar. Die
+  // Farb-Token bleiben als Regressionsschutz, die Semantik ist der eigentliche
+  // Vertrag für Screenreader.
+  it('färbt den aktiven Chip, meldet die Auswahl und Klicks', () => {
     const klick = vi.fn()
     const inaktiv = render(
       <Chip aktiv={false} onClick={klick}>
@@ -103,6 +103,7 @@ describe('Feld und Chip', () => {
     )
     const knopf = inaktiv.container.querySelector('button')!
     expect(knopf.className).toContain('bg-surface2')
+    expect(knopf.getAttribute('aria-pressed')).toBe('false')
     act(() => knopf.click())
     expect(klick).toHaveBeenCalledOnce()
     inaktiv.unmount()
@@ -112,7 +113,9 @@ describe('Feld und Chip', () => {
         100 m
       </Chip>,
     )
-    expect(aktiv.container.querySelector('button')?.className).toContain('bg-accent')
+    const aktivKnopf = aktiv.container.querySelector('button')!
+    expect(aktivKnopf.className).toContain('bg-accent')
+    expect(aktivKnopf.getAttribute('aria-pressed')).toBe('true')
     aktiv.unmount()
   })
 

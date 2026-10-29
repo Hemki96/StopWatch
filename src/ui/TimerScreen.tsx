@@ -509,12 +509,32 @@ export function TimerScreen() {
   // Nach einem Reload können ganze Runden oder einzelne Bahnen einer
   // begonnenen Runde ohne Startzeit zurückbleiben. „Weiter“ plant nur die
   // fehlenden Starts neu und tastet gemessene Zeiten nicht an.
+  // Auch ein einzelner Lauf kann nach einem Reload einzelne Bahnen ohne Start
+  // zurücklassen. „Weiter“ macht das sichtbar und startet sie gebündelt, statt
+  // jeden Tap einzeln als neuen Start zu deuten. Unterbrochene Bahnen mit
+  // Anschlägen gehören nicht dazu: Für sie fehlt der monotone Bezugspunkt.
   const hatFehlendeStarts =
-    serie &&
     gestartet &&
-    runden.some((runde) =>
-      runde.bahnen.some((bahn) => bahn.startMs === null && !isFinished(bahn)),
-    )
+    (serie
+      ? runden.some((runde) =>
+          runde.bahnen.some(
+            (bahn) =>
+              bahn.startMs === null && !isFinished(bahn) && bahn.anschlaege.length === 0,
+          ),
+        )
+      : lauf.bahnen.some(
+          (bahn) => bahn.startMs === null && !isFinished(bahn) && bahn.anschlaege.length === 0,
+        ))
+  // Nach einem Reload bleiben Splits ohne Startzeit zurück. Sie lassen sich
+  // nur über langes Drücken schrittweise zurücksetzen; der Hinweis macht das
+  // sichtbar, statt einen wirkungslosen Tap zu erwarten.
+  const hatUnterbrochene = (serie ? runden.flatMap((runde) => runde.bahnen) : lauf.bahnen).some(
+    (bahn) =>
+      bahn.startMs === null &&
+      bahn.anschlaege.length > 0 &&
+      !isFinished(bahn) &&
+      !bahn.status,
+  )
 
   return (
     <div className="flex h-full flex-col">
@@ -696,11 +716,13 @@ export function TimerScreen() {
               <p className={`text-xs ${app.brauchtTakt && !wach ? 'text-warn' : 'text-muted'}`}>
                 {app.brauchtTakt && !wach
                   ? 'Display-Sperre nicht aktiv — Bildschirm kann sich ausschalten.'
-                  : hatFehlendeStarts
-                    ? 'Einzelne Runden oder Bahnen warten noch auf ihren Start.'
-                    : offeneStrecke
-                      ? '„Ziel“ auf der Zeile beendet eine Bahn.'
-                      : 'Weiter tippen, bis alle im Ziel sind.'}
+                  : hatUnterbrochene
+                    ? 'Unterbrochene Bahn: lange drücken, um Anschläge zurückzunehmen.'
+                    : hatFehlendeStarts
+                      ? 'Einzelne Runden oder Bahnen warten noch auf ihren Start.'
+                      : offeneStrecke
+                        ? '„Ziel“ auf der Zeile beendet eine Bahn.'
+                        : 'Weiter tippen, bis alle im Ziel sind.'}
               </p>
             </div>
             {/* „Weiter“ und „Alle beenden“ schließen sich aus: erst fehlende
@@ -744,7 +766,7 @@ export function TimerScreen() {
             ? 'Alle Wiederholungen und Zeiten dieser Serie werden gelöscht. Das lässt sich nicht rückgängig machen.'
             : 'Alle Zeiten dieses Laufs werden gelöscht. Das lässt sich nicht rückgängig machen.'
         }
-        bestaetigenLabel={serie ? 'Abbrechen' : 'Verwerfen'}
+        bestaetigenLabel={serie ? 'Serie verwerfen' : 'Verwerfen'}
         onBestaetigen={() => {
           setFrageVerwerfen(false)
           app.verwerfeAktivenLauf()

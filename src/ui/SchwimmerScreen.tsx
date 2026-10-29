@@ -211,7 +211,7 @@ function SchwimmerFormular({
     // Ein leerer oder unlesbarer Jahrgang wird als `null` gespeichert.
     const jahr = Number.parseInt(jahrgang, 10)
     app.speichereSchwimmer({
-      id: vorhanden?.id,
+      ...(vorhanden?.id ? { id: vorhanden.id } : {}),
       name,
       jahrgang: Number.isFinite(jahr) ? jahr : null,
       notiz,

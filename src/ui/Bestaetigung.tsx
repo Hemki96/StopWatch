@@ -48,7 +48,7 @@ export function Bestaetigung({
       role="alertdialog"
       labelledBy={titelId}
       describedBy={textId}
-      backdropLabel="Abbrechen"
+      backdropLabel="Dialog schließen"
       layerClassName="items-center justify-center p-6"
       panelClassName="w-full max-w-sm rounded-2xl border border-line bg-surface p-5 shadow-2xl"
       initialFocusRef={abbrechenRef}

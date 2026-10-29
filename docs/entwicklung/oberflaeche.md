@@ -192,7 +192,9 @@ Die Kachel eines einzelnen Laufs:
 - Bahnnummer, Name, Status, letzter Split,
 - Fortschrittslinie unten (ein Segment pro Länge),
 - **Ziel**-Knopf nur bei offener Strecke,
-- Long-Press-Overlay mit Fortschrittsbalken.
+- Long-Press-Overlay mit Fortschrittsbalken,
+- Status **unterbrochen**, wenn nach einem Reload Anschläge ohne Startzeit übrig sind; ein Tap
+  startet die Bahn dann nicht neu, langes Drücken nimmt die Anschläge schrittweise zurück.
 
 ### `SerieAnsicht`
 
@@ -219,7 +221,8 @@ Wie `LaneTile`, aber:
 `Feld`, `Chip` und `TaktWahl` für Formulare in Sheets:
 
 - `Feld` = Abschnitt mit Label und optionalem Hinweis,
-- `Chip` = große Auswahlfläche mit aktivem Zustand,
+- `Chip` = große Auswahlfläche mit aktivem Zustand; `aria-pressed` macht die Auswahl auch für
+  Screenreader erkennbar,
 - deaktivierte Chips sind sichtbar, aber nicht bedienbar,
 - `TaktWahl` = Schnellauswahl plus freie Eingabe in Minuten und Sekunden; der Wert bleibt in
   Sekunden, die Felder öffnen die Zifferntastatur.

@@ -30,7 +30,15 @@ import { Sheet } from './Sheet'
 const STRECKEN = [50, 100, 200, 400, 800, 1500] as const
 
 /** Feldblock für ein Sheet: Überschrift, Inhalt und optionaler Hinweis. */
-function Feld({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+function Feld({
+  label,
+  hint,
+  children,
+}: {
+  label: string
+  hint?: string | undefined
+  children: ReactNode
+}) {
   return (
     <section className="mb-5">
       <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted">{label}</h3>

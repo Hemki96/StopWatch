@@ -219,3 +219,26 @@ test('Serie zeigt Runden pro Schwimmer, zählt sie und nimmt den letzten Anschla
   await expect(page.getByText(/^R1 · /)).toBeVisible()
   await expect(page.getByText(/^R2 · /)).toHaveCount(0)
 })
+
+// Der Verwerfen-Dialog einer Serie darf nicht zwei gleich benannte Knöpfe
+// haben: „Abbrechen“ bricht ab, „Serie verwerfen“ löscht alle Runden.
+test('Serie verwerfen: Abbrechen und Verwerfen sind eindeutig', async ({ page }) => {
+  await oeffneMitEinstellungen(page, {
+    bahnen: 2,
+    streckeM: 100,
+    startversatzMs: 0,
+    wiederholungen: 3,
+    taktSek: 60,
+  })
+  await starteLauf(page)
+
+  await page.getByRole('button', { name: 'Serie abbrechen' }).tap()
+  await expect(page.getByText('Serie abbrechen?')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Abbrechen', exact: true })).toHaveCount(1)
+  await expect(page.getByRole('button', { name: 'Serie verwerfen', exact: true })).toHaveCount(1)
+
+  // Abbrechen lässt die Serie unangetastet.
+  await page.getByRole('button', { name: 'Abbrechen', exact: true }).tap()
+  await expect(page.getByRole('button', { name: 'Serie abbrechen' })).toBeVisible()
+  await expect(page.getByText('0 von 3 Runden vollständig')).toBeVisible()
+})

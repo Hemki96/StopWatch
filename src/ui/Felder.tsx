@@ -20,7 +20,7 @@ export function Feld({
   children,
 }: {
   label: string
-  hint?: string
+  hint?: string | undefined
   children: ReactNode
 }) {
   return (
@@ -56,6 +56,9 @@ export function Chip({
       type="button"
       disabled={disabled}
       onClick={onClick}
+      // Farbe allein ist kein Zustand für Screenreader. `aria-pressed` macht
+      // die Auswahl auch ohne Sehen erkennbar.
+      aria-pressed={aktiv}
       // Das Deaktivieren muss auch optisch erkennbar sein, nicht nur über
       // `disabled` im DOM.
       className={`h-11 min-w-11 rounded-xl border px-3 text-sm font-semibold transition-colors disabled:opacity-40 ${

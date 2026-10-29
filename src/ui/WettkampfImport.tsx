@@ -113,6 +113,10 @@ export function WettkampfImportSheet({
   const ladeDatei = async () => {
     const datei = await waehleDatei('text/csv,text/plain,.csv,.txt')
     if (!datei) return
+    if (datei.size > 2 * 1024 * 1024) {
+      setDateiFehler('Die Datei ist größer als 2 MB. Bitte teile die Meldeliste auf.')
+      return
+    }
     try {
       setText(await datei.text())
       setDateiFehler(null)

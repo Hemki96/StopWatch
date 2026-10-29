@@ -204,6 +204,15 @@ describe('parseMeldeliste', () => {
       1, 2,
     ])
   })
+
+  // Die Größenprüfung greift vor dem Split: Eine einzelne riesige Zeile darf
+  // den Hauptthread nicht erst sekundenlang blockieren.
+  it('lehnt zu großen Text ab, bevor er zerlegt wird', () => {
+    const ergebnis = parseMeldeliste('x'.repeat(2_000_001), vorgabe)
+    expect(ergebnis.ok).toBe(false)
+    if (ergebnis.ok) return
+    expect(ergebnis.fehler).toContain('zu groß')
+  })
 })
 
 // Die Vorschauzeile muss Singular und Plural unterscheiden; „Disziplin“ und

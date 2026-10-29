@@ -8,7 +8,7 @@
  * Die Verdichtung liefert `bahnZeile` aus domain/serie, die Aktionen kommen aus
  * app/AppProvider über TimerScreen.
  */
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { haptic } from '../app/haptics'
 import { useReducedMotion } from '../app/useReducedMotion'
 import { finishMs, lengthCount, bahnenNachReihen, zwischenzeiten } from '../domain/lauf'
@@ -87,6 +87,16 @@ function Zeile({
   // Siehe LaneTile: echter Pointer/Klick ist bereits verarbeitet, ein reiner
   // Klick ohne vorherige Eingabe kommt von VoiceOver/TalkBack.
   const klickRef = useRef(false)
+
+  // Ein laufender Langdruck darf nach dem Unmount keinen Anschlag mehr
+  // zurücknehmen (Tab-Wechsel während des Haltens).
+  useEffect(
+    () => () => {
+      const press = pressRef.current
+      if (press) window.clearTimeout(press.timer)
+    },
+    [],
+  )
   // Bei reduzierter Bewegung entfällt nur die Animation des Haltebalkens.
   const reduzierteBewegung = useReducedMotion()
 
@@ -225,6 +235,7 @@ function Zeile({
       role="button"
       tabIndex={0}
       data-status={zeile.status}
+      aria-keyshortcuts={kannRueckgaengig ? 'Backspace Delete' : undefined}
       aria-label={`Reihe ${basis.reihe}, Bahn ${basis.nummer}${name ? `, ${name}` : ''}, Runde ${angezeigteRunde} von ${gesamt}, ${STATUS_LABEL[zeile.status]}`}
       // Die Zahl der Zwischenzeiten ergänzt den Vorlesetext als Beschreibung,
       // ohne den Namen der Zeile zu verändern.
@@ -248,6 +259,11 @@ function Zeile({
           merkeKlick()
           haptic(8)
           onTap(zeile.index, performance.now(), Date.now())
+        }
+        // Tastatur-Äquivalent zum langen Drücken (siehe LaneTile).
+        if ((e.key === 'Backspace' || e.key === 'Delete') && kannRueckgaengig) {
+          e.preventDefault()
+          onUndo(zeile.index)
         }
       }}
       className={`relative flex select-none items-center gap-3 overflow-hidden rounded-2xl border-2 p-3 transition-[background-color,border-color,opacity] duration-75 rail:rounded-3xl rail:p-4 ${
@@ -327,7 +343,7 @@ function Zeile({
             haptic(8)
             onFinish(zeile.index, performance.now(), Date.now())
           }}
-          className="shrink-0 rounded-lg bg-ok px-2.5 py-2 text-[10px] font-bold text-black"
+          className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg bg-ok px-2.5 py-2 text-[10px] font-bold text-black"
         >
           Ziel
         </button>

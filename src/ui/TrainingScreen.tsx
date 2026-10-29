@@ -443,10 +443,10 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
             // Konfiguration sind meist ähnlich. ID und Bezeichnung werden
             // zurückgesetzt, damit kein bestehender Satz überschrieben wird.
             const basis = training.saetze.at(-1) ?? neuerTrainingsSatz()
+            const { id: _id, ...ohneId } = basis
             setNeuerSatz(
               neuerTrainingsSatz({
-                ...basis,
-                id: undefined,
+                ...ohneId,
                 bezeichnung: '',
                 konfiguration: { ...basis.konfiguration },
               }),

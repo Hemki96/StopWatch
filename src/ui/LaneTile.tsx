@@ -8,7 +8,7 @@
  * reicht TimerScreen aus app/AppProvider herein. Die Reihe steht im Vorlesetext;
  * sichtbar wird sie durch den Abschnitt im Timer.
  */
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { haptic } from '../app/haptics'
 import { useReducedMotion } from '../app/useReducedMotion'
 import {
@@ -72,6 +72,17 @@ export function LaneTile({
   // verarbeitet. Ein Klick ohne vorherige Eingabe kommt von VoiceOver/TalkBack.
   const klickRef = useRef(false)
 
+  // Beim Unmount (Tab-Wechsel, Screen-Abbau) darf ein laufender Langdruck
+  // keinen Anschlag mehr zurücknehmen. Ohne diesen Cleanup feuert der Timer
+  // nach dem Verschwinden der Kachel weiter.
+  useEffect(
+    () => () => {
+      const press = pressRef.current
+      if (press) window.clearTimeout(press.timer)
+    },
+    [],
+  )
+
   const merkeKlick = () => {
     klickRef.current = true
     window.setTimeout(() => {
@@ -82,21 +93,28 @@ export function LaneTile({
   // Der Status hängt von `now` ab: Eine Bahn mit Startzeit in der Zukunft ist
   // „geplant“ und nimmt noch keine Anschläge an.
   const status = laneStatusAt(bahn, now)
+  // Nach einem Reload bleiben Splits ohne Startzeit zurück. Die Bahn ist dann
+  // unterbrochen: Sie lässt sich nicht neu starten, weil der monotone
+  // Bezugspunkt fehlt, und muss erst über langes Drücken zurückgesetzt werden.
+  const unterbrochen = status === 'bereit' && bahn.anschlaege.length > 0
   // Anzahl der Längen der Strecke; `null` bedeutet offene Strecke.
   const gesamt = lengthCount(konfiguration)
+  // Letzter Anschlag für die kleine Zeile unten rechts.
+  const letzter = lastSplit(bahn)
   // Große Zahl der Kachel: Zielzeit, Countdown bis zum Start oder laufende
-  // Zeit. Der Countdown wird bei 0 gekappt, damit er nicht negativ läuft.
-  const zeit =
-    status === 'beendet'
+  // Zeit. Der Countdown wird bei 0 gekappt, damit er nicht negativ läuft. Eine
+  // unterbrochene Bahn zeigt ihren letzten erfassten Split eingefroren.
+  const zeit = unterbrochen
+    ? (letzter?.splitMs ?? 0)
+    : status === 'beendet'
       ? (finishMs(bahn) ?? 0)
       : status === 'geplant'
         ? Math.max(0, (bahn.startMs ?? now) - now)
         : elapsedMs(bahn, now)
-  // Letzter Anschlag für die kleine Zeile unten rechts.
-  const letzter = lastSplit(bahn)
   // Auf einer unberührten Bahn gibt es nichts zurückzunehmen; dort bleibt auch
-  // der Undo-Timer aus (siehe startPress).
-  const kannRueckgaengig = status !== 'bereit'
+  // der Undo-Timer aus (siehe startPress). Unterbrochene Bahnen lassen sich
+  // dagegen schrittweise zurücksetzen.
+  const kannRueckgaengig = status !== 'bereit' || unterbrochen
   // Bei reduzierter Bewegung entfällt nur die Animation des Haltebalkens.
   const reduzierteBewegung = useReducedMotion()
 
@@ -115,15 +133,14 @@ export function LaneTile({
 
     // Auf einer unberührten Bahn gibt es nichts rückgängig zu machen. Der
     // Timer bleibt aus, damit ein langer Druck dort keinen Leerlauf auslöst.
-    const timer =
-      status === 'bereit'
-        ? 0
-        : window.setTimeout(() => {
-            pressRef.current = null
-            setGedrueckt(false)
-            haptic([16, 40, 16])
-            onUndo(bahn.id)
-          }, LANGDRUCK_MS)
+    const timer = kannRueckgaengig
+      ? window.setTimeout(() => {
+          pressRef.current = null
+          setGedrueckt(false)
+          haptic([16, 40, 16])
+          onUndo(bahn.id)
+        }, LANGDRUCK_MS)
+      : 0
 
     pressRef.current = { perf, wall, timer }
   }
@@ -138,8 +155,9 @@ export function LaneTile({
     pressRef.current = null
     setGedrueckt(false)
     // Eine geplante Bahn startet zu ihrem festen Zeitpunkt; ein kurzer Tap
-    // darf den Countdown nicht vorziehen.
-    if (status === 'geplant') return
+    // darf den Countdown nicht vorziehen. Eine unterbrochene Bahn nimmt keinen
+    // neuen Anschlag an, solange ihre alten Splits nicht zurückgesetzt sind.
+    if (status === 'geplant' || unterbrochen) return
     haptic(8)
     onTap(bahn.id, press.perf, press.wall)
   }
@@ -157,8 +175,9 @@ export function LaneTile({
   // Farbe und Rahmen spiegeln den Status, damit Fläche und Zeit dieselbe
   // Semantik tragen: Akzent = läuft, grün = im Ziel, gelb = geplanter Start,
   // neutral = bereit.
-  const rand =
-    status === 'laeuft'
+  const rand = unterbrochen
+    ? 'border-warn/60 bg-warn/10'
+    : status === 'laeuft'
       ? 'border-accent/70 bg-accent/10'
       : status === 'beendet'
         ? 'border-ok/50 bg-ok/10'
@@ -166,8 +185,9 @@ export function LaneTile({
           ? 'border-warn/60 bg-warn/10'
           : 'border-line bg-surface'
 
-  const zeitFarbe =
-    status === 'laeuft'
+  const zeitFarbe = unterbrochen
+    ? 'text-warn'
+    : status === 'laeuft'
       ? 'text-accent'
       : status === 'beendet'
         ? 'text-ok'
@@ -182,7 +202,7 @@ export function LaneTile({
   // Zeile weg.
   const zwischenzeit = zwischenzeiten(bahn, konfiguration)
   const zeigtZwischenzeiten =
-    (status === 'laeuft' || status === 'beendet') &&
+    (status === 'laeuft' || status === 'beendet' || unterbrochen) &&
     (zwischenzeit.gesamt === null || zwischenzeit.gesamt > 0)
   const zwischenzeitId = `zwischenzeiten-${bahn.id}`
 
@@ -195,7 +215,9 @@ export function LaneTile({
       tabIndex={0}
       data-anschlaege={bahn.anschlaege.length}
       data-status={status}
-      aria-label={`Reihe ${bahn.reihe}, Bahn ${bahn.nummer}${schwimmerName ? `, ${schwimmerName}` : ''}, ${STATUS_LABEL[status]}`}
+      data-unterbrochen={unterbrochen ? 'true' : undefined}
+      aria-keyshortcuts={kannRueckgaengig ? 'Backspace Delete' : undefined}
+      aria-label={`Reihe ${bahn.reihe}, Bahn ${bahn.nummer}${schwimmerName ? `, ${schwimmerName}` : ''}, ${unterbrochen ? 'unterbrochen' : STATUS_LABEL[status]}`}
       // Der Vorlesetext nennt den Status; die Zahl der Zwischenzeiten ergänzt
       // ihn als Beschreibung, ohne den Namen für Tests und Sprachbefehle zu
       // verändern.
@@ -208,7 +230,7 @@ export function LaneTile({
         // Ein Klick auf den eingebetteten "Ziel"-Knopf gehört nicht der Kachel.
         if (e.target !== e.currentTarget) return
         if (klickRef.current) return
-        if (status === 'geplant') return
+        if (status === 'geplant' || unterbrochen) return
         haptic(8)
         onTap(bahn.id, performance.now(), Date.now())
       }}
@@ -218,10 +240,17 @@ export function LaneTile({
         if (e.target !== e.currentTarget) return
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault()
-          if (status === 'geplant') return
+          if (status === 'geplant' || unterbrochen) return
           merkeKlick()
           haptic(8)
           onTap(bahn.id, performance.now(), Date.now())
+        }
+        // Tastatur-Äquivalent zum langen Drücken. Ohne ihn könnte eine
+        // Tastatur- oder Screenreader-Nutzung einen Anschlag erfassen, aber
+        // nicht zurücknehmen.
+        if ((e.key === 'Backspace' || e.key === 'Delete') && kannRueckgaengig) {
+          e.preventDefault()
+          onUndo(bahn.id)
         }
       }}
       className={`relative flex min-h-[7.5rem] select-none flex-col justify-between overflow-hidden rounded-2xl border-2 p-3 transition-[background-color,border-color,opacity] duration-75 rail:rounded-3xl rail:p-4 ${
@@ -261,15 +290,17 @@ export function LaneTile({
       <div className="flex flex-col gap-0.5 text-[11px] text-muted">
         <div className="flex items-end justify-between gap-2">
           <span className="tabular">
-            {status === 'beendet'
-              ? 'Ziel'
-              : status === 'geplant'
-                ? 'Start in'
-                : status === 'laeuft'
-                  ? gesamt
-                    ? `Länge ${Math.min(bahn.anschlaege.length + 1, gesamt)}/${gesamt}`
-                    : `Länge ${bahn.anschlaege.length + 1}`
-                  : 'Bereit'}
+            {unterbrochen
+              ? 'Unterbrochen'
+              : status === 'beendet'
+                ? 'Ziel'
+                : status === 'geplant'
+                  ? 'Start in'
+                  : status === 'laeuft'
+                    ? gesamt
+                      ? `Länge ${Math.min(bahn.anschlaege.length + 1, gesamt)}/${gesamt}`
+                      : `Länge ${bahn.anschlaege.length + 1}`
+                    : 'Bereit'}
           </span>
 
           {/* Nur bei offener Strecke braucht es einen eigenen Zielknopf; bei
@@ -285,7 +316,7 @@ export function LaneTile({
                 haptic(8)
                 onFinish(bahn.id, performance.now(), Date.now())
               }}
-              className="-mb-1 rounded-lg bg-ok px-2.5 py-1 text-[10px] font-bold text-black"
+              className="-mb-1 inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg bg-ok px-2.5 py-1 text-[10px] font-bold text-black"
             >
               Ziel
             </button>

@@ -72,6 +72,32 @@ describe('useNow', () => {
     aktiv.unmount()
     expect(cancel).toHaveBeenCalled()
   })
+
+  // Die Anzeige läuft mit etwa 30 fps statt mit jedem Frame. Der Tap selbst
+  // misst weiterhin mit `performance.now()` und ist davon unabhängig.
+  it('drosselt die Anzeige auf etwa 30 fps', () => {
+    let jetzt = 1000
+    vi.spyOn(performance, 'now').mockImplementation(() => jetzt)
+    const raf = vi.fn<(cb: FrameRequestCallback) => number>()
+    vi.stubGlobal('requestAnimationFrame', raf)
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+
+    const hook = renderHook(() => useNow(true))
+    act(() => raf.mock.calls[0]![0](0))
+    expect(hook.aktuell()).toBe(1000)
+
+    // 16 ms später: noch kein neuer Render.
+    jetzt = 1016
+    act(() => raf.mock.calls[1]![0](16))
+    expect(hook.aktuell()).toBe(1000)
+
+    // Nach mehr als 33 ms wird wieder abgetastet.
+    jetzt = 1034
+    act(() => raf.mock.calls[2]![0](34))
+    expect(hook.aktuell()).toBe(1034)
+
+    hook.unmount()
+  })
 })
 
 // `prefers-reduced-motion` steuert Animationen. Der Hook muss den Live-Wechsel

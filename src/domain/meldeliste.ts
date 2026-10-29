@@ -61,6 +61,13 @@ export type MeldelisteErgebnis =
 
 /** Obergrenze für sinnvolle Zeilen; größere Dateien werden mit einem Hinweis abgelehnt. */
 const MAX_ZEILEN = 2000
+
+/**
+ * Obergrenze für den eingelesenen Text. 2 MB reichen für deutlich mehr als
+ * 2000 Zeilen; alles darüber wird abgelehnt, bevor `split` den Hauptthread
+ * blockiert.
+ */
+const MAX_TEXTLAENGE = 2_000_000
 /** Bahnen pro Lauf; entspricht der Grenze in `training.ts` und im Datenmodell. */
 const MAX_BAHNEN = 10
 
@@ -312,6 +319,13 @@ function fehler(text: string): MeldelisteErgebnis {
  * blockieren nicht.
  */
 export function parseMeldeliste(text: string, vorgabe: MeldelisteVorgabe): MeldelisteErgebnis {
+  // Eine riesige Datei würde schon beim Split den Hauptthread blockieren,
+  // bevor die Zeilenprüfung greifen kann.
+  if (text.length > MAX_TEXTLAENGE) {
+    return fehler(
+      `Die Meldeliste ist zu groß (mehr als ${Math.round(MAX_TEXTLAENGE / 1_000_000)} MB Text).`,
+    )
+  }
   // Die Zeilennummer wird vor dem Filtern vergeben, damit Fehlermeldungen zur
   // Datei passen und nicht zu den verbleibenden Zeilen.
   const zeilen = text

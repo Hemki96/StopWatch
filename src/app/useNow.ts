@@ -14,6 +14,14 @@
 import { useEffect, useState } from 'react'
 
 /**
+ * Anzeigeabstand in Millisekunden. 30 fps reichen für eine gut lesbare
+ * Hundertstel-Anzeige und halbieren die Renderarbeit gegenüber 60 fps. Die
+ * Messung selbst ist davon nicht betroffen: Ein Tap liest `performance.now()`
+ * direkt, nicht den zuletzt gerenderten Wert.
+ */
+const ANZEIGE_ABSTAND_MS = 1000 / 30
+
+/**
  * Laufend aktualisierte monotone Zeit, aber nur solange `aktiv` gilt.
  *
  * Bei `aktiv === false` wird kein Frame angefordert und der letzte Wert
@@ -26,8 +34,12 @@ export function useNow(aktiv: boolean): number {
   useEffect(() => {
     if (!aktiv) return
     let frame = 0
-    const tick = () => {
-      setNow(performance.now())
+    let letzterTick = Number.NEGATIVE_INFINITY
+    const tick = (zeit: number) => {
+      if (zeit - letzterTick >= ANZEIGE_ABSTAND_MS) {
+        letzterTick = zeit
+        setNow(performance.now())
+      }
       frame = requestAnimationFrame(tick)
     }
     frame = requestAnimationFrame(tick)

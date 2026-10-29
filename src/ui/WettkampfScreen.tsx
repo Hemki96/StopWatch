@@ -138,8 +138,12 @@ export function WettkampfScreen() {
     name: string
   } | null>(null)
 
-  const now = useNow(app.brauchtTakt)
-  useWakeLock(app.brauchtTakt)
+  // Nur die Heat-Ansicht zeigt eine laufende Uhr. Die Liste und die
+  // Disziplinenansicht sollen nicht mit 60 fps neu rendern, nur weil
+  // irgendwo ein Trainingslauf aktiv ist.
+  const taktSichtbar = app.brauchtTakt && satzId !== null
+  const now = useNow(taktSichtbar)
+  useWakeLock(taktSichtbar)
 
   const wettkampf = app.wettkampfe.find((eintrag) => eintrag.id === wettkampfId) ?? null
 
