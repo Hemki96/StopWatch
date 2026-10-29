@@ -8,7 +8,8 @@
  * - Die Fachmodule verdrahten: `laufAktionen`, `wettkampfAktionen` und
  *   `trainingsAktionen` bekommen die Ref-Spiegel und schreiben über
  *   `useSchreibpfad`; `aktiveLaeufe` und `einstellungen` liefern Lesen und
- *   Normalisierung. Der Provider selbst hält nur noch den Rahmen.
+ *   Normalisierung, `theme` die Designauflösung samt DOM-Spiegelung. Der
+ *   Provider selbst hält nur noch den Rahmen.
  * - Mit anderen Tabs über `TabKoordinator` abstimmen. Nur der aktive Tab
  *   schreibt; alle anderen sind lesend.
  *
@@ -71,12 +72,8 @@ import {
 import {
   begrenzeEinstellungen,
   leseEinstellungen,
-  leseThemeEinstellung,
   schreibeEinstellungen,
-  schreibeThemeEinstellung,
   type Einstellungen,
-  type Theme,
-  type ThemeEinstellung,
 } from './einstellungen'
 import {
   berechneAktiveEintraege,
@@ -89,6 +86,11 @@ import {
   waehleOffenenLauf,
   type AktiverEintrag,
 } from './aktiveLaeufe'
+import {
+  useTheme,
+  type Theme,
+  type ThemeEinstellung,
+} from './theme'
 import { createLaufAktionen } from './laufAktionen'
 import { createSchwimmerAktionen } from './schwimmerAktionen'
 import { createTrainingsAktionen } from './trainingsAktionen'
@@ -96,7 +98,8 @@ import { createWettkampfAktionen } from './wettkampfAktionen'
 import { useSchreibpfad } from './schreibpfad'
 
 export { leseEinstellungen } from './einstellungen'
-export type { Einstellungen, Theme, ThemeEinstellung } from './einstellungen'
+export type { Einstellungen } from './einstellungen'
+export type { Theme, ThemeEinstellung } from './theme'
 export type { Backup, SpeicherSchutz } from './daten'
 
 export type { AktiverEintrag } from './aktiveLaeufe'
@@ -256,25 +259,6 @@ const AppContext = createContext<AppContextValue | null>(null)
 
 
 /**
- * Fragt die Systemeinstellung ab. Gefragt wird nach „hell“, nicht nach „dunkel“:
- * Ohne `matchMedia` (ältere oder eingebettete Browser) ist `matches` dann false
- * und die App startet dunkel, also im gestalterischen Standard.
- */
-function systemIstDunkel(): boolean {
-  return !window.matchMedia?.('(prefers-color-scheme: light)').matches
-}
-
-/**
- * Die Statusleiste des installierten iOS-Starts wird über dieses Meta gesteuert.
- * `black-translucent` schiebt den Inhalt unter die Uhr und erzwingt weiße Schrift —
- * im hellen Design unlesbar. Deshalb pro Design eine deckende Variante.
- */
-function setzeStatusleistenStil(theme: Theme): void {
-  const meta = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]')
-  meta?.setAttribute('content', theme === 'dark' ? 'black' : 'default')
-}
-
-/**
  * Stellt den App-Zustand allen Screens bereit.
  *
  * Lebenszyklus:
@@ -302,7 +286,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   //   trainings  Vorbereitung: Aktive und noch nicht gestartete Sätze.
   // Auswahl (localStorage): aktiverLaufId (sichtbarer Lauf) und aktiveIds
   //   (Leiste oben, ein Eintrag pro Lauf oder Serie).
-  // Design: themeEinstellung ist die Wahl, systemDunkel die Live-Systemabfrage.
+  // Design: `useTheme` kapselt gespeicherte Wahl, Live-Systemabfrage und die
+  // Spiegelung in DOM und Browser-Chrome.
   // Einstellungen: Vorbelegung des nächsten Laufs.
   // Flüchtig: toast, speicherFehler, tabRolle.
   const [geladen, setGeladen] = useState(false)
@@ -313,12 +298,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [trainings, setTrainings] = useState<Training[]>([])
   const [aktiverLaufId, setAktiverLaufId] = useState<string | null>(null)
   const [aktiveIds, setAktiveIdsState] = useState<string[]>(() => leseAktiveIds())
-  const [themeEinstellung, setThemeEinstellung] = useState<ThemeEinstellung>(() =>
-    leseThemeEinstellung(),
-  )
-  const [systemDunkel, setSystemDunkel] = useState(systemIstDunkel)
-  const theme: Theme =
-    themeEinstellung === 'system' ? (systemDunkel ? 'dark' : 'light') : themeEinstellung
+  const { theme, themeEinstellung, setzeTheme } = useTheme()
   const [einstellungen, setEinstellungenState] = useState<Einstellungen>(() => leseEinstellungen())
   const [toast, setToast] = useState<string | null>(null)
   const [tabRolle, setTabRolle] = useState<TabRolle>('startet')
@@ -765,38 +745,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => {
       abgebrochen = true
     }
-  }, [])
-
-  // Systemdesign live verfolgen. Der Listener hängt auch dann, wenn fest
-  // gewählt wurde — das ist billiger als ihn ab- und anzuhängen, und `theme`
-  // ignoriert `systemDunkel` in diesem Fall ohnehin.
-  useEffect(() => {
-    const abfrage = window.matchMedia?.('(prefers-color-scheme: light)')
-    if (!abfrage) return
-    const reagiere = () => setSystemDunkel(!abfrage.matches)
-    abfrage.addEventListener('change', reagiere)
-    return () => abfrage.removeEventListener('change', reagiere)
-  }, [])
-
-  // Design in DOM und Browser-Chrome spiegeln. Die Farbwerte müssen zu den
-  // Meta-Angaben in `index.html` passen, sonst blinkt der Startbildschirm in
-  // der falschen Farbe. Der Effekt läuft nur bei echter Änderung von `theme`.
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark')
-    document.documentElement.style.colorScheme = theme
-    document
-      .querySelector('meta[name="theme-color"]')
-      ?.setAttribute('content', theme === 'dark' ? '#070c15' : '#eef2f7')
-    setzeStatusleistenStil(theme)
-  }, [theme])
-
-  /**
-   * Speichert die Designwahl. `system` wird als solches gemerkt, nicht als
-   * aufgelöstes Design — so folgt die App später einer Änderung des Systems.
-   */
-  const setzeTheme = useCallback((einstellung: ThemeEinstellung) => {
-    setThemeEinstellung(einstellung)
-    schreibeThemeEinstellung(einstellung)
   }, [])
 
   /**
