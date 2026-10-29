@@ -114,8 +114,12 @@ Jede Ebene hat einen eigenen Zurück-Pfad: Heat → Disziplinen → Wettkämpfe.
 
 ### Verlauf und Detail
 
-Der Verlauf ist eine Liste von Satzgruppen. Das Detail ist ein Vollbild-Screen (`fixed inset-0`),
-kein Sheet, weil es viel Inhalt und eigene Aktionen hat.
+Der Verlauf ist eine Liste von Satzgruppen. Das Detail ist ein Vollbild-**Dialog** über `Dialog`
+(`role="dialog"`, `aria-modal`, `aria-labelledby`), kein Sheet, weil es viel Inhalt und eigene
+Aktionen hat. Fokusfalle, Startfokus auf dem Rückweg, Escape für den obersten Dialog, Scroll-Sperre,
+die Zurück-Geste und die Fokus-Rückgabe zur auslösenden Zeile kommen aus der gemeinsamen Hülle.
+Geöffnet wird es aus dem Verlauf und aus den Bestzeiten im Schwimmer-Tab; der Rückweg nennt jeweils
+den Ursprung.
 
 ### Einstellungen
 

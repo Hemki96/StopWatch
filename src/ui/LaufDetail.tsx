@@ -6,8 +6,13 @@
  * „manuell“), Schwimmer lassen sich zuordnen, der Lauf exportiert oder gelöscht
  * werden. Korrekturprüfung und Auswertung liegen in domain/lauf und
  * domain/analyse, die Aktionen im App-Kontext.
+ *
+ * Das Detail nutzt bewusst `Dialog` statt eines eigenen `fixed inset-0`:
+ * Fokusfalle, Startfokus, Scroll-Sperre, Escape für den obersten Dialog, die
+ * Zurück-Geste und die Fokus-Rückgabe zur auslösenden Zeile kommen damit aus
+ * derselben Hülle wie Sheets und Bestätigungen.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useId, useMemo, useRef, useState } from 'react'
 import { useApp } from '../app/AppProvider'
 import { berechnePbs, pacePro100, pbDelta } from '../domain/analyse'
 import { formatDelta, formatStrecke, formatTakt, formatTime, parseTime } from '../domain/format'
@@ -24,6 +29,7 @@ import { SCHWIMMARTEN } from '../domain/types'
 import { csvDateiname, laeufeAlsCsv } from '../export/csv'
 import { speichereDatei } from '../export/datei'
 import { Bestaetigung } from './Bestaetigung'
+import { Dialog } from './Dialog'
 import { ChevronLeftIcon, DownloadIcon, PencilIcon, TrashIcon } from './icons'
 
 /** Tagesdatum des Laufs in der Kopfzeile, deutsch und kurz. */
@@ -64,29 +70,47 @@ export function LaufDetail({
   } | null>(null)
   // Fehlertext der Korrektur; gilt nur für den gerade bearbeiteten Anschlag.
   const [korrekturFehler, setKorrekturFehler] = useState<string | null>(null)
+  // Beschriftung des Dialogs und Startfokus: Der Rückweg ist die erste
+  // sinnvolle Station und macht die Herkunft (Verlauf oder Schwimmer) hörbar.
+  const titelId = useId()
+  const zurueckRef = useRef<HTMLButtonElement>(null)
 
   // Bestzeiten über alle Läufe, nicht nur diesen: Das Delta ist der Vergleich
   // mit dem, was der Schwimmer bisher geschwommen ist.
   const pbs = useMemo(() => berechnePbs(app.laeufe), [app.laeufe])
 
-  useEffect(() => {
-    const beiTaste = (event: KeyboardEvent) => {
-      // Ein offener Bestätigungsdialog stoppt die Ausbreitung selbst.
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', beiTaste)
-    return () => window.removeEventListener('keydown', beiTaste)
-  }, [onClose])
-
   // Der Lauf kann zwischen Öffnen und Rendern gelöscht worden sein; dann bleibt
   // nur der Weg zurück, statt eine leere Detailseite zu zeigen.
   if (!lauf) {
     return (
-      <div className="fixed inset-0 z-30 grid place-items-center bg-bg">
-        <button type="button" onClick={onClose} className="text-accent">
-          Zurück
-        </button>
-      </div>
+      <Dialog
+        open
+        onClose={onClose}
+        role="dialog"
+        labelledBy={titelId}
+        backdropLabel="Lauf schließen"
+        panelClassName="safe-x flex min-h-0 w-full flex-1 flex-col bg-bg"
+        initialFocusRef={zurueckRef}
+      >
+        <div className="grid flex-1 place-items-center px-4">
+          <div className="text-center">
+            <h1 id={titelId} className="text-lg font-semibold">
+              Lauf nicht gefunden
+            </h1>
+            <p className="mt-2 text-sm text-muted">
+              Der Lauf wurde inzwischen gelöscht.
+            </p>
+            <button
+              ref={zurueckRef}
+              type="button"
+              onClick={onClose}
+              className="mt-4 h-11 rounded-xl bg-accent px-4 text-sm font-semibold text-accent-fg"
+            >
+              Zurück
+            </button>
+          </div>
+        </div>
+      </Dialog>
     )
   }
 
@@ -107,13 +131,22 @@ export function LaufDetail({
   }
 
   return (
-    <div className="safe-x fixed inset-0 z-30 flex flex-col bg-bg">
-      <header className="border-b border-line">
+    <Dialog
+      open
+      onClose={onClose}
+      role="dialog"
+      labelledBy={titelId}
+      backdropLabel="Lauf schließen"
+      panelClassName="safe-x flex min-h-0 w-full flex-1 flex-col bg-bg"
+      initialFocusRef={zurueckRef}
+    >
+      <header className="shrink-0 border-b border-line">
         <div className="mx-auto flex w-full max-w-5xl items-center gap-1 px-2 py-2 rail:px-4">
         {/* Kopfzeile: zurück zum Verlauf, CSV-Export und Löschen. Die
             Icon-Knöpfe tragen ein aria-label, weil das Symbol allein nichts
-            vorlesbares enthält. */}
+            vorlesbares enthält. Der Rückweg bekommt beim Öffnen den Fokus. */}
         <button
+          ref={zurueckRef}
           type="button"
           onClick={onClose}
           aria-label={zurueck.aria}
@@ -142,14 +175,14 @@ export function LaufDetail({
         </div>
       </header>
 
-      <div className="mx-auto w-full max-w-4xl flex-1 overflow-y-auto px-4 pb-8 pt-4 rail:px-6">
+      <div className="mx-auto w-full max-w-4xl min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-4 rail:px-6">
         {/* Startzeit aus der Wanduhr, damit sie mit dem Verlauf und anderen
             Geräten vergleichbar bleibt. */}
         <p className="text-xs text-muted">
           {lauf.startWallMs ? `${datumFormat.format(lauf.startWallMs)} · ` : ''}
           {lauf.startWallMs ? `${zeitFormat.format(lauf.startWallMs)} Uhr` : 'ohne Startzeit'}
         </p>
-        <h1 className="mt-1 text-xl font-semibold">
+        <h1 id={titelId} className="mt-1 text-xl font-semibold">
           {lauf.bahnen.length} {reihenVon(lauf) > 1 ? 'Personen' : 'Bahnen'} ·{' '}
           {formatStrecke(lauf.konfiguration.streckeM, einheit)}
         </h1>
@@ -426,6 +459,6 @@ export function LaufDetail({
         }}
         onAbbrechen={() => setFrageLoeschen(false)}
       />
-    </div>
+    </Dialog>
   )
 }
