@@ -26,6 +26,7 @@ import {
   MAX_WIEDERHOLUNGEN,
   bahnenGesamt,
 } from '../domain/training'
+import { istVielfacheDerBeckenlaenge } from '../domain/lauf'
 import {
   SCHWIMMARTEN,
   type Lauf,
@@ -34,6 +35,21 @@ import {
   type Training,
   type Wettkampf,
 } from '../domain/types'
+
+/**
+ * Obergrenzen für die Backup-Prüfung. Sie liegen bewusst deutlich über dem,
+ * was die App in einem realistischen Trainingsleben erzeugt, verhindern aber,
+ * dass eine präparierte oder versehentlich riesige Datei den Hauptthread und
+ * die IndexedDB-Transaktion blockiert. Die Werte sind Teil des Formats: Wer sie
+ * erhöht, muss ältere Backups weiterhin lesen können.
+ */
+const MAX_SCHWIMMER = 10_000
+const MAX_SATZE = 10_000
+const MAX_LAEUFE = 100_000
+const MAX_WETTKAMPFE = 2_000
+const MAX_TRAININGS = 2_000
+const MAX_ANSCHLAEGE_PRO_BAHN = 1_000
+const MAX_TEXTLAENGE = 10_000
 
 /** Formatkennung im Feld `format`; grenzt Backups von fremden JSON-Dateien ab. */
 export const BACKUP_FORMAT = 'beckenrand-backup'
@@ -122,6 +138,15 @@ function pruefeKonfiguration(wert: unknown, pfad: string): string | null {
   if (wert.streckeM !== null && (!istZahl(wert.streckeM) || wert.streckeM <= 0)) {
     return `${pfad}: Feld "streckeM" muss eine positive Zahl oder null sein.`
   }
+  // Eine Strecke, die kein Vielfaches der Beckenlänge ist, würde später eine
+  // krumme Längenzahl und damit falsche Splits erzeugen.
+  if (
+    typeof wert.streckeM === 'number' &&
+    typeof wert.beckenlaengeM === 'number' &&
+    !istVielfacheDerBeckenlaenge(wert.streckeM, wert.beckenlaengeM)
+  ) {
+    return `${pfad}: Feld "streckeM" muss ein Vielfaches der Beckenlänge sein.`
+  }
   if (!SCHWIMMARTEN.some((art) => art.wert === wert.schwimmart)) {
     return `${pfad}: Feld "schwimmart" enthält einen unbekannten Wert.`
   }
@@ -140,10 +165,16 @@ function pruefeSchwimmer(wert: unknown, index: number): string | null {
   if (!istText(wert.name) || wert.name.trim().length === 0) {
     return `${pfad}: Feld "name" fehlt oder ist leer.`
   }
+  if (wert.name.length > MAX_TEXTLAENGE) {
+    return `${pfad}: Feld "name" ist länger als ${MAX_TEXTLAENGE} Zeichen.`
+  }
   if (wert.jahrgang !== null && !istZahl(wert.jahrgang)) {
     return `${pfad}: Feld "jahrgang" muss eine Zahl oder null sein.`
   }
   if (!istText(wert.notiz)) return `${pfad}: Feld "notiz" fehlt.`
+  if (wert.notiz.length > MAX_TEXTLAENGE) {
+    return `${pfad}: Feld "notiz" ist länger als ${MAX_TEXTLAENGE} Zeichen.`
+  }
   if (!istZahl(wert.erstelltAm)) return `${pfad}: Feld "erstelltAm" fehlt oder ist keine Zahl.`
   return null
 }
@@ -366,9 +397,33 @@ function pruefeBahn(wert: unknown, pfad: string): string | null {
     return `${pfad}: Feld "status" muss "dns", "dnf" oder leer sein.`
   }
   if (!Array.isArray(wert.anschlaege)) return `${pfad}: Feld "anschlaege" fehlt oder ist keine Liste.`
+  if (wert.anschlaege.length > MAX_ANSCHLAEGE_PRO_BAHN) {
+    return `${pfad}: Feld "anschlaege" darf höchstens ${MAX_ANSCHLAEGE_PRO_BAHN} Einträge enthalten.`
+  }
+  let vorherigeLaenge = 0
+  let vorherigerSplit = -1
   for (const [i, anschlag] of wert.anschlaege.entries()) {
-    const fehler = pruefeAnschlag(anschlag, `${pfad}, Anschlag ${i + 1}`)
+    const anschlagPfad = `${pfad}, Anschlag ${i + 1}`
+    const fehler = pruefeAnschlag(anschlag, anschlagPfad)
     if (fehler) return fehler
+    // `pruefeAnschlag` hat die Felder bereits geprüft; hier zählt die
+    // Reihenfolge. Ohne sie könnten Längenzeiten negativ werden.
+    const geprueft = anschlag as {
+      laengeNr: number
+      splitMs: number
+      istFinish: boolean
+    }
+    if (geprueft.laengeNr !== vorherigeLaenge + 1) {
+      return `${anschlagPfad}: Feld "laengeNr" muss lückenlos aufsteigen.`
+    }
+    if (geprueft.splitMs <= vorherigerSplit) {
+      return `${anschlagPfad}: Feld "splitMs" muss größer als der vorherige Anschlag sein.`
+    }
+    if (geprueft.istFinish && i !== wert.anschlaege.length - 1) {
+      return `${anschlagPfad}: Nur der letzte Anschlag darf das Finish sein.`
+    }
+    vorherigeLaenge = geprueft.laengeNr
+    vorherigerSplit = geprueft.splitMs
   }
   return null
 }
@@ -402,9 +457,11 @@ function pruefeLauf(wert: unknown, index: number): string | null {
   if (
     wert.wiederholung !== undefined &&
     wert.wiederholung !== null &&
-    (!istIndex(wert.wiederholung) || wert.wiederholung < 1)
+    (!istIndex(wert.wiederholung) ||
+      wert.wiederholung < 1 ||
+      wert.wiederholung > MAX_WIEDERHOLUNGEN)
   ) {
-    return `${pfad}: Feld "wiederholung" muss eine ganze Zahl ab 1 oder null sein.`
+    return `${pfad}: Feld "wiederholung" muss eine ganze Zahl von 1 bis ${MAX_WIEDERHOLUNGEN} oder null sein.`
   }
   if (wert.modus !== undefined && wert.modus !== 'training' && wert.modus !== 'wettkampf') {
     return `${pfad}: Feld "modus" muss "training" oder "wettkampf" sein.`
@@ -418,6 +475,22 @@ function pruefeLauf(wert: unknown, index: number): string | null {
   for (const [i, bahn] of wert.bahnen.entries()) {
     const fehler = pruefeBahn(bahn, `${pfad}, Bahn ${i + 1}`)
     if (fehler) return fehler
+  }
+  return null
+}
+
+/**
+ * Meldet die erste doppelte ID in einer Liste. Einträge ohne lesbare ID werden
+ * übersprungen; dafür ist die jeweilige Einzelprüfung zuständig.
+ */
+function pruefeEindeutigeIds(liste: unknown[], pfad: string): string | null {
+  const ids = new Set<string>()
+  for (const [i, eintrag] of liste.entries()) {
+    if (!istObjekt(eintrag) || !istText(eintrag.id)) continue
+    if (ids.has(eintrag.id)) {
+      return `${pfad} ${i + 1}: Die ID "${eintrag.id}" kommt mehrfach vor.`
+    }
+    ids.add(eintrag.id)
   }
   return null
 }
@@ -474,6 +547,33 @@ export function pruefeBackup(roh: unknown): BackupPruefung {
   if (roh.trainings !== undefined && !Array.isArray(roh.trainings)) {
     return { ok: false, fehler: 'Feld "trainings" ist keine Liste.' }
   }
+
+  // Obergrenzen verhindern, dass eine riesige Datei den Import blockiert.
+  // Die Grenzen liegen weit über dem realistischen Bestand.
+  const grenzen: Array<[string, unknown[], number]> = [
+    ['schwimmer', roh.schwimmer, MAX_SCHWIMMER],
+    ['satze', roh.satze, MAX_SATZE],
+    ['laeufe', roh.laeufe, MAX_LAEUFE],
+    ['wettkampfe', Array.isArray(roh.wettkampfe) ? roh.wettkampfe : [], MAX_WETTKAMPFE],
+    ['trainings', Array.isArray(roh.trainings) ? roh.trainings : [], MAX_TRAININGS],
+  ]
+  for (const [name, liste, max] of grenzen) {
+    if (liste.length > max) {
+      return {
+        ok: false,
+        fehler: `Feld "${name}" darf höchstens ${max} Einträge enthalten.`,
+      }
+    }
+  }
+
+  // Doppelte IDs würde der Upsert-Import stillschweigend zu einem Datensatz
+  // zusammenfassen; das ist ein Datenverlust und deshalb ein Fehler.
+  const doppelte = pruefeEindeutigeIds(roh.schwimmer, 'Schwimmer')
+    ?? pruefeEindeutigeIds(roh.satze, 'Satz')
+    ?? pruefeEindeutigeIds(roh.laeufe, 'Lauf')
+    ?? pruefeEindeutigeIds(Array.isArray(roh.wettkampfe) ? roh.wettkampfe : [], 'Wettkampf')
+    ?? pruefeEindeutigeIds(Array.isArray(roh.trainings) ? roh.trainings : [], 'Training')
+  if (doppelte) return { ok: false, fehler: doppelte }
 
   // Jeder Datensatz wird einzeln geprüft; der erste Fehler beendet die Prüfung.
   // Die Meldungen tragen den Pfad (z. B. "Lauf 1, Bahn 2, Anschlag 1").

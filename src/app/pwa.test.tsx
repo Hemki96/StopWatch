@@ -34,6 +34,7 @@ vi.mock('virtual:pwa-register', () => ({
 /** Minimale Form der Service-Worker-Registrierung, die der Hook nachlädt. */
 interface RegistrierungMock {
   update: ReturnType<typeof vi.fn>
+  waiting?: ServiceWorker | null
 }
 
 /**
@@ -161,6 +162,33 @@ describe('useServiceWorkerUpdate', () => {
       document.dispatchEvent(new Event('visibilitychange'))
     })
     await warteAuf(() => registrierung.update.mock.calls.length === 1)
+    ergebnis.unmount()
+  })
+
+  // Ein weggeklickter Hinweis darf nicht für immer verschwinden: Solange die
+  // neue Version wartet, kommt er beim nächsten Vordergrundwechsel zurück.
+  it('zeigt einen weggeklickten Update-Hinweis erneut', async () => {
+    let optionen: { onNeedRefresh?: () => void } = {}
+    mocks.registerSW.mockImplementation((werte) => {
+      optionen = werte
+      return vi.fn(async () => undefined)
+    })
+    const { registrierung } = setzeServiceWorker()
+    registrierung.waiting = {} as ServiceWorker
+
+    vi.resetModules()
+    const { useServiceWorkerUpdate: hook } = await import('./pwa')
+    const ergebnis = renderHook(() => hook())
+
+    act(() => optionen.onNeedRefresh?.())
+    expect(ergebnis.aktuell().verfuegbar).toBe(true)
+    act(() => ergebnis.aktuell().spaeter())
+    expect(ergebnis.aktuell().verfuegbar).toBe(false)
+
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    await warteAuf(() => ergebnis.aktuell().verfuegbar)
     ergebnis.unmount()
   })
 

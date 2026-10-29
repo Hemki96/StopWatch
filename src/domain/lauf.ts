@@ -320,7 +320,9 @@ function updateBahn(lauf: Lauf, bahnId: string, update: (bahn: Bahn) => Bahn): L
  */
 export function startLane(lauf: Lauf, bahnId: string, now: number, wallNow: number): Lauf {
   const next = updateBahn(lauf, bahnId, (bahn) =>
-    bahn.startMs === null && !bahn.status ? { ...bahn, startMs: now } : bahn,
+    bahn.startMs === null && !bahn.status && bahn.anschlaege.length === 0
+      ? { ...bahn, startMs: now }
+      : bahn,
   )
   // Keine Änderung (unbekannte oder bereits gestartete Bahn): Anker nicht anfassen.
   if (next === lauf) return lauf
@@ -357,6 +359,46 @@ export function planeLauf(
 }
 
 /**
+ * Verschiebt die Startzeitpunkte eines Laufs auf die monotone Uhr eines
+ * anderen Tabs.
+ *
+ * `performance.now()` hat pro Dokument einen eigenen Nullpunkt. Ein Lauf, den
+ * Tab A gestartet hat, ist in Tab B deshalb nicht direkt weiterführbar. Der
+ * Wanduhr-Anker `startWallMs` und der früheste Start bilden jedoch eine
+ * origin-unabhängige Zeitbasis: Für jede Bahn gilt
+ *
+ *   Wanduhr-Start = startWallMs + (startMs - frühester Start)
+ *
+ * Daraus wird mit der neuen monotonen und der neuen Wanduhr der Startwert im
+ * neuen Dokument berechnet. Abstände zwischen Bahnen und Reihen bleiben
+ * erhalten; bereits beendete Bahnen behalten ihre Anschläge.
+ *
+ * Ohne Wanduhr-Anker oder ohne gestartete Bahn gibt es nichts zu verschieben —
+ * dann kommt derselbe Lauf zurück. Negative neue Startwerte sind gültig: Sie
+ * bedeuten lediglich, dass die Bahn vor dem Nullpunkt dieses Dokuments
+ * gestartet wurde.
+ */
+export function rebaseLauf(lauf: Lauf, now: number, wallNow: number): Lauf {
+  if (lauf.startWallMs === null) return lauf
+  if (!Number.isFinite(now) || !Number.isFinite(wallNow)) return lauf
+  const starts = lauf.bahnen
+    .map((bahn) => bahn.startMs)
+    .filter((start): start is number => start !== null)
+  if (starts.length === 0) return lauf
+
+  const fruehesterStart = Math.min(...starts)
+  const versatz = lauf.startWallMs - fruehesterStart
+  return {
+    ...lauf,
+    bahnen: lauf.bahnen.map((bahn) =>
+      bahn.startMs === null
+        ? bahn
+        : { ...bahn, startMs: now + (bahn.startMs + versatz - wallNow) },
+    ),
+  }
+}
+
+/**
  * Startet alle noch nicht gestarteten Bahnen, gestaffelt nach ihrer Reihe.
  *
  * Der Versatz richtet sich nach der Reihe, nicht nach der Bahnposition: Reihe 2
@@ -371,7 +413,11 @@ export function startAll(lauf: Lauf, now: number, wallNow: number): Lauf {
   let changed = false
   const bahnen = lauf.bahnen.map((bahn) => {
     // Markierte Bahnen (DNS/DNF) bleiben endgültig; sie bekommen keinen Start.
-    if (bahn.startMs !== null || istBahnBeendet(bahn)) return bahn
+    // Eine Bahn mit Anschlägen, aber ohne Startzeit ist nach einem Reload
+    // unterbrochen: Ihr fehlt der monotone Bezugspunkt. Ein Neustart würde die
+    // alten Splits mit einer neuen Startzeit vermischen und ein falsches Finish
+    // erzeugen; deshalb bleibt sie stehen, bis sie zurückgesetzt wird.
+    if (bahn.startMs !== null || istBahnBeendet(bahn) || bahn.anschlaege.length > 0) return bahn
     changed = true
     return { ...bahn, startMs: now + (bahnReihe(bahn) - 1) * versatz }
   })
@@ -393,7 +439,12 @@ export function tapLane(lauf: Lauf, bahnId: string, now: number, wallNow: number
   if (!bahn) return lauf
   // DNS/DNF ist endgültig: kein Start, kein Anschlag, kein Ziel.
   if (bahn.status) return lauf
-  if (bahn.startMs === null) return startLane(lauf, bahnId, now, wallNow)
+  // Unterbrochene Bahn (Splits ohne Startzeit): Ein Neustart würde die alten
+  // Splits mit einer neuen Startzeit vermischen. Sie muss erst zurückgesetzt
+  // werden; ein einfacher Tap ändert nichts.
+  if (bahn.startMs === null) {
+    return bahn.anschlaege.length > 0 ? lauf : startLane(lauf, bahnId, now, wallNow)
+  }
   // Geplante Bahn (Startversatz): Der Tap wird ignoriert, bis der
   // Startzeitpunkt erreicht ist.
   if (now < bahn.startMs) return lauf
@@ -513,14 +564,20 @@ export function setzeWettkampfStatus(
   if (!bahn || isFinished(bahn)) return lauf
   const naechster: WettkampfStatus | undefined = status ?? undefined
   if ((bahn.status ?? undefined) === naechster) return lauf
-  return updateBahn(lauf, bahnId, (b) => ({
-    ...b,
-    status: naechster,
-    // DNS heißt: nie gestartet. DNF behält den Start, damit „nicht beendet“
-    // nachvollziehbar bleibt; die Anzeige zeigt ohnehin den Status.
-    startMs: naechster === 'dns' ? null : b.startMs,
-    anschlaege: naechster ? [] : b.anschlaege,
-  }))
+  return updateBahn(lauf, bahnId, (b) => {
+    // `status` muss beim Aufheben ganz verschwinden, nicht als `undefined`
+    // stehen bleiben; sonst unterscheiden sich „kein Status“ und „Status
+    // gelöscht“ im gespeicherten Objekt.
+    const { status: _alterStatus, ...rest } = b
+    return {
+      ...rest,
+      ...(naechster ? { status: naechster } : {}),
+      // DNS heißt: nie gestartet. DNF behält den Start, damit „nicht beendet“
+      // nachvollziehbar bleibt; die Anzeige zeigt ohnehin den Status.
+      startMs: naechster === 'dns' ? null : b.startMs,
+      anschlaege: naechster ? [] : b.anschlaege,
+    }
+  })
 }
 
 /**
@@ -536,7 +593,8 @@ export function undoLane(lauf: Lauf, bahnId: string): Lauf {
     // Ein Wettkampf-Status ist die letzte Aktion dieser Bahn; Zurücknehmen
     // entfernt ihn und macht die Bahn wieder offen.
     if (bahn.status) {
-      return { ...bahn, status: undefined, startMs: null }
+      const { status: _status, ...rest } = bahn
+      return { ...rest, startMs: null }
     }
     if (bahn.anschlaege.length > 0) {
       // Ein Finish verliert damit auch seinen Status: Die Bahn läuft wieder.

@@ -29,6 +29,7 @@ import {
   importBackup,
   loadAll,
   saveLauf,
+  saveMehrere,
   saveSatz,
   saveSchwimmer,
   saveTraining,
@@ -203,6 +204,60 @@ describe('loadAll', () => {
     expect(geladen?.startversatzMs).toBe(0)
     expect(geladen?.wiederholung).toBeNull()
     expect(geladen?.modus).toBe('training')
+  })
+
+  // Bei einer Tab-Übergabe lebt die Messung weiter: Der Start darf nicht wie
+  // nach einem Reload verschwinden. `rebaseLauf` verschiebt ihn anschließend
+  // auf die Uhr des neuen Dokuments.
+  it('behält laufende Startzeiten für eine Tab-Übergabe', async () => {
+    const laufend = lauf('l1')
+    laufend.startWallMs = 1_000
+    laufend.bahnen[0]!.startMs = 100
+    await saveLauf(laufend)
+
+    const [nachReload] = (await loadAll()).laeufe
+    expect(nachReload?.bahnen[0]?.startMs).toBeNull()
+
+    const [nachUebergabe] = (await loadAll({ behalteLaufende: true })).laeufe
+    expect(nachUebergabe?.bahnen[0]?.startMs).toBe(100)
+  })
+})
+
+// Mehrere fachlich zusammengehörige Datensätze in einer Transaktion.
+describe('saveMehrere', () => {
+  it('schreibt Bezugsobjekte und abhängige Datensätze gemeinsam', async () => {
+    await saveMehrere({
+      schwimmer: [schwimmer('sw1', 'Anna')],
+      satze: [satz('s1')],
+      laeufe: [lauf('l1', 's1')],
+    })
+
+    const daten = await loadAll()
+    expect(daten.schwimmer.map((eintrag) => eintrag.id)).toEqual(['sw1'])
+    expect(daten.satze.map((eintrag) => eintrag.id)).toEqual(['s1'])
+    expect(daten.laeufe.map((eintrag) => eintrag.id)).toEqual(['l1'])
+  })
+
+  it('schreibt bei einem Fehler nichts aus dem Batch', async () => {
+    await saveSchwimmer(schwimmer('sw1', 'Anna'))
+    // Eine Funktion ist nicht strukturklonbar; IndexedDB wirft beim `put`.
+    const ungueltig = {
+      ...lauf('l1', 's1'),
+      konfiguration: { ...KONFIGURATION, schwimmart: (() => undefined) as unknown as string },
+    } as Lauf
+
+    await expect(
+      saveMehrere({
+        satze: [satz('s1')],
+        laeufe: [ungueltig],
+      }),
+    ).rejects.toBeDefined()
+
+    const daten = await loadAll()
+    expect(daten.satze).toEqual([])
+    expect(daten.laeufe).toEqual([])
+    // Der vorherige Bestand bleibt erhalten.
+    expect(daten.schwimmer.map((eintrag) => eintrag.id)).toEqual(['sw1'])
   })
 })
 

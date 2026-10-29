@@ -486,6 +486,77 @@ describe('Trainings im Backup', () => {
 
 // Text der Import-Vorschau: feste Reihenfolge und deutsche Singular-/Plural-
 // Formen; „Schwimmer“ bleibt im Plural unverändert.
+// Die Prüfung ist die Grenze zwischen einer fremden Datei und dem Bestand.
+// Reihenfolge, Finish-Position, Streckenvielfache und doppelte IDs müssen
+// abgelehnt werden, bevor irgendetwas geschrieben wird.
+describe('Grenzen und Konsistenz im Backup', () => {
+  it('lehnt nicht aufsteigende Splits ab', () => {
+    const roh = kopie()
+    const anschlag = (roh.laeufe as Record<string, unknown>[])[0]!
+      .bahnen as Array<{ anschlaege: Array<{ splitMs: number }> }>
+    anschlag[0]!.anschlaege[1]!.splitMs = 20_000
+    const ergebnis = pruefeBackup(roh)
+    expect(ergebnis.ok).toBe(false)
+    if (ergebnis.ok) return
+    expect(ergebnis.fehler).toContain('größer als der vorherige Anschlag')
+  })
+
+  it('lehnt ein Finish vor dem letzten Anschlag ab', () => {
+    const roh = kopie()
+    const bahn = (roh.laeufe as Record<string, unknown>[])[0]!
+      .bahnen as Array<{ anschlaege: Array<{ istFinish: boolean }> }>
+    bahn[0]!.anschlaege[0]!.istFinish = true
+    const ergebnis = pruefeBackup(roh)
+    expect(ergebnis.ok).toBe(false)
+    if (ergebnis.ok) return
+    expect(ergebnis.fehler).toContain('Nur der letzte Anschlag')
+  })
+
+  it('lehnt eine Strecke ab, die kein Vielfaches der Beckenlänge ist', () => {
+    const roh = kopie()
+    ;((roh.laeufe as Record<string, unknown>[])[0]!.konfiguration as Record<string, unknown>)
+      .streckeM = 30
+    const ergebnis = pruefeBackup(roh)
+    expect(ergebnis.ok).toBe(false)
+    if (ergebnis.ok) return
+    expect(ergebnis.fehler).toContain('Vielfaches der Beckenlänge')
+  })
+
+  it('lehnt doppelte IDs ab, statt sie beim Upsert zu verschmelzen', () => {
+    const roh = kopie()
+    roh.schwimmer = [schwimmer, { ...schwimmer }]
+    const ergebnis = pruefeBackup(roh)
+    expect(ergebnis.ok).toBe(false)
+    if (ergebnis.ok) return
+    expect(ergebnis.fehler).toContain('mehrfach')
+  })
+
+  it('begrenzt die Wiederholungsnummer eines Laufs', () => {
+    const roh = kopie()
+    ;(roh.laeufe as Record<string, unknown>[])[0]!.wiederholung = 999
+    const ergebnis = pruefeBackup(roh)
+    expect(ergebnis.ok).toBe(false)
+    if (ergebnis.ok) return
+    expect(ergebnis.fehler).toContain('1 bis 20')
+  })
+
+  it('begrenzt die Zahl der Anschläge je Bahn', () => {
+    const roh = kopie()
+    const bahn = (roh.laeufe as Record<string, unknown>[])[0]!
+      .bahnen as Array<{ anschlaege: unknown[] }>
+    bahn[0]!.anschlaege = Array.from({ length: 1001 }, (_, index) => ({
+      laengeNr: index + 1,
+      splitMs: (index + 1) * 1000,
+      erfasstAt: index,
+      istFinish: index === 1000,
+    }))
+    const ergebnis = pruefeBackup(roh)
+    expect(ergebnis.ok).toBe(false)
+    if (ergebnis.ok) return
+    expect(ergebnis.fehler).toContain('höchstens 1000')
+  })
+})
+
 describe('zusammenfassungText', () => {
   it('formatiert Singular und Plural', () => {
     expect(

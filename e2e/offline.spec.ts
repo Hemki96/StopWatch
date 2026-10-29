@@ -8,7 +8,7 @@
  * Produktions-Build, weil der Dev-Server keinen Service Worker registriert.
  */
 import { expect, test } from '@playwright/test'
-import { oeffneApp, starteLauf } from './helfer'
+import { oeffneApp, starteLauf, warteAufAnschlaege } from './helfer'
 
 /**
  * Läuft gegen den gebauten Stand (`npm run build` + `npm run preview`).
@@ -41,11 +41,17 @@ test('App lädt offline aus dem Service-Worker-Cache, der Lauf bleibt sichtbar',
   await starteLauf(page)
   await page.getByRole('button', { name: /Bahn 1, läuft$/ }).tap()
   await expect(page.locator('[data-anschlaege="1"]')).toBeVisible()
+  await warteAufAnschlaege(page, 1)
 
   await context.setOffline(true)
   await page.reload()
 
-  // Die App rendert aus dem Cache; der angelegte Lauf ist weiterhin da.
-  await expect(page.getByRole('button', { name: /Bahn 1, bereit$/ })).toBeVisible()
+  // Die App rendert aus dem Cache; der angelegte Lauf ist weiterhin da. Die
+  // Bahn ist nach dem Reload unterbrochen: Der monotone Start fehlt, die
+  // gemessene Zeit bleibt. Ein Tap darf sie nicht neu starten und damit einen
+  // Split vor dem bereits erfassten erzeugen.
+  await expect(page.getByRole('button', { name: /Bahn 1, unterbrochen$/ })).toBeVisible()
+  await page.getByRole('button', { name: /Bahn 1, unterbrochen$/ }).tap()
+  await expect(page.locator('[data-anschlaege="1"]')).toBeVisible()
   await expect(page.getByText('Nächster Lauf')).toHaveCount(0)
 })

@@ -23,7 +23,7 @@ import {
   zusammenfassungText,
   type Backup,
 } from '../storage/backup'
-import { clearAll, exportBackup, importBackup } from '../storage/repository'
+import { exportBackup } from '../storage/repository'
 import { Bestaetigung } from './Bestaetigung'
 import { KonfigurationSheet } from './KonfigurationSheet'
 import { Sheet } from './Sheet'
@@ -160,9 +160,15 @@ export function SettingsScreen() {
    * Meldung. Ein Abbruch der Dateiauswahl ist kein Fehler.
    */
   const importiereBackup = async () => {
-    if (app.tabGesperrt) return
+    if (!app.tabAktiv) return
     const datei = await waehleDatei('application/json')
     if (!datei) return
+    // Vor dem Lesen prüfen: `text()` und `JSON.parse` würden eine riesige
+    // Datei sonst vollständig in den Speicher holen.
+    if (datei.size > 10 * 1024 * 1024) {
+      setImportMeldung('Die Datei ist größer als 10 MB und wird nicht eingelesen.')
+      return
+    }
     try {
       const inhalt: unknown = JSON.parse(await datei.text())
       const pruefung = pruefeBackup(inhalt)
@@ -186,11 +192,10 @@ export function SettingsScreen() {
    * fehl, wird die Vorschau geschlossen und die Fehlermeldung angezeigt.
    */
   const fuehreImportAus = async () => {
-    if (!importVorschau || app.tabGesperrt) return
+    if (!importVorschau || !app.tabAktiv) return
     const { backup, text } = importVorschau
     try {
-      await importBackup(backup)
-      await app.neuLaden()
+      await app.importiereBackup(backup)
       setImportVorschau(null)
       app.zeigeToast(`Übernommen: ${text}.`)
     } catch (fehler) {
@@ -354,7 +359,7 @@ export function SettingsScreen() {
         titel="Backup importieren?"
         text={
           importVorschau
-            ? `Vorhandene Daten bleiben erhalten. Übernommen werden: ${importVorschau.text}.${
+            ? `Vorhandene Daten bleiben erhalten; Datensätze mit derselben ID werden durch den Stand des Backups ersetzt. Übernommen werden: ${importVorschau.text}.${
                 // Eine laufende Messung wird beim Neuladen zurückgesetzt.
                 app.brauchtTakt ? ' Eine laufende Messung wird dabei unterbrochen.' : ''
               }`
@@ -394,9 +399,9 @@ export function SettingsScreen() {
         onBestaetigen={() => {
           setFrageLoeschen(false)
           // Doppelte Absicherung gegen einen parallel gesperrten Tab.
-          if (app.tabGesperrt) return
-          void clearAll()
-            .then(() => app.neuLaden())
+          if (!app.tabAktiv) return
+          void app
+            .loescheAlles()
             .then(() => app.zeigeToast('Alle Daten gelöscht.'))
             .catch(() => app.zeigeToast('Löschen fehlgeschlagen. Bitte die App neu laden.'))
         }}

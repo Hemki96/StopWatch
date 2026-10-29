@@ -145,6 +145,44 @@ export async function warteAufZielzeiten(page: Page, anzahl: number): Promise<vo
 }
 
 /**
+ * Wartet, bis mindestens so viele Anschläge wie erwartet in IndexedDB liegen.
+ *
+ * @param page - Seite mit geöffneter App.
+ * @param anzahl - Mindestzahl an Anschlägen über alle Läufe.
+ * @returns Promise, das auflöst, sobald der Bestand persistiert ist.
+ *
+ * Die Anzeige ist optimistisch; vor einem Tab-Schließen oder Reload muss der
+ * Schreibvorgang abgeschlossen sein, sonst fehlt der letzte Tap.
+ */
+export async function warteAufAnschlaege(page: Page, anzahl: number): Promise<void> {
+  await page.waitForFunction(async (erwartet) => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const anfrage = indexedDB.open('beckenrand')
+      anfrage.onsuccess = () => resolve(anfrage.result)
+      anfrage.onerror = () => reject(anfrage.error)
+    })
+    try {
+      const laeufe = await new Promise<Array<{ bahnen?: Array<{ anschlaege?: unknown[] }> }>>(
+        (resolve, reject) => {
+          const tx = db.transaction('lauf', 'readonly')
+          const anfrage = tx.objectStore('lauf').getAll()
+          anfrage.onsuccess = () => resolve(anfrage.result)
+          anfrage.onerror = () => reject(anfrage.error)
+        },
+      )
+      const gesamt = laeufe.reduce(
+        (summe, lauf) =>
+          summe + (lauf.bahnen ?? []).reduce((n, bahn) => n + (bahn.anschlaege?.length ?? 0), 0),
+        0,
+      )
+      return gesamt >= erwartet
+    } finally {
+      db.close()
+    }
+  }, anzahl)
+}
+
+/**
  * Öffnet einen zweiten Tab mit derselben Herkunft.
  *
  * @param page - Seite des ersten Tabs; sie liefert den Browser-Kontext für

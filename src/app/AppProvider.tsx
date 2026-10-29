@@ -57,6 +57,7 @@ import {
   istVielfacheDerBeckenlaenge,
   korrigiereAnschlag as korrigiereAnschlagImLauf,
   planeLauf,
+  rebaseLauf,
   setzeWettkampfStatus as setzeWettkampfStatusImLauf,
   setzeZielzeit,
   startAll,
@@ -92,18 +93,22 @@ import {
 import { newId } from '../domain/id'
 import { TabKoordinator, type TabRolle } from './tabKoordinator'
 import {
+  clearAll,
   deleteLauf,
   deleteSatzUndLaeufe,
   deleteSchwimmer,
   deleteTraining,
   deleteWettkampfUndDaten,
+  importBackup,
   loadAll,
   saveLauf,
+  saveMehrere,
   saveSatz,
   saveSchwimmer,
   saveTraining,
   saveWettkampf,
 } from '../storage/repository'
+import type { Backup } from '../storage/backup'
 
 /** Das tatsächlich angewendete Design. */
 export type Theme = 'dark' | 'light'
@@ -205,6 +210,14 @@ export interface AppContextValue {
   einstellungen: Einstellungen
   setzeEinstellungen: (einstellungen: Einstellungen) => void
   neuLaden: () => Promise<void>
+  /**
+   * Schreibt ein geprüftes Backup und lädt den Bestand neu. Nur der aktive Tab
+   * darf das; der Schreibvorgang läuft über dieselbe Warteschlange wie die
+   * Messungen, damit eine Tab-Übergabe ihn abwartet.
+   */
+  importiereBackup: (backup: Backup) => Promise<void>
+  /** Leert alle fünf Bestände und lädt neu; ebenfalls nur im aktiven Tab. */
+  loescheAlles: () => Promise<void>
   geladen: boolean
   schwimmer: Schwimmer[]
   satze: Satz[]
@@ -693,6 +706,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // den Stand des letzten Renders; mehrere Taps im selben Frame würden sich
   // gegenseitig überschreiben. Gelesen wird immer aus den Refs, geschrieben
   // über die `set...Safe`-Funktionen.
+  const schwimmerRef = useRef<Schwimmer[]>([])
   const laeufeRef = useRef<Lauf[]>([])
   const satzeRef = useRef<Satz[]>([])
   const wettkampfeRef = useRef<Wettkampf[]>([])
@@ -710,10 +724,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Immer die aktuelle Lade-Funktion. Der Koordinator wird vor dem Lade-Effekt
   // erzeugt; über diese Ref kann er trotzdem nachladen, wenn er die Rolle
   // „aktiv“ erhält, ohne dass der Effekt neu laufen muss.
-  const ladeDatenRef = useRef<(() => Promise<void>) | null>(null)
+  const ladeDatenRef = useRef<((uebernahme?: boolean) => Promise<void>) | null>(null)
+  // Ob dieser Tab bereits aktiv war bzw. lesend auf die Übergabe gewartet hat.
+  // Nur dann ist eine erneute Aktivierung eine Übergabe und der laufende Start
+  // muss auf die monotone Uhr dieses Dokuments umgerechnet werden. Ein frisch
+  // geladener Tab, der zum ersten Mal aktiv wird, ist dagegen ein Reload und
+  // normalisiert wie bisher.
+  const warAktivRef = useRef(false)
+  const warGesperrtRef = useRef(false)
 
   // Ref und State werden ausschließlich zusammen gesetzt: Aktionen lesen die
   // Ref, das Rendern den State. Ein Auseinanderlaufen würde Taps verlieren.
+  const setSchwimmerSafe = useCallback((next: Schwimmer[]) => {
+    schwimmerRef.current = next
+    setSchwimmer(next)
+  }, [])
+
   const setLaeufeSafe = useCallback((next: Lauf[]) => {
     laeufeRef.current = next
     setLaeufe(next)
@@ -807,10 +833,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
    * `allSettled` ist bewusst gewählt: Ein fehlgeschlagener Schreibvorgang darf
    * eine Tab-Übergabe nicht blockieren, sonst bliebe der neue Tab lesend.
    */
-  const warteAufSchreibvorgaenge = useCallback(
-    () => Promise.allSettled([...schreibvorgaengeRef.current]).then(() => undefined),
-    [],
-  )
+  const warteAufSchreibvorgaenge = useCallback(async () => {
+    // Zuerst das Schreibtor schließen: Sonst könnte ein Tap während des
+    // Wartens noch einen Schreibvorgang starten, der nicht mehr im Snapshot
+    // liegt und beim Wechsel verloren ginge. Danach so lange leeren, bis keine
+    // neuen Vorgänge mehr dazukommen (durch das geschlossene Tor endlich).
+    tabAktivRef.current = false
+    while (schreibvorgaengeRef.current.size > 0) {
+      await Promise.allSettled([...schreibvorgaengeRef.current])
+    }
+  }, [])
 
   /**
    * Lädt den kompletten Bestand und gleicht die Auswahl damit ab.
@@ -821,29 +853,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
    * offene Lauf als Kandidat angenommen, damit die Leiste nach einem Neustart
    * nicht leer wirkt.
    *
-   * Wird auch bei jeder Tab-Übernahme aufgerufen. Alle Schritte lesen nur und
+   * Wird auch bei jeder Tab-Übergabe aufgerufen. Alle Schritte lesen nur und
    * sind deshalb wiederholbar.
+   *
+   * `uebernahme` unterscheidet die Tab-Übergabe vom Neuladen nach einem
+   * Reload oder Backup-Import: Bei einer Übergabe lebt die Messung weiter und
+   * die Startzeitpunkte werden über `rebaseLauf` auf die monotone Uhr dieses
+   * Dokuments verschoben. Ohne diese Umrechnung wäre `performance.now()` aus
+   * dem anderen Tab wertlos und die Bahnen würden fälschlich als „bereit“
+   * erscheinen.
    */
-  const ladeDaten = useCallback(async () => {
-    const daten = await loadAll()
-    setSchwimmer(daten.schwimmer)
+  const ladeDaten = useCallback(async (uebernahme = false) => {
+    const daten = await loadAll({ behalteLaufende: uebernahme })
+    const jetzt = uebernahme ? performance.now() : 0
+    const wandJetzt = uebernahme ? Date.now() : 0
+    const laeufe = uebernahme
+      ? daten.laeufe.map((lauf) => rebaseLauf(lauf, jetzt, wandJetzt))
+      : daten.laeufe
+    setSchwimmerSafe(daten.schwimmer)
     setSatzeSafe(daten.satze)
-    setLaeufeSafe(daten.laeufe)
+    setLaeufeSafe(laeufe)
     setWettkampfeSafe(daten.wettkampfe)
     setTrainingsSafe(daten.trainings)
 
     // Verwaiste und vollständig beendete Einträge fallen weg. Bleibt nichts
     // übrig, wird der zuletzt gestartete offene Lauf angeboten; bei einer Serie
     // ist das ihr Anker, nicht die zuletzt gestartete Wiederholung.
-    let aktive = bereinigeAktiveIds(leseAktiveIds(), daten.laeufe, daten.satze)
+    let aktive = bereinigeAktiveIds(leseAktiveIds(), laeufe, daten.satze)
     if (aktive.length === 0) {
-      const kandidat = [...daten.laeufe]
+      const kandidat = [...laeufe]
         .sort((a, b) => (b.startWallMs ?? 0) - (a.startWallMs ?? 0))
         .find((lauf) => !isComplete(lauf) && lauf.modus !== 'wettkampf')
       if (kandidat) {
         const satz = daten.satze.find((eintrag) => eintrag.id === kandidat.satzId)
         const anker =
-          istSerie(satz) && satz ? (rundenVon(daten.laeufe, satz.id)[0] ?? kandidat) : kandidat
+          istSerie(satz) && satz ? (rundenVon(laeufe, satz.id)[0] ?? kandidat) : kandidat
         aktive = [anker.id]
       }
     }
@@ -857,27 +901,59 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     // Ein noch offener Lauf mit erfasstem Anschlag ist der unterbrochene Lauf:
     // `performance.now()` ist nach einem Reload wertlos, die Zeiten bleiben aber
-    // im Verlauf. Der Hinweis erscheint auch nach einer Tab-Übergabe — er ist
-    // bewusst nur eine Information, keine Fehlermeldung.
-    const kandidat = auswahl ? daten.laeufe.find((lauf) => lauf.id === auswahl) : null
-    if (kandidat?.bahnen.some((bahn) => bahn.anschlaege.length > 0)) {
-      zeigeToast('Der letzte Lauf wurde unterbrochen. Erfasste Zeiten bleiben erhalten.')
+    // im Verlauf. Bei einer Tab-Übergabe läuft die Messung dagegen weiter —
+    // dort wäre der Hinweis falsch.
+    if (!uebernahme) {
+      const kandidat = auswahl ? laeufe.find((lauf) => lauf.id === auswahl) : null
+      if (kandidat?.bahnen.some((bahn) => bahn.anschlaege.length > 0)) {
+        zeigeToast('Der letzte Lauf wurde unterbrochen. Erfasste Zeiten bleiben erhalten.')
+      }
     }
   }, [
     setAktiveIds,
     setAktivenLaufId,
+    setSchwimmerSafe,
     setLaeufeSafe,
     setSatzeSafe,
     setWettkampfeSafe,
     setTrainingsSafe,
     zeigeToast,
-    meldeSpeicherFehler,
   ])
 
   // Die Ref zeigt immer auf die jüngste Fassung. Der Koordinator greift darauf
   // zu, statt `ladeDaten` als Abhängigkeit zu binden — sonst würde jede neue
   // Funktionsidentität den Koordinator neu starten und die Tab-Rolle verlieren.
   ladeDatenRef.current = ladeDaten
+
+  /**
+   * Schreibt ein geprüftes Backup und lädt den Bestand neu.
+   *
+   * Bewusst im Provider und nicht im Einstellungs-Screen: Nur hier ist die
+   * Tab-Rolle bekannt, und nur hier landet der Vorgang in der Warteschlange,
+   * auf die eine Tab-Übergabe wartet. Die Prüfung läuft in `importBackup`
+   * erneut, damit kein Aufrufer sie überspringen kann.
+   */
+  const importiereBackup = useCallback(
+    async (backup: Backup) => {
+      if (!tabAktivRef.current) {
+        throw new Error('Nur der aktive Tab darf ein Backup importieren.')
+      }
+      const vorgang = importBackup(backup).then(() => ladeDaten())
+      verfolge(vorgang)
+      await vorgang
+    },
+    [ladeDaten, verfolge],
+  )
+
+  /** Leert alle Bestände und lädt neu; nur der aktive Tab darf das. */
+  const loescheAlles = useCallback(async () => {
+    if (!tabAktivRef.current) {
+      throw new Error('Nur der aktive Tab darf alle Daten löschen.')
+    }
+    const vorgang = clearAll().then(() => ladeDaten())
+    verfolge(vorgang)
+    await vorgang
+  }, [ladeDaten, verfolge])
 
   /**
    * Startet die Tab-Abstimmung.
@@ -894,12 +970,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const koordinator = new TabKoordinator({
       onRolle: (rolle) => {
+        // Nur ein Tab, der schon einmal aktiv war oder lesend auf die Übergabe
+        // gewartet hat, übernimmt eine laufende Messung. Der erste Aktivwerden
+        // nach einem Seitenaufruf ist ein Reload und normalisiert.
+        const uebernahme = rolle === 'aktiv' && (warAktivRef.current || warGesperrtRef.current)
+        if (rolle === 'aktiv') warAktivRef.current = true
+        if (rolle === 'gesperrt') warGesperrtRef.current = true
         tabAktivRef.current = rolle === 'aktiv'
         setTabRolle(rolle)
         if (rolle === 'aktiv') {
           // Nach einer Übergabe den Stand des vorherigen Tabs übernehmen.
           // Schlägt das Lesen fehl, bleibt der aktuelle Stand bedienbar.
-          void ladeDatenRef.current?.().catch(() => meldeSpeicherFehler())
+          void ladeDatenRef.current?.(uebernahme).catch(() => meldeSpeicherFehler())
         }
       },
       vorUebergabe: warteAufSchreibvorgaenge,
@@ -908,9 +990,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     koordinator.start()
 
     const beiSeitenende = () => koordinator.stop()
+    // Ein aus dem bfcache wiederhergestellter Tab hat `pagehide` gesehen und
+    // wäre sonst dauerhaft gestoppt: Er würde weiter Taps annehmen, ohne noch
+    // am BroadcastChannel teilzunehmen. Beim Zurückkehren deshalb neu werben
+    // und den Bestand des anderen Tabs übernehmen.
+    const beiSeitenAnzeige = (event: PageTransitionEvent) => {
+      if (!event.persisted) return
+      koordinator.start()
+      void ladeDatenRef
+        .current?.(warAktivRef.current || warGesperrtRef.current)
+        .catch(() => meldeSpeicherFehler())
+    }
     window.addEventListener('pagehide', beiSeitenende)
+    window.addEventListener('pageshow', beiSeitenAnzeige)
     return () => {
       window.removeEventListener('pagehide', beiSeitenende)
+      window.removeEventListener('pageshow', beiSeitenAnzeige)
       koordinator.stop()
       koordinatorRef.current = null
     }
@@ -1441,6 +1536,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const geplanteSerie = wiederholungen > 1
 
       let satzId: string | null = null
+      let neuerSatz: Satz | null = null
       if (geplanteSerie) {
         const satz: Satz = {
           id: newId(),
@@ -1451,8 +1547,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           erstelltAm: Date.now(),
         }
         satzId = satz.id
+        neuerSatz = satz
         setSatzeSafe([satz, ...satzeRef.current])
-        verfolge(saveSatz(satz))
       } else {
         // Einzelner Lauf: den letzten Satz desselben Tages mit gleicher
         // Konfiguration weiterverwenden, statt einen neuen anzulegen. `reverse`
@@ -1478,8 +1574,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             erstelltAm: Date.now(),
           }
           satzId = satz.id
+          neuerSatz = satz
           setSatzeSafe([satz, ...satzeRef.current])
-          verfolge(saveSatz(satz))
         }
       }
 
@@ -1503,7 +1599,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       )
 
       setLaeufeSafe([...neueLaeufe, ...laeufeRef.current])
-      for (const lauf of neueLaeufe) verfolge(saveLauf(lauf))
+      // Satz und Läufe gehören zusammen: Entweder ist der Lauf vollständig
+      // angelegt oder gar nicht.
+      verfolge(saveMehrere({ satze: neuerSatz ? [neuerSatz] : [], laeufe: neueLaeufe }))
 
       // Fertig gemessene Einträge verschwinden beim Anlegen aus der Leiste,
       // bleiben aber im Verlauf. Offene Läufe werden weitergeführt.
@@ -1695,7 +1793,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!tabAktivRef.current) return null
       const name = daten.name.trim()
       if (!name) return null
-      const vorhanden = daten.id ? schwimmer.find((s) => s.id === daten.id) : undefined
+      const vorhanden = daten.id
+        ? schwimmerRef.current.find((s) => s.id === daten.id)
+        : undefined
       const eintrag: Schwimmer = {
         id: vorhanden?.id ?? newId(),
         name,
@@ -1703,15 +1803,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         notiz: daten.notiz.trim(),
         erstelltAm: vorhanden?.erstelltAm ?? Date.now(),
       }
-      setSchwimmer((aktuell) =>
-        [...aktuell.filter((s) => s.id !== eintrag.id), eintrag].sort((a, b) =>
+      setSchwimmerSafe(
+        [...schwimmerRef.current.filter((s) => s.id !== eintrag.id), eintrag].sort((a, b) =>
           a.name.localeCompare(b.name, 'de'),
         ),
       )
       verfolge(saveSchwimmer(eintrag))
       return eintrag
     },
-    [schwimmer, meldeSpeicherFehler],
+    [setSchwimmerSafe, verfolge],
   )
 
   /**
@@ -1724,7 +1824,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const loescheSchwimmer = useCallback(
     (id: string) => {
       if (!tabAktivRef.current) return
-      setSchwimmer((aktuell) => aktuell.filter((s) => s.id !== id))
+      setSchwimmerSafe(schwimmerRef.current.filter((s) => s.id !== id))
       verfolge(deleteSchwimmer(id))
 
       const geaenderteLaeufe: Lauf[] = []
@@ -1774,11 +1874,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     },
     [
       einstellungen,
+      setSchwimmerSafe,
       setLaeufeSafe,
       setTrainingsSafe,
       setzeEinstellungen,
       verfolge,
-      meldeSpeicherFehler,
     ],
   )
 
@@ -1864,11 +1964,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           name,
           datum: plan.datum,
           beckenlaengeM: plan.beckenlaengeM,
-          einheit: plan.einheit,
+          ...(plan.einheit ? { einheit: plan.einheit } : {}),
         })
       if (!vorhanden) {
         setWettkampfeSafe([wettkampf, ...wettkampfeRef.current])
-        verfolge(saveWettkampf(wettkampf))
       }
 
       const neueSchwimmer: Schwimmer[] = []
@@ -1885,26 +1984,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
         for (const laufPlan of disziplin.laeufe) {
           neueLaeufe.push(
             createWettkampfLauf(satz, laufPlan, (start) =>
-              schwimmerIdFuer(start.name, start.jahrgang ?? null, schwimmer, neueSchwimmer),
+              schwimmerIdFuer(
+                start.name,
+                start.jahrgang ?? null,
+                schwimmerRef.current,
+                neueSchwimmer,
+              ),
             ),
           )
         }
       })
 
       if (neueSchwimmer.length > 0) {
-        setSchwimmer((aktuell) =>
-          [...aktuell, ...neueSchwimmer].sort((a, b) => a.name.localeCompare(b.name, 'de')),
+        setSchwimmerSafe(
+          [...schwimmerRef.current, ...neueSchwimmer].sort((a, b) =>
+            a.name.localeCompare(b.name, 'de'),
+          ),
         )
-        for (const eintrag of neueSchwimmer) verfolge(saveSchwimmer(eintrag))
       }
 
       setSatzeSafe([...neueSatze, ...satzeRef.current])
       setLaeufeSafe([...neueLaeufe, ...laeufeRef.current])
-      for (const satz of neueSatze) verfolge(saveSatz(satz))
-      for (const lauf of neueLaeufe) verfolge(saveLauf(lauf))
+      // Ein Wettkampf mit Disziplinen, Heats und neuen Schwimmern gehört
+      // zusammen: eine Transaktion statt bis zu tausender Einzel-Schreibvorgänge.
+      verfolge(
+        saveMehrere({
+          wettkampfe: vorhanden ? [] : [wettkampf],
+          schwimmer: neueSchwimmer,
+          satze: neueSatze,
+          laeufe: neueLaeufe,
+        }),
+      )
       return wettkampf.id
     },
-    [schwimmer, setLaeufeSafe, setSatzeSafe, setWettkampfeSafe, verfolge],
+    [setSchwimmerSafe, setLaeufeSafe, setSatzeSafe, setWettkampfeSafe, verfolge],
   )
 
   /**
@@ -1962,16 +2075,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const satz = createWettkampfSatz(wettkampf, plan)
       const neueLaeufe = plan.laeufe.map((laufPlan) =>
         createWettkampfLauf(satz, laufPlan, (start) =>
-          schwimmerIdFuer(start.name, start.jahrgang ?? null, schwimmer, []),
+          schwimmerIdFuer(start.name, start.jahrgang ?? null, schwimmerRef.current, []),
         ),
       )
       setSatzeSafe([satz, ...satzeRef.current])
       setLaeufeSafe([...neueLaeufe, ...laeufeRef.current])
-      verfolge(saveSatz(satz))
-      for (const lauf of neueLaeufe) verfolge(saveLauf(lauf))
+      verfolge(saveMehrere({ satze: [satz], laeufe: neueLaeufe }))
       return satz.id
     },
-    [schwimmer, setLaeufeSafe, setSatzeSafe, verfolge],
+    [setLaeufeSafe, setSatzeSafe, verfolge],
   )
 
   /**
@@ -2111,21 +2223,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!lauf) return
       const neueSchwimmer: Schwimmer[] = []
       const ids = namen.map((name) =>
-        schwimmerIdFuer(name, null, schwimmer, neueSchwimmer),
+        schwimmerIdFuer(name, null, schwimmerRef.current, neueSchwimmer),
       )
       let naechster = lauf
       lauf.bahnen.forEach((bahn, index) => {
         naechster = setSchwimmerOnLane(naechster, bahn.id, ids[index] ?? null)
       })
       if (neueSchwimmer.length > 0) {
-        setSchwimmer((aktuell) =>
-          [...aktuell, ...neueSchwimmer].sort((a, b) => a.name.localeCompare(b.name, 'de')),
+        setSchwimmerSafe(
+          [...schwimmerRef.current, ...neueSchwimmer].sort((a, b) =>
+            a.name.localeCompare(b.name, 'de'),
+          ),
         )
         for (const eintrag of neueSchwimmer) verfolge(saveSchwimmer(eintrag))
       }
       aendereLauf(lauf, naechster)
     },
-    [aendereLauf, schwimmer, verfolge],
+    [aendereLauf, setSchwimmerSafe, verfolge],
   )
 
   /**
@@ -2304,9 +2418,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           kandidat.id === training.id ? naechstesTraining : kandidat,
         ),
       )
-      verfolge(saveSatz(satz))
-      verfolge(saveTraining(naechstesTraining))
-      for (const lauf of neueLaeufe) verfolge(saveLauf(lauf))
+      // Satz, Trainingsverweis und Läufe gehören zusammen. Eine Transaktion
+      // verhindert den Zustand „gestartet, aber ohne Läufe“ nach einem Abbruch.
+      verfolge(saveMehrere({ satze: [satz], trainings: [naechstesTraining], laeufe: neueLaeufe }))
 
       setAktiveIds([...new Set([anker.id, ...aktiveIdsRef.current])])
       setAktivenLaufId(anker.id)
@@ -2338,7 +2452,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setzeEinstellungen,
       // Bewusst der Ladevorgang, keine Seitenaktualisierung: „Neu laden“ in den
       // Einstellungen liest den Bestand erneut, ohne die Messung zu verlieren.
-      neuLaden: ladeDaten,
+      // Ein Reload normalisiert laufende Bahnen wie nach einem Neustart; die
+      // Übergabe-Variante bleibt dem Tab-Koordinator vorbehalten.
+      neuLaden: () => ladeDaten(),
+      importiereBackup,
+      loescheAlles,
       schwimmer,
       satze,
       laeufe,
@@ -2403,6 +2521,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       einstellungen,
       setzeEinstellungen,
       ladeDaten,
+      importiereBackup,
+      loescheAlles,
       schwimmer,
       satze,
       laeufe,

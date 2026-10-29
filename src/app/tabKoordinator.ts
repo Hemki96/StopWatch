@@ -122,7 +122,7 @@ export class TabKoordinator {
   readonly tabId: string
   private readonly kanalFactory: () => TabKanal | null
   private readonly onRolle: KoordinatorOptionen['onRolle']
-  private readonly vorUebergabe?: () => Promise<void>
+  private readonly vorUebergabe: (() => Promise<void>) | undefined
   private readonly claimMs: number
   private readonly heartbeatMs: number
   private readonly ausfallMs: number
@@ -165,6 +165,12 @@ export class TabKoordinator {
    * App bedienbar bleibt.
    */
   start(): void {
+    // Bereits verbunden: kein zweiter Kanal, sonst gingen Nachrichten doppelt
+    // ein und `stop()` würde nur einen davon schließen.
+    if (this.kanal) return
+    // Nach einem `pagehide` (etwa bfcache) ist der Koordinator gestoppt. Ein
+    // erneutes `start()` beim `pageshow` muss ihn wieder vollständig aufnehmen.
+    this.gestoppt = false
     try {
       this.kanal = this.kanalFactory()
     } catch {

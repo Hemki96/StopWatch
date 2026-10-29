@@ -41,9 +41,18 @@ import { BACKUP_FORMAT, BACKUP_VERSION, pruefeBackup, type Backup } from './back
  *   vollständig bleibt. `startWallMs` des Laufs wird nicht verändert, weil er
  *   als Wanduhr-Anker weiterhin gültig ist.
  *
+ * `behalteLaufende` ist für die Übergabe an einen anderen Tab gedacht: Dort
+ * lebt die Messung weiter und wird anschließend über `rebaseLauf` auf die
+ * monotone Uhr des neuen Dokuments verschoben. Ohne Wanduhr-Anker bleibt es
+ * beim Zurücksetzen, weil sich der Start dann nicht verlässlich umrechnen
+ * lässt.
+ *
  * Die Funktion ist rein und verändert den übergebenen Lauf nicht.
  */
-export function normalizeOnLoad(lauf: Lauf): Lauf {
+export function normalizeOnLoad(
+  lauf: Lauf,
+  optionen: { behalteLaufende?: boolean } = {},
+): Lauf {
   const startversatzMs = Number.isFinite(lauf.startversatzMs)
     ? Math.max(0, Math.round(lauf.startversatzMs))
     : 0
@@ -56,6 +65,9 @@ export function normalizeOnLoad(lauf: Lauf): Lauf {
   // Eine Bahn mit Start, aber ohne Finish-Anschlag gilt als abgebrochen bzw.
   // durch den Reload ungültig. Die Anschläge selbst bleiben erhalten.
   // Ältere Läufe kennen keine Reihen; ihre Bahnen gehören zu Reihe 1.
+  // Ohne Wanduhr-Anker lässt sich ein laufender Start nicht auf ein anderes
+  // Dokument übertragen; dann gilt weiterhin die Reload-Regel.
+  const behalteLaufende = optionen.behalteLaufende === true && lauf.startWallMs !== null
   const bahnen = lauf.bahnen.map((bahn) => {
     // Der Wettkampf-Status ist endgültig und braucht keine Startzeit. Eine
     // Bahn mit unbekanntem Status bleibt offen; ältere Backups kennen das Feld
@@ -64,8 +76,12 @@ export function normalizeOnLoad(lauf: Lauf): Lauf {
     const status = roherStatus === 'dns' || roherStatus === 'dnf' ? roherStatus : undefined
     // Gestartete, aber offene Bahnen verlieren ihre Startzeit; bei DNS/DNF ist
     // sie ebenfalls wertlos, weil die Bahn endgültig ohne Zeit beendet ist.
+    // Bei einer Tab-Übergabe bleibt der Start erhalten und wird später auf die
+    // neue Zeitbasis verschoben.
     const startMs =
-      status || (bahn.startMs !== null && !isFinished(bahn)) ? null : bahn.startMs
+      status || (bahn.startMs !== null && !isFinished(bahn) && !behalteLaufende)
+        ? null
+        : bahn.startMs
     return { ...rest, reihe: bahnReihe(bahn), startMs, ...(status ? { status } : {}) }
   })
   return {
@@ -162,7 +178,7 @@ export function normalizeTrainingOnLoad(training: Training): Training {
  *
  * Fehler von IndexedDB werden unverändert weitergereicht.
  */
-export async function loadAll(): Promise<{
+export async function loadAll(optionen: { behalteLaufende?: boolean } = {}): Promise<{
   schwimmer: Schwimmer[]
   satze: Satz[]
   laeufe: Lauf[]
@@ -180,7 +196,7 @@ export async function loadAll(): Promise<{
   return {
     schwimmer: schwimmer.sort((a, b) => a.name.localeCompare(b.name, 'de')),
     satze: satze.map(normalizeSatzOnLoad).sort((a, b) => b.datum.localeCompare(a.datum)),
-    laeufe: laeufe.map(normalizeOnLoad),
+    laeufe: laeufe.map((lauf) => normalizeOnLoad(lauf, optionen)),
     wettkampfe: wettkampfe
       .map(normalizeWettkampfOnLoad)
       .sort((a, b) => b.datum.localeCompare(a.datum) || b.erstelltAm - a.erstelltAm),
@@ -213,15 +229,6 @@ export async function deleteLauf(id: string): Promise<void> {
 export async function saveSatz(satz: Satz): Promise<void> {
   const db = await getDb()
   await db.put('satz', satz)
-}
-
-/**
- * Löscht nur den Satz. Läufe, die auf ihn verweisen, würden verwaisen; deshalb
- * nur für Sätze ohne Läufe verwenden bzw. `deleteSatzUndLaeufe` bevorzugen.
- */
-export async function deleteSatz(id: string): Promise<void> {
-  const db = await getDb()
-  await db.delete('satz', id)
 }
 
 /**
@@ -284,6 +291,58 @@ export async function saveTraining(training: Training): Promise<void> {
 export async function deleteTraining(id: string): Promise<void> {
   const db = await getDb()
   await db.delete('training', id)
+}
+
+/** Mehrere Datensätze, die gemeinsam geschrieben werden sollen. */
+export interface SpeicherBatch {
+  schwimmer?: Schwimmer[]
+  satze?: Satz[]
+  laeufe?: Lauf[]
+  wettkampfe?: Wettkampf[]
+  trainings?: Training[]
+}
+
+/**
+ * Schreibt mehrere Datensätze in genau einer Transaktion.
+ *
+ * Gedacht für Aktionen, die fachlich zusammengehören: ein Wettkampf mit
+ * Disziplinen und Heats oder ein gestarteter Trainingssatz mit seinen Läufen.
+ * Entweder ist danach alles sichtbar oder nichts; ein Abbruch mitten im
+ * Schreibvorgang hinterlässt keinen halben Import. Die Reihenfolge entspricht
+ * `importBackup`: Bezugsobjekte vor abhängigen Datensätzen.
+ */
+export async function saveMehrere(batch: SpeicherBatch): Promise<void> {
+  const db = await getDb()
+  const tx = db.transaction(['schwimmer', 'satz', 'lauf', 'wettkampf', 'training'], 'readwrite')
+  try {
+    for (const schwimmer of batch.schwimmer ?? []) {
+      await tx.objectStore('schwimmer').put(schwimmer)
+    }
+    for (const wettkampf of batch.wettkampfe ?? []) {
+      await tx.objectStore('wettkampf').put(wettkampf)
+    }
+    for (const training of batch.trainings ?? []) {
+      await tx.objectStore('training').put(training)
+    }
+    for (const satz of batch.satze ?? []) {
+      await tx.objectStore('satz').put(satz)
+    }
+    for (const lauf of batch.laeufe ?? []) {
+      await tx.objectStore('lauf').put(lauf)
+    }
+    await tx.done
+  } catch (fehler) {
+    // Auch ein synchroner Fehler (etwa ein nicht klonbarer Wert) muss die
+    // bereits geschriebenen Datensätze zurückrollen. Ohne `abort` könnte die
+    // Transaktion mit einem Teilstand committen.
+    try {
+      tx.abort()
+    } catch {
+      // Bereits abgebrochen oder committet.
+    }
+    await tx.done.catch(() => undefined)
+    throw fehler
+  }
 }
 
 /** Schreibt einen Schwimmer als Upsert (Schlüssel ist `schwimmer.id`). */
@@ -363,7 +422,15 @@ export async function importBackup(roh: unknown): Promise<void> {
     }
     await tx.done
   } catch (fehler) {
-    // Ein Fehler bricht die Transaktion ab; es wurde nichts teilweise geschrieben.
+    // Ein Fehler bricht die Transaktion ab; es wurde nichts teilweise
+    // geschrieben. `abort` deckt auch synchrone Fehler ab, die IndexedDB nicht
+    // selbst als Request-Fehler behandelt.
+    try {
+      tx.abort()
+    } catch {
+      // Bereits abgebrochen oder committet.
+    }
+    await tx.done.catch(() => undefined)
     throw fehler
   }
 }

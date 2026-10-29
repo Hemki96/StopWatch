@@ -239,6 +239,23 @@ describe('TabKoordinator', () => {
     a.stop()
   })
 
+  // bfcache: `pagehide` stoppt den Koordinator, `pageshow` muss ihn wieder
+  // aufnehmen. Ohne diesen Neustart bliebe der Tab für immer stumm und würde
+  // weiter Taps annehmen, obwohl ein anderer Tab die Messung hält.
+  it('nimmt nach stop() und start() wieder am Protokoll teil', () => {
+    const { a } = zweiTabs()
+    a.start()
+    vi.advanceTimersByTime(400)
+    expect(a.aktuelleRolle).toBe('aktiv')
+
+    a.stop()
+    a.start()
+    expect(a.aktuelleRolle).toBe('startet')
+    vi.advanceTimersByTime(400)
+    expect(a.aktuelleRolle).toBe('aktiv')
+    a.stop()
+  })
+
   // Ohne BroadcastChannel gibt es keinen Schutz, aber auch keinen toten Tab:
   // `kanal` liefert `null`, die Rolle wird genau einmal als `aktiv` gemeldet.
   it('bleibt ohne BroadcastChannel bedienbar', () => {

@@ -420,6 +420,25 @@ describe('AppProvider', () => {
     expect(app.wert().schwimmer).toEqual([])
   })
 
+  // Zwei Aktionen im selben Tick dürfen keine zweite Person mit derselben ID
+  // anlegen. Der Ref-Spiegel ist die einzige aktuelle Sicht zwischen zwei
+  // Renders; ohne ihn überschreibt die zweite Speicherung die erste.
+  it('aktualisiert einen gerade angelegten Schwimmer im selben Tick', async () => {
+    const app = await geladeneApp()
+    let id: string | null = null
+    act(() => {
+      id =
+        app
+          .wert()
+          .speichereSchwimmer({ name: 'Mia', jahrgang: 2010, notiz: '' })?.id ?? null
+      if (!id) return
+      app.wert().speichereSchwimmer({ id, name: 'Mia B.', jahrgang: 2010, notiz: '' })
+    })
+
+    expect(app.wert().schwimmer).toHaveLength(1)
+    expect(app.wert().schwimmer[0]?.name).toBe('Mia B.')
+  })
+
   // Korrekturen tragen `manuell`, damit eine von Hand erzeugte Bestzeit
   // erkennbar bleibt. Eine Korrektur, die die Reihenfolge der Anschläge
   // verletzen würde (hier 70 s vor dem zweiten Split bei 64 s), wird

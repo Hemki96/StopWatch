@@ -94,7 +94,16 @@ export function useServiceWorkerUpdate(): UpdateState {
       if (!('serviceWorker' in navigator) || !navigator.serviceWorker?.getRegistration) return
       void navigator.serviceWorker
         .getRegistration()
-        .then((registration) => registration?.update())
+        .then(async (registration) => {
+          if (!registration) return
+          await registration.update()
+          // Ein zuvor weggeklickter Hinweis kommt beim nächsten Vordergrund-
+          // Wechsel zurück, solange die neue Version noch wartet. Sonst bliebe
+          // die App bis zum nächsten Kaltstart auf dem alten Stand.
+          if (registration.waiting) {
+            for (const listener of updateListener) listener()
+          }
+        })
         .catch(() => undefined)
     }
     document.addEventListener('visibilitychange', beiSichtbarkeit)

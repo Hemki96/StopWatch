@@ -140,7 +140,19 @@ Bahn. Siehe [ADR-0005](../adr/0005-serie-mit-festem-takt.md).
 
 `performance.now()` ist nach einem Reload wertlos. `normalizeOnLoad` in `src/storage/repository.ts`
 setzt deshalb jede Bahn mit `startMs !== null` und ohne Finish auf `startMs: null` zurück. Bereits
-erfasste Anschläge bleiben. Eine Serie kann unberührte Runden mit `Weiter` neu planen.
+erfasste Anschläge bleiben. Eine Serie kann unberührte Runden mit `Weiter` neu planen; bei einem
+einzelnen Lauf erscheint „Weiter“, sobald einzelne Bahnen noch auf ihren Start warten.
+
+Eine Bahn mit Anschlägen, aber ohne Startzeit ist **unterbrochen**. Sie wird nicht neu gestartet,
+weil der neue Start sonst einen Split vor den bereits erfassten legen würde. Langes Drücken nimmt
+die Anschläge schrittweise zurück; danach ist die Bahn wieder startbar.
+
+### Tab-Übergabe
+
+Anders als ein Reload ist die Übergabe an einen anderen Tab: Die Messung läuft weiter. Der neue Tab
+lädt mit `behalteLaufende: true` und verschiebt jede gestartete Bahn über `rebaseLauf` auf seine
+eigene monotone Uhr. Grundlage ist der Wanduhr-Anker `startWallMs`; Einzelheiten und Alternativen
+stehen in [ADR-0010](../adr/0010-zeitbasis-bei-tab-uebergabe.md).
 
 ## Globaler Zustand
 
@@ -225,9 +237,11 @@ Zeiten:
 - Takeover-Timeout: **600 ms**, danach eigener Claim
 
 Bei gleichzeitigem Start gewinnt die **kleinere Tab-ID** (String-Vergleich). Ein aktiver Tab, der
-ein `takeover` erhält, wird sofort lesend, wartet auf offene Schreibvorgänge
-(`warteAufSchreibvorgaenge`) und sendet erst dann `yield`. So geht kein Anschlag bei der Übergabe
-verloren.
+ein `takeover` erhält, wird sofort lesend, schließt das Schreibtor und wartet, bis keine offenen
+Schreibvorgänge mehr übrig sind (`warteAufSchreibvorgaenge`); erst dann sendet er `yield`. Das
+Schließen vor dem Warten verhindert, dass ein Tap während der Übergabe noch einen Schreibvorgang
+startet, den der neue Tab nicht mehr sieht. Der neue Tab rechnet laufende Startzeiten anschließend
+auf seine eigene Uhr um (siehe oben).
 
 Ohne `BroadcastChannel` wird der Tab sofort aktiv. Die App bleibt bedienbar, verliert aber den
 Schutz gegen zwei schreibende Tabs.
@@ -325,7 +339,7 @@ Details: [Oberfläche](oberflaeche.md).
 | Ein schreibender Tab | verhindert doppelte Anschläge |
 | Keine Splits im Wettkampf | ein Tap pro Bahn ist am Beckenrand robuster |
 | Gestartete Trainingssätze sind fest | gemessene Zeiten dürfen nicht umgeschrieben werden |
-| Kein Fortsetzen nach Reload | `performance.now()` ist seitenspezifisch |
+| Kein Fortsetzen nach Reload | `performance.now()` ist seitenspezifisch; eine Tab-Übergabe wird dagegen umgerechnet (ADR-0010) |
 | Maximal 10 Bahnen je Reihe, 5 Reihen, 20 Runden, 20 Sätze | lesbare Oberfläche und beherrschbare Datenmengen |
 
 ## Weiterlesen

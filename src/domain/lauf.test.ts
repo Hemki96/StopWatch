@@ -33,6 +33,7 @@ import {
   normalisiereReihe,
   planeLauf,
   pruefeAnschlagKorrektur,
+  rebaseLauf,
   lastSplit,
   laufzeitMs,
   lengthCount,
@@ -693,5 +694,72 @@ describe('setzeWettkampfStatus', () => {
     const zurueck = undoLane(lauf, id)
     expect(bahn(zurueck).status).toBeUndefined()
     expect(bahn(zurueck).startMs).toBeNull()
+  })
+})
+
+describe('unterbrochene Bahn', () => {
+  // Nach einem Reload fehlt der monotone Start, die Splits bleiben aber. Ein
+  // Tap darf die Bahn nicht neu starten: Sonst entstünde ein Split aus der
+  // neuen Startzeit, der vor den alten Splits liegt, und ein falsches Finish.
+  it('startet eine Bahn mit vorhandenen Anschlägen nicht neu', () => {
+    const gestartet = startAll(createLauf(K100, [{ nummer: 1 }]), 100_000, 1_000)
+    const mitAnschlag = tapLane(gestartet, gestartet.bahnen[0]!.id, 130_000, 2_000)
+    const unterbrochen: Lauf = {
+      ...mitAnschlag,
+      bahnen: mitAnschlag.bahnen.map((bahn) => ({ ...bahn, startMs: null })),
+    }
+
+    const id = unterbrochen.bahnen[0]!.id
+    expect(tapLane(unterbrochen, id, 200_000, 3_000)).toBe(unterbrochen)
+    expect(startAll(unterbrochen, 200_000, 3_000)).toBe(unterbrochen)
+    expect(startLane(unterbrochen, id, 200_000, 3_000)).toBe(unterbrochen)
+  })
+})
+
+describe('rebaseLauf', () => {
+  // Tab A startet bei perf 100 s und Wanduhr T. Tab B hat einen anderen
+  // performance-Nullpunkt und übernimmt 30 s später. Der Abstand der Reihen
+  // (10 s) und die verstrichene Zeit (30 s) müssen erhalten bleiben.
+  it('verschiebt Startzeiten auf die Zeitbasis eines anderen Tabs', () => {
+    const gestartet = startAll(
+      createLauf(
+        K100,
+        [
+          { nummer: 1, reihe: 1 },
+          { nummer: 2, reihe: 2 },
+        ],
+        null,
+        { startversatzMs: 10_000 },
+      ),
+      100_000,
+      1_700_000_000_000,
+    )
+
+    const verschoben = rebaseLauf(gestartet, 5_000, 1_700_000_030_000)
+
+    expect(verschoben.bahnen.map((eintrag) => eintrag.startMs)).toEqual([-25_000, -15_000])
+    expect(verschoben.bahnen[1]!.startMs! - verschoben.bahnen[0]!.startMs!).toBe(10_000)
+    expect(5_000 - verschoben.bahnen[0]!.startMs!).toBe(30_000)
+    expect(verschoben.startWallMs).toBe(1_700_000_000_000)
+  })
+
+  it('lässt ungestartete Bahnen und erfasste Anschläge unverändert', () => {
+    const gestartet = startAll(createLauf(K100, [{ nummer: 1 }, { nummer: 2 }]), 100_000, 1_000)
+    const mitAnschlag = tapLane(gestartet, gestartet.bahnen[0]!.id, 130_000, 2_000)
+
+    const verschoben = rebaseLauf(mitAnschlag, 5_000, 31_000)
+
+    expect(verschoben.bahnen[0]!.startMs).toBe(-25_000)
+    expect(verschoben.bahnen[0]!.anschlaege).toEqual(mitAnschlag.bahnen[0]!.anschlaege)
+    expect(verschoben.bahnen[1]!.startMs).toBe(-25_000)
+  })
+
+  it('gibt ohne Wanduhr-Anker oder ohne gestartete Bahn denselben Lauf zurück', () => {
+    const bereit = createLauf(K100, [{ nummer: 1 }])
+    expect(rebaseLauf(bereit, 5_000, 31_000)).toBe(bereit)
+
+    const ohneAnker = startAll(bereit, 100_000, 1_000)
+    const ohneAnkerLauf: Lauf = { ...ohneAnker, startWallMs: null }
+    expect(rebaseLauf(ohneAnkerLauf, 5_000, 31_000)).toBe(ohneAnkerLauf)
   })
 })

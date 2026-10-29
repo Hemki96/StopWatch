@@ -12,7 +12,7 @@ Blick in die Konsole des Browsers und in die [Entwicklerdokumentation](../entwic
 | App startet offline nicht | Noch nie online geladen oder Cache geleert | Einmal online öffnen, installieren, erneut testen |
 | Zeit fehlt nach dem Display-Sperren | PWA nimmt im Hintergrund keine Tipps an | Display wachhalten, Wake-Lock-Hinweis beachten, Zeit korrigieren |
 | Bahn reagiert nicht auf Tipp | Bahn ist geplant oder bereits im Ziel | Countdown abwarten bzw. Verlauf prüfen |
-| Nach Reload sind Bahnen „bereit“ | `performance.now()` gilt nur pro Seitensitzung | Lauf neu starten; Serie mit „Weiter“ fortsetzen |
+| Nach Reload sind Bahnen „bereit“ oder „unterbrochen“ | `performance.now()` gilt nur pro Seitensitzung | „Weiter“ für fehlende Starts; unterbrochene Bahnen lange drücken und neu starten |
 | Keine Bestzeit sichtbar | Keine Zuordnung, offene Strecke oder kein Finish | Schwimmer zuordnen, feste Strecke messen, Ziel erfassen |
 | Backup wird abgelehnt | Falsches Format, falsche Version oder beschädigte Datei | Fehlermeldung lesen; Datei nicht bearbeiten |
 | CSV öffnet in Excel in einer Spalte | Excel erwartet ein anderes Trennzeichen | Semikolon und UTF-8 beim Import wählen |
@@ -130,15 +130,22 @@ Weitere Ursachen:
 ### Nach einem Reload stimmen die Zeiten nicht mehr
 
 Das ist eine bewusste Grenze. `performance.now()` ist nach einem Reload wertlos; die App setzt
-laufende und geplante Bahnen auf **bereit** zurück. Bereits erfasste Anschläge bleiben erhalten,
-werden aber mit einem neuen Start vermischt, wenn du weiter tippst.
+laufende und geplante Bahnen auf **bereit** zurück. Bereits erfasste Anschläge bleiben erhalten.
+Eine Bahn mit Anschlägen, aber ohne Startzeit wird als **unterbrochen** angezeigt; ein einfacher
+Tap startet sie nicht neu, damit keine Zeit vor den bereits erfassten Splits entsteht.
 
 Empfehlung:
 
 - Den unterbrochenen Lauf im Verlauf prüfen und als unvollständig behandeln.
 - Für eine saubere Zeit den Lauf verwerfen und neu starten.
-- Bei einer Serie **Weiter** verwenden, wenn nur unberührte Runden übrig sind.
+- Bei einer Serie oder einem einzelnen Lauf **Weiter** verwenden, wenn nur unberührte Bahnen
+  fehlen.
+- Unterbrochene Bahnen lange drücken, um die Anschläge schrittweise zurückzunehmen; danach neu
+  starten.
 - Im Wettkampf den Heat erneut starten; vorhandene Zielzeiten bleiben.
+
+Eine **Tab-Übergabe** ist kein Reload: „Hier weiterarbeiten“ übernimmt die laufende Messung und
+rechnet die Startzeiten auf den neuen Tab um.
 
 ### Eine Serie ist „überfällig“
 

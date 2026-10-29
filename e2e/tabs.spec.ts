@@ -8,7 +8,7 @@
  * dieselbe IndexedDB und denselben `BroadcastChannel` sehen.
  */
 import { expect, test } from '@playwright/test'
-import { oeffneApp, oeffneZweitenTab, starteLauf } from './helfer'
+import { oeffneApp, oeffneZweitenTab, starteLauf, warteAufAnschlaege } from './helfer'
 
 // Übernahme: Der zweite Tab startet lesend, übernimmt den laufenden Lauf samt
 // bereits erfasstem Anschlag und gibt nach dem Schließen wieder frei.
@@ -29,12 +29,25 @@ test('zweiter Tab ist lesend, übernimmt auf Wunsch und gibt nach dem Schließen
   await expect(zweiter.locator('[data-tab-status="aktiv"]')).toBeVisible()
   await expect(page.locator('[data-tab-status="gesperrt"]')).toBeVisible()
 
-  // Der aktive Lauf samt Anschlag ist im übernehmenden Tab vorhanden.
+  // Der aktive Lauf samt Anschlag ist im übernehmenden Tab vorhanden — und die
+  // Uhr läuft weiter. Vor der Umrechnung auf die neue Zeitbasis wurde die Bahn
+  // hier fälschlich wieder „bereit“; ein weiterer Tap hätte neu gestartet
+  // statt den zweiten Anschlag zu erfassen.
   await expect(zweiter.locator('[data-anschlaege="1"]')).toBeVisible()
+  await expect(zweiter.getByRole('button', { name: /Bahn 1, läuft$/ })).toBeVisible()
+  await zweiter.getByRole('button', { name: /Bahn 1, läuft$/ }).tap()
+  await expect(zweiter.locator('[data-anschlaege="2"]')).toBeVisible()
+  // Vor dem Schließen muss der zweite Anschlag wirklich in IndexedDB liegen;
+  // die Anzeige allein ist optimistisch.
+  await warteAufAnschlaege(zweiter, 2)
 
   await zweiter.close()
   await expect(page.locator('[data-tab-status="aktiv"]')).toBeVisible({ timeout: 10_000 })
-  await expect(page.locator('[data-anschlaege="1"]')).toBeVisible()
+  // Zurück in Tab A: Der in Tab B erfasste Anschlag ist da. Die zweite Länge
+  // ist bei 100 m im 50-m-Becken das Ziel; entscheidend ist, dass die zuvor
+  // geprüfte laufende Bahn nicht neu gestartet wurde.
+  await expect(page.locator('[data-anschlaege="2"]')).toBeVisible()
+  await expect(page.getByRole('button', { name: /Bahn 1, im Ziel$/ })).toBeVisible()
 })
 
 // Auch ohne Messrechte bleibt der Verlauf lesbar; nur Aktionen sind gesperrt.
