@@ -134,10 +134,12 @@ import {
   analyseMatrix,
   analyseRunden,
   istAnalyseSatz,
+  istAnalyseSatzAusRunden,
   laengenMatrix,
   laengenZeiten,
   letzterGleicherSatz,
   mittlereAbweichungen,
+  sortiereRunden,
 } from './analyse'
 import type { Satz, SatzPlan } from './types'
 
@@ -212,6 +214,26 @@ describe('istAnalyseSatz', () => {
 
     const ohneSplits = satz('leer')
     expect(istAnalyseSatz(ohneSplits, [])).toBe(false)
+  })
+})
+
+describe('istAnalyseSatzAusRunden', () => {
+  it('prüft bereits gruppierte Läufe ohne erneutes Filtern', () => {
+    const training = satz('t1')
+    const runden = [runde('t1', 1, [[30_000, 60_000]])]
+    expect(istAnalyseSatzAusRunden(training, runden)).toBe(true)
+    expect(istAnalyseSatzAusRunden({ ...training, wettkampfId: 'wk1' }, runden)).toBe(false)
+    expect(istAnalyseSatzAusRunden(training, [])).toBe(false)
+  })
+})
+
+describe('sortiereRunden', () => {
+  it('sortiert bereits gruppierte Runden ohne Satzbezug', () => {
+    const runden = [
+      runde('s1', 2, [[60_000, 120_000]]),
+      runde('s1', 1, [[61_000, 122_000]]),
+    ]
+    expect(sortiereRunden(runden).map((lauf) => lauf.wiederholung)).toEqual([1, 2])
   })
 })
 

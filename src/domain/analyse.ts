@@ -195,19 +195,44 @@ export interface AnalyseMatrix {
 }
 
 /**
- * Die Runden eines Satzes in Anzeigereihenfolge: bei einer Serie nach
+ * Sortiert die Läufe eines Satzes in Anzeigereihenfolge: bei einer Serie nach
  * Wiederholungsnummer, bei frei gewachsenen Sätzen nach Startzeit. So stehen
  * die Wiederholungen in der Matrix in der Reihenfolge, in der sie geschwommen
  * wurden.
+ *
+ * Die Funktion erwartet bereits die Läufe eines Satzes. Aufrufer, die den
+ * Bestand ohnehin je Satz gruppieren, sparen damit das wiederholte Filtern
+ * über alle Läufe.
  */
-export function analyseRunden(satz: Satz, laeufe: Lauf[]): Lauf[] {
-  const betroffen = laeufe.filter((lauf) => lauf.satzId === satz.id)
-  const hatNummern = betroffen.some((lauf) => lauf.wiederholung !== null)
-  return [...betroffen].sort((a, b) =>
+export function sortiereRunden(laeufe: Lauf[]): Lauf[] {
+  const hatNummern = laeufe.some((lauf) => lauf.wiederholung !== null)
+  return [...laeufe].sort((a, b) =>
     hatNummern
       ? (a.wiederholung ?? 0) - (b.wiederholung ?? 0)
       : (a.startWallMs ?? 0) - (b.startWallMs ?? 0) || a.id.localeCompare(b.id),
   )
+}
+
+/** Die Runden eines Satzes in Anzeigereihenfolge; filtert aus allen Läufen. */
+export function analyseRunden(satz: Satz, laeufe: Lauf[]): Lauf[] {
+  return sortiereRunden(laeufe.filter((lauf) => lauf.satzId === satz.id))
+}
+
+/** Wahr, wenn ein einzelner Lauf auswertbare Zwischenzeiten beisteuert. */
+function istAnalyseLauf(lauf: Lauf): boolean {
+  return (
+    lauf.modus !== 'wettkampf' && lauf.bahnen.some((bahn) => bahn.anschlaege.length > 0)
+  )
+}
+
+/**
+ * Wie `istAnalyseSatz`, aber für die bereits gruppierten Läufe eines Satzes.
+ * Eine Liste kann so den Bestand einmal nach Satz gruppieren, statt für jeden
+ * Satz alle Läufe zu filtern.
+ */
+export function istAnalyseSatzAusRunden(satz: Satz, runden: Lauf[]): boolean {
+  if (istWettkampfSatz(satz)) return false
+  return runden.some(istAnalyseLauf)
 }
 
 /**
@@ -217,12 +242,7 @@ export function analyseRunden(satz: Satz, laeufe: Lauf[]): Lauf[] {
  */
 export function istAnalyseSatz(satz: Satz, laeufe: Lauf[]): boolean {
   if (istWettkampfSatz(satz)) return false
-  return laeufe.some(
-    (lauf) =>
-      lauf.satzId === satz.id &&
-      lauf.modus !== 'wettkampf' &&
-      lauf.bahnen.some((bahn) => bahn.anschlaege.length > 0),
-  )
+  return laeufe.some((lauf) => lauf.satzId === satz.id && istAnalyseLauf(lauf))
 }
 
 /** Zwei Sätze sind nur vergleichbar, wenn Strecke, Schwimmart und Becken gleich sind. */

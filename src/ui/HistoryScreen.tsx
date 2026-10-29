@@ -10,8 +10,7 @@
 import { useMemo, useState } from 'react'
 import { useApp } from '../app/AppProvider'
 import { hatBegonnen, isComplete } from '../domain/lauf'
-import { istAnalyseSatz } from '../domain/analyse'
-import { schnellsteZeit } from '../domain/analyse'
+import { istAnalyseSatzAusRunden, schnellsteZeit } from '../domain/analyse'
 import { formatStrecke, formatTakt, formatTime } from '../domain/format'
 import { einheitVon } from '../domain/einheit'
 import { SCHWIMMARTEN, type Lauf, type SatzPlan } from '../domain/types'
@@ -19,6 +18,7 @@ import { AnalyseScreen } from './AnalyseScreen'
 import { Bestaetigung } from './Bestaetigung'
 import { ChevronRightIcon, TrashIcon } from './icons'
 import { LaufDetail } from './LaufDetail'
+import { laeufeNachSatz } from './analyseMemo'
 
 /** Tagesdatum der Gruppenüberschrift, deutsch und kurz. */
 const datumFormat = new Intl.DateTimeFormat('de-DE', {
@@ -149,7 +149,14 @@ export function HistoryScreen() {
 
   // Kopfzeile zählt nur begonnene Läufe, nicht die geplanten Runden.
   const begonneneLaeufe = app.laeufe.filter((lauf) => hatBegonnen(lauf)).length
-  const auswertbareSaetze = app.satze.filter((satz) => istAnalyseSatz(satz, app.laeufe)).length
+  // Einmal gruppieren statt je Satz alle Läufe zu filtern; der Kopf wird auch
+  // beim Wechsel auf „Analyse“ neu gerendert (#68).
+  const auswertbareSaetze = useMemo(() => {
+    const nachSatz = laeufeNachSatz(app.laeufe)
+    return app.satze.filter((satz) =>
+      istAnalyseSatzAusRunden(satz, nachSatz.get(satz.id) ?? []),
+    ).length
+  }, [app.satze, app.laeufe])
 
   // Die Seitengröße wächst seitenweise; `slice` hält Reihenfolge und
   // Gruppierung unverändert und lässt keine Gruppe doppelt erscheinen.
