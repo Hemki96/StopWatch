@@ -4,9 +4,12 @@ import {
   elapsedMs,
   finishLane,
   finishMs,
+  hatLaufendeBahn,
   isFinished,
   isStreckeLocked,
+  korrigiereAnschlag,
   laneStatus,
+  pruefeAnschlagKorrektur,
   lastSplit,
   lengthCount,
   startAll,
@@ -190,6 +193,27 @@ describe('elapsedMs', () => {
   })
 })
 
+describe('hatLaufendeBahn', () => {
+  it('ist false für einen angelegten, nie gestarteten Lauf', () => {
+    expect(hatLaufendeBahn(laufMit(K100, 2))).toBe(false)
+    expect(hatLaufendeBahn(null)).toBe(false)
+  })
+
+  it('ist true, sobald mindestens eine Bahn läuft', () => {
+    const start = laufMit(K100, 2)
+    const gestartet = tapLane(start, bahn(start).id, 1000, 1)
+    expect(hatLaufendeBahn(gestartet)).toBe(true)
+  })
+
+  it('ist false, wenn alle Bahnen im Ziel sind', () => {
+    const start = laufMit(K100, 1)
+    const id = bahn(start).id
+    const fertig = tapLane(tapLane(tapLane(start, id, 0, 1), id, 30_000, 2), id, 60_000, 3)
+    expect(isFinished(bahn(fertig))).toBe(true)
+    expect(hatLaufendeBahn(fertig)).toBe(false)
+  })
+})
+
 describe('updateStrecke', () => {
   it('sperrt die Strecke, sobald ein Anschlag existiert', () => {
     const start = laufMit(K100, 1)
@@ -205,5 +229,48 @@ describe('updateStrecke', () => {
     const lauf = laufMit(K100, 1)
     const geaendert = updateStrecke(lauf, { ...K100, streckeM: 200 })
     expect(geaendert.konfiguration.streckeM).toBe(200)
+  })
+})
+
+describe('korrigiereAnschlag', () => {
+  function zweiLaengen() {
+    const start = laufMit(K100, 1)
+    const id = bahn(start).id
+    const lauf = tapLane(tapLane(tapLane(start, id, 0, 1), id, 30_000, 2), id, 60_000, 3)
+    return { lauf, bahnId: id }
+  }
+
+  it('korrigiert eine Zwischenzeit, ohne das Finish zu verschieben', () => {
+    const { lauf, bahnId } = zweiLaengen()
+    const korrigiert = korrigiereAnschlag(lauf, bahnId, 1, 31_000)
+    expect(bahn(korrigiert).anschlaege[0]?.splitMs).toBe(31_000)
+    expect(bahn(korrigiert).anschlaege[0]?.istFinish).toBe(false)
+    expect(bahn(korrigiert).anschlaege[0]?.manuell).toBe(true)
+    expect(bahn(korrigiert).anschlaege[1]?.splitMs).toBe(60_000)
+    expect(bahn(korrigiert).anschlaege[1]?.istFinish).toBe(true)
+  })
+
+  it('erhält das Finish-Flag bei der letzten Länge', () => {
+    const { lauf, bahnId } = zweiLaengen()
+    const korrigiert = korrigiereAnschlag(lauf, bahnId, 2, 58_000)
+    expect(finishMs(bahn(korrigiert))).toBe(58_000)
+    expect(bahn(korrigiert).anschlaege[1]?.manuell).toBe(true)
+  })
+
+  it('erzeugt aus einer Zwischenzeit kein Finish', () => {
+    const start = laufMit({ ...K100, streckeM: 150 }, 1)
+    const bahnId = bahn(start).id
+    const offen = tapLane(tapLane(start, bahnId, 0, 1), bahnId, 30_000, 2)
+    const korrigiert = korrigiereAnschlag(offen, bahnId, 1, 20_000)
+    expect(isFinished(bahn(korrigiert))).toBe(false)
+    expect(bahn(korrigiert).anschlaege[0]?.istFinish).toBe(false)
+  })
+
+  it('lehnt Zeiten ab, die die Reihenfolge brechen', () => {
+    const { lauf, bahnId } = zweiLaengen()
+    expect(pruefeAnschlagKorrektur(lauf, bahnId, 1, 61_000)).not.toBeNull()
+    expect(pruefeAnschlagKorrektur(lauf, bahnId, 2, 10_000)).not.toBeNull()
+    expect(korrigiereAnschlag(lauf, bahnId, 1, 61_000)).toBe(lauf)
+    expect(pruefeAnschlagKorrektur(lauf, bahnId, 1, 31_000)).toBeNull()
   })
 })

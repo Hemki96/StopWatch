@@ -34,6 +34,8 @@ export interface Anschlag {
   erfasstAt: number
   /** True, wenn dieser Anschlag die konfigurierte Strecke abschließt. */
   istFinish: boolean
+  /** True, wenn die Zeit nachträglich von Hand korrigiert wurde. */
+  manuell?: boolean
 }
 
 export interface Bahn {
@@ -49,8 +51,12 @@ export interface Lauf {
   id: string
   satzId: string | null
   konfiguration: LaufKonfiguration
-  /** Wanduhr-Anker des ersten Starts (`Date.now`), null solange nicht gestartet. */
+  /** Wanduhr-Anker des Starts dieser Wiederholung (`Date.now`). */
   startWallMs: number | null
+  /** Fester Abstand zwischen den Starts der Bahnen in ms. 0 = gemeinsamer Start. */
+  startversatzMs: number
+  /** 1-basierte Wiederholung innerhalb einer geplanten Serie, sonst null. */
+  wiederholung: number | null
   bahnen: Bahn[]
 }
 
@@ -62,6 +68,19 @@ export interface Schwimmer {
   erstelltAm: number
 }
 
+/**
+ * Der Plan einer Serie: mehrere Wiederholungen im festen Takt. Die Starts aller
+ * Wiederholungen stehen beim Start fest, damit die App ohne Timer auskommt.
+ */
+export interface SatzPlan {
+  /** Anzahl der Wiederholungen (Läufe) in der Serie. */
+  wiederholungen: number
+  /** Zeit zwischen zwei Wiederholungen in Sekunden. */
+  taktSek: number
+  /** Abstand zwischen den Starts der Bahnen innerhalb einer Wiederholung in ms. */
+  startversatzMs: number
+}
+
 export interface Satz {
   id: string
   /** Trainingstag als ISO-Datum (YYYY-MM-DD). */
@@ -69,7 +88,9 @@ export interface Satz {
   bezeichnung: string
   /** Läufe mit identischer Konfiguration am selben Tag landen im selben Satz. */
   konfiguration: LaufKonfiguration
+  /** Plan, wenn der Satz eine Serie mit festem Takt ist. */
+  plan: SatzPlan | null
   erstelltAm: number
 }
 
-export type BahnStatus = 'bereit' | 'laeuft' | 'beendet'
+export type BahnStatus = 'bereit' | 'geplant' | 'laeuft' | 'beendet'

@@ -13,6 +13,7 @@ import {
   createLauf,
   finishLane,
   isComplete,
+  korrigiereAnschlag as korrigiereAnschlagImLauf,
   startAll,
   tapLane,
   undoLane,
@@ -20,8 +21,10 @@ import {
   updateStrecke,
 } from '../domain/lauf'
 import { newId } from '../domain/id'
+import { TabKoordinator, type TabRolle } from './tabKoordinator'
 import {
   deleteLauf,
+  deleteSatzUndLaeufe,
   deleteSchwimmer,
   loadAll,
   saveLauf,
@@ -30,6 +33,8 @@ import {
 } from '../storage/repository'
 
 export type Theme = 'dark' | 'light'
+/** Die gespeicherte Wahl. `system` folgt der Betriebssystem-Einstellung. */
+export type ThemeEinstellung = Theme | 'system'
 
 export interface Einstellungen {
   konfiguration: LaufKonfiguration
@@ -60,9 +65,19 @@ export interface AppContextValue {
   satze: Satz[]
   laeufe: Lauf[]
   aktiverLauf: Lauf | null
+  /** Das tatsächlich aktive Design, nach Auflösung von `themeEinstellung`. */
   theme: Theme
+  themeEinstellung: ThemeEinstellung
   toast: string | null
-  toggleTheme: () => void
+  /** Wahr, sobald Laden oder Schreiben im lokalen Speicher gescheitert ist. */
+  speicherFehler: boolean
+  /** Wahr, wenn ein anderer Tab die Messung hält. */
+  tabGesperrt: boolean
+  /** Wahr, sobald dieser Tab die Messung hält. */
+  tabAktiv: boolean
+  /** Übernimmt die Messung aus dem anderen Tab. */
+  uebernehmen: () => void
+  setzeTheme: (einstellung: ThemeEinstellung) => void
   zeigeToast: (nachricht: string) => void
   neuerLauf: (
     konfiguration: LaufKonfiguration,
@@ -75,15 +90,22 @@ export interface AppContextValue {
   rueckgaengig: (bahnId: string) => void
   setzeSchwimmer: (bahnId: string, schwimmerId: string | null) => void
   setzeSchwimmerImLauf: (laufId: string, bahnId: string, schwimmerId: string | null) => void
+  korrigiereAnschlag: (
+    laufId: string,
+    bahnId: string,
+    laengeNr: number,
+    splitMs: number,
+  ) => void
   setzeKonfiguration: (konfiguration: LaufKonfiguration) => void
   verwerfeAktivenLauf: () => void
   loescheLauf: (id: string) => void
+  loescheSatz: (id: string) => void
   speichereSchwimmer: (daten: {
     id?: string
     name: string
     jahrgang: number | null
     notiz: string
-  }) => void
+  }) => Schwimmer | null
   loescheSchwimmer: (id: string) => void
   benenneSatz: (id: string, bezeichnung: string) => void
 }
@@ -131,10 +153,26 @@ function gleicheKonfiguration(a: LaufKonfiguration, b: LaufKonfiguration): boole
   )
 }
 
-function leseTheme(): Theme {
+function leseThemeEinstellung(): ThemeEinstellung {
   const gespeichert = localStorage.getItem(THEME_KEY)
-  if (gespeichert === 'light' || gespeichert === 'dark') return gespeichert
-  return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+  if (gespeichert === 'light' || gespeichert === 'dark' || gespeichert === 'system') {
+    return gespeichert
+  }
+  return 'system'
+}
+
+function systemIstDunkel(): boolean {
+  return !window.matchMedia?.('(prefers-color-scheme: light)').matches
+}
+
+/**
+ * Die Statusleiste des installierten iOS-Starts wird über dieses Meta gesteuert.
+ * `black-translucent` schiebt den Inhalt unter die Uhr und erzwingt weiße Schrift —
+ * im hellen Design unlesbar. Deshalb pro Design eine deckende Variante.
+ */
+function setzeStatusleistenStil(theme: Theme): void {
+  const meta = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]')
+  meta?.setAttribute('content', theme === 'dark' ? 'black' : 'default')
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -143,12 +181,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [satze, setSatze] = useState<Satz[]>([])
   const [laeufe, setLaeufe] = useState<Lauf[]>([])
   const [aktiverLaufId, setAktiverLaufId] = useState<string | null>(null)
-  const [theme, setTheme] = useState<Theme>(() => leseTheme())
+  const [themeEinstellung, setThemeEinstellung] = useState<ThemeEinstellung>(() =>
+    leseThemeEinstellung(),
+  )
+  const [systemDunkel, setSystemDunkel] = useState(systemIstDunkel)
+  const theme: Theme =
+    themeEinstellung === 'system' ? (systemDunkel ? 'dark' : 'light') : themeEinstellung
   const [einstellungen, setEinstellungenState] = useState<Einstellungen>(() => leseEinstellungen())
   const [toast, setToast] = useState<string | null>(null)
+  const [speicherFehler, setSpeicherFehler] = useState(false)
+  const [tabRolle, setTabRolle] = useState<TabRolle>('startet')
 
   const laeufeRef = useRef<Lauf[]>([])
   const aktiverLaufIdRef = useRef<string | null>(null)
+  const speicherFehlerRef = useRef(false)
+  const tabAktivRef = useRef(false)
+  const koordinatorRef = useRef<TabKoordinator | null>(null)
+  const schreibvorgaengeRef = useRef(new Set<Promise<unknown>>())
+  const ladeDatenRef = useRef<(() => Promise<void>) | null>(null)
 
   const setLaeufeSafe = useCallback((next: Lauf[]) => {
     laeufeRef.current = next
@@ -166,6 +216,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setToast(nachricht)
     window.setTimeout(() => setToast((aktuell) => (aktuell === nachricht ? null : aktuell)), 3200)
   }, [])
+
+  /**
+   * Speicherfehler werden zu einem dauerhaften Banner. Ein Toast pro Tap wäre
+   * bei sechs Bahnen sechsmal dieselbe Meldung und damit unlesbar.
+   */
+  const meldeSpeicherFehler = useCallback(() => {
+    console.error('Speichern im lokalen Speicher fehlgeschlagen.')
+    if (speicherFehlerRef.current) return
+    speicherFehlerRef.current = true
+    setSpeicherFehler(true)
+  }, [])
+
+  /** Verfolgt Schreibvorgänge, damit eine Tab-Übergabe nichts verliert. */
+  const verfolge = useCallback(
+    <T,>(vorgang: Promise<T>): Promise<T> => {
+      schreibvorgaengeRef.current.add(vorgang)
+      vorgang
+        .catch(() => meldeSpeicherFehler())
+        .finally(() => schreibvorgaengeRef.current.delete(vorgang))
+      return vorgang
+    },
+    [meldeSpeicherFehler],
+  )
+
+  const warteAufSchreibvorgaenge = useCallback(
+    () => Promise.allSettled([...schreibvorgaengeRef.current]).then(() => undefined),
+    [],
+  )
 
   const ladeDaten = useCallback(async () => {
     const daten = await loadAll()
@@ -188,7 +266,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Ein abgeschlossener Lauf bleibt im Verlauf, nicht auf dem Timer.
       setAktivenLaufId(null)
     }
-  }, [setAktivenLaufId, setLaeufeSafe, zeigeToast])
+  }, [setAktivenLaufId, setLaeufeSafe, zeigeToast, meldeSpeicherFehler])
+
+  ladeDatenRef.current = ladeDaten
+
+  useEffect(() => {
+    const koordinator = new TabKoordinator({
+      onRolle: (rolle) => {
+        tabAktivRef.current = rolle === 'aktiv'
+        setTabRolle(rolle)
+        if (rolle === 'aktiv') {
+          // Nach einer Übergabe den Stand des vorherigen Tabs übernehmen.
+          void ladeDatenRef.current?.()
+        }
+      },
+      vorUebergabe: warteAufSchreibvorgaenge,
+    })
+    koordinatorRef.current = koordinator
+    koordinator.start()
+
+    const beiSeitenende = () => koordinator.stop()
+    window.addEventListener('pagehide', beiSeitenende)
+    return () => {
+      window.removeEventListener('pagehide', beiSeitenende)
+      koordinator.stop()
+      koordinatorRef.current = null
+    }
+  }, [warteAufSchreibvorgaenge])
 
   useEffect(() => {
     let abgebrochen = false
@@ -199,12 +303,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .catch(() => {
         if (abgebrochen) return
         setGeladen(true)
-        zeigeToast('Speicher konnte nicht geladen werden.')
+        meldeSpeicherFehler()
       })
     return () => {
       abgebrochen = true
     }
-  }, [ladeDaten, zeigeToast])
+  }, [ladeDaten, meldeSpeicherFehler])
+
+  useEffect(() => {
+    const abfrage = window.matchMedia?.('(prefers-color-scheme: light)')
+    if (!abfrage) return
+    const reagiere = () => setSystemDunkel(!abfrage.matches)
+    abfrage.addEventListener('change', reagiere)
+    return () => abfrage.removeEventListener('change', reagiere)
+  }, [])
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
@@ -212,11 +324,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     document
       .querySelector('meta[name="theme-color"]')
       ?.setAttribute('content', theme === 'dark' ? '#070c15' : '#eef2f7')
-    localStorage.setItem(THEME_KEY, theme)
+    setzeStatusleistenStil(theme)
   }, [theme])
 
-  const toggleTheme = useCallback(() => {
-    setTheme((aktuell) => (aktuell === 'dark' ? 'light' : 'dark'))
+  const setzeTheme = useCallback((einstellung: ThemeEinstellung) => {
+    setThemeEinstellung(einstellung)
+    localStorage.setItem(THEME_KEY, einstellung)
   }, [])
 
   const setzeEinstellungen = useCallback((naechste: Einstellungen) => {
@@ -235,6 +348,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const aktualisiereAktiven = useCallback(
     (fn: (lauf: Lauf) => Lauf) => {
+      if (!tabAktivRef.current) return
       const id = aktiverLaufIdRef.current
       if (!id) return
       const aktuell = laeufeRef.current.find((l) => l.id === id)
@@ -242,9 +356,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const naechster = fn(aktuell)
       if (naechster === aktuell) return
       setLaeufeSafe(laeufeRef.current.map((l) => (l.id === id ? naechster : l)))
-      saveLauf(naechster).catch(() => zeigeToast('Speichern fehlgeschlagen.'))
+      verfolge(saveLauf(naechster))
     },
-    [setLaeufeSafe, zeigeToast],
+    [setLaeufeSafe, meldeSpeicherFehler],
   )
 
   const startAlle = useCallback(
@@ -277,14 +391,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setzeSchwimmerImLauf = useCallback(
     (laufId: string, bahnId: string, schwimmerId: string | null) => {
+      if (!tabAktivRef.current) return
       const lauf = laeufeRef.current.find((l) => l.id === laufId)
       if (!lauf) return
       const naechster = setSchwimmerOnLane(lauf, bahnId, schwimmerId)
       if (naechster === lauf) return
       setLaeufeSafe(laeufeRef.current.map((l) => (l.id === laufId ? naechster : l)))
-      saveLauf(naechster).catch(() => zeigeToast('Speichern fehlgeschlagen.'))
+      verfolge(saveLauf(naechster))
     },
-    [setLaeufeSafe, zeigeToast],
+    [setLaeufeSafe, meldeSpeicherFehler],
+  )
+
+  const korrigiereAnschlag = useCallback(
+    (laufId: string, bahnId: string, laengeNr: number, splitMs: number) => {
+      if (!tabAktivRef.current) return
+      const lauf = laeufeRef.current.find((l) => l.id === laufId)
+      if (!lauf) return
+      const naechster = korrigiereAnschlagImLauf(lauf, bahnId, laengeNr, splitMs)
+      if (naechster === lauf) return
+      setLaeufeSafe(laeufeRef.current.map((l) => (l.id === laufId ? naechster : l)))
+      verfolge(saveLauf(naechster))
+    },
+    [setLaeufeSafe, meldeSpeicherFehler],
   )
 
   const setzeKonfiguration = useCallback(
@@ -295,6 +423,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const neuerLauf = useCallback(
     (konfiguration: LaufKonfiguration, bahnen: number, schwimmerProBahn: (string | null)[] = []) => {
+      if (!tabAktivRef.current) return
       const datum = heute()
       const vorhandenerSatz = [...satze]
         .reverse()
@@ -307,11 +436,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
           datum,
           bezeichnung: '',
           konfiguration: { ...konfiguration },
+          plan: null,
           erstelltAm: Date.now(),
         }
         satzId = satz.id
         setSatze((aktuell) => [satz, ...aktuell])
-        saveSatz(satz).catch(() => zeigeToast('Speichern fehlgeschlagen.'))
+        verfolge(saveSatz(satz))
       }
 
       const lauf = createLauf(
@@ -324,33 +454,58 @@ export function AppProvider({ children }: { children: ReactNode }) {
       )
       setLaeufeSafe([lauf, ...laeufeRef.current])
       setAktivenLaufId(lauf.id)
-      saveLauf(lauf).catch(() => zeigeToast('Speichern fehlgeschlagen.'))
+      verfolge(saveLauf(lauf))
     },
-    [satze, setAktivenLaufId, setLaeufeSafe, zeigeToast],
+    [satze, setAktivenLaufId, setLaeufeSafe, meldeSpeicherFehler],
   )
 
   const verwerfeAktivenLauf = useCallback(() => {
+    if (!tabAktivRef.current) return
     const id = aktiverLaufIdRef.current
     if (!id) return
     setLaeufeSafe(laeufeRef.current.filter((l) => l.id !== id))
     setAktivenLaufId(null)
-    deleteLauf(id).catch(() => zeigeToast('Löschen fehlgeschlagen.'))
+    verfolge(deleteLauf(id))
     zeigeToast('Lauf verworfen.')
-  }, [setAktivenLaufId, setLaeufeSafe, zeigeToast])
+  }, [setAktivenLaufId, setLaeufeSafe, zeigeToast, meldeSpeicherFehler])
 
   const loescheLauf = useCallback(
     (id: string) => {
-      setLaeufeSafe(laeufeRef.current.filter((l) => l.id !== id))
+      if (!tabAktivRef.current) return
+      const lauf = laeufeRef.current.find((l) => l.id === id)
+      const verbleibend = laeufeRef.current.filter((l) => l.id !== id)
+      setLaeufeSafe(verbleibend)
       if (aktiverLaufIdRef.current === id) setAktivenLaufId(null)
-      deleteLauf(id).catch(() => zeigeToast('Löschen fehlgeschlagen.'))
+      verfolge(deleteLauf(id))
+
+      // Ein Satz ohne Läufe ist unsichtbar, aber nicht weg. Er verschwindet
+      // mit seinem letzten Lauf.
+      const satzId = lauf?.satzId
+      if (satzId && !verbleibend.some((l) => l.satzId === satzId)) {
+        setSatze((aktuell) => aktuell.filter((s) => s.id !== satzId))
+        verfolge(deleteSatzUndLaeufe(satzId))
+      }
     },
-    [setAktivenLaufId, setLaeufeSafe, zeigeToast],
+    [setAktivenLaufId, setLaeufeSafe, meldeSpeicherFehler],
+  )
+
+  const loescheSatz = useCallback(
+    (id: string) => {
+      if (!tabAktivRef.current) return
+      const betroffen = laeufeRef.current.filter((l) => l.satzId === id)
+      setSatze((aktuell) => aktuell.filter((s) => s.id !== id))
+      setLaeufeSafe(laeufeRef.current.filter((l) => l.satzId !== id))
+      if (betroffen.some((l) => l.id === aktiverLaufIdRef.current)) setAktivenLaufId(null)
+      verfolge(deleteSatzUndLaeufe(id))
+    },
+    [setAktivenLaufId, setLaeufeSafe, meldeSpeicherFehler],
   )
 
   const speichereSchwimmer = useCallback(
     (daten: { id?: string; name: string; jahrgang: number | null; notiz: string }) => {
+      if (!tabAktivRef.current) return null
       const name = daten.name.trim()
-      if (!name) return
+      if (!name) return null
       const vorhanden = daten.id ? schwimmer.find((s) => s.id === daten.id) : undefined
       const eintrag: Schwimmer = {
         id: vorhanden?.id ?? newId(),
@@ -364,15 +519,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
           a.name.localeCompare(b.name, 'de'),
         ),
       )
-      saveSchwimmer(eintrag).catch(() => zeigeToast('Speichern fehlgeschlagen.'))
+      verfolge(saveSchwimmer(eintrag))
+      return eintrag
     },
-    [schwimmer, zeigeToast],
+    [schwimmer, meldeSpeicherFehler],
   )
 
   const loescheSchwimmer = useCallback(
     (id: string) => {
+      if (!tabAktivRef.current) return
       setSchwimmer((aktuell) => aktuell.filter((s) => s.id !== id))
-      deleteSchwimmer(id).catch(() => zeigeToast('Löschen fehlgeschlagen.'))
+      verfolge(deleteSchwimmer(id))
 
       const geaenderteLaeufe: Lauf[] = []
       const naechsteLaeufe = laeufeRef.current.map((lauf) => {
@@ -389,7 +546,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (geaenderteLaeufe.length > 0) {
         setLaeufeSafe(naechsteLaeufe)
         for (const lauf of geaenderteLaeufe) {
-          saveLauf(lauf).catch(() => zeigeToast('Speichern fehlgeschlagen.'))
+          verfolge(saveLauf(lauf))
         }
       }
 
@@ -402,18 +559,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
         })
       }
     },
-    [einstellungen, setLaeufeSafe, setzeEinstellungen, zeigeToast],
+    [einstellungen, setLaeufeSafe, setzeEinstellungen, meldeSpeicherFehler],
   )
+
+  const uebernehmen = useCallback(() => {
+    koordinatorRef.current?.uebernehmen()
+  }, [])
 
   const benenneSatz = useCallback(
     (id: string, bezeichnung: string) => {
+      if (!tabAktivRef.current) return
       const satz = satze.find((s) => s.id === id)
       if (!satz) return
       const naechster = { ...satz, bezeichnung: bezeichnung.trim() }
       setSatze((aktuell) => aktuell.map((s) => (s.id === id ? naechster : s)))
-      saveSatz(naechster).catch(() => zeigeToast('Speichern fehlgeschlagen.'))
+      verfolge(saveSatz(naechster))
     },
-    [satze, zeigeToast],
+    [satze, meldeSpeicherFehler],
   )
 
   const value = useMemo<AppContextValue>(
@@ -427,8 +589,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       laeufe,
       aktiverLauf,
       theme,
+      themeEinstellung,
       toast,
-      toggleTheme,
+      speicherFehler,
+      tabGesperrt: tabRolle === 'gesperrt',
+      tabAktiv: tabRolle === 'aktiv',
+      uebernehmen,
+      setzeTheme,
       zeigeToast,
       neuerLauf,
       startAlle,
@@ -437,9 +604,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       rueckgaengig,
       setzeSchwimmer,
       setzeSchwimmerImLauf,
+      korrigiereAnschlag,
       setzeKonfiguration,
       verwerfeAktivenLauf,
       loescheLauf,
+      loescheSatz,
       speichereSchwimmer,
       loescheSchwimmer,
       benenneSatz,
@@ -454,8 +623,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       laeufe,
       aktiverLauf,
       theme,
+      themeEinstellung,
       toast,
-      toggleTheme,
+      speicherFehler,
+      tabRolle,
+      uebernehmen,
+      setzeTheme,
       zeigeToast,
       neuerLauf,
       startAlle,
@@ -464,12 +637,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       rueckgaengig,
       setzeSchwimmer,
       setzeSchwimmerImLauf,
+      korrigiereAnschlag,
       setzeKonfiguration,
       verwerfeAktivenLauf,
       loescheLauf,
+      loescheSatz,
       speichereSchwimmer,
       loescheSchwimmer,
       benenneSatz,
+      uebernehmen,
     ],
   )
 

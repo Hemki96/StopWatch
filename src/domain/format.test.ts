@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { formatDelta, formatStrecke, formatTime, truncateToHundredths } from './format'
+import {
+  formatDelta,
+  formatStrecke,
+  formatTime,
+  parseTime,
+  truncateToHundredths,
+} from './format'
 
 describe('truncateToHundredths', () => {
   it('schneidet ab statt zu runden', () => {
@@ -40,5 +46,22 @@ describe('formatStrecke', () => {
     expect(formatStrecke(100)).toBe('100 m')
     expect(formatStrecke(1500)).toBe('1.500 m')
     expect(formatStrecke(null)).toBe('offene Strecke')
+  })
+})
+
+describe('parseTime', () => {
+  it('liest mm:ss,hh und einfache Sekunden', () => {
+    expect(parseTime('01:23,45')).toBe(83_450)
+    expect(parseTime('1:23,4')).toBe(83_400)
+    expect(parseTime('83,45')).toBe(83_450)
+    expect(parseTime(' 01:00,00 ')).toBe(60_000)
+  })
+
+  it('lehnt ungültige Eingaben ab', () => {
+    expect(parseTime('')).toBeNull()
+    expect(parseTime('abc')).toBeNull()
+    expect(parseTime('01:75,00')).toBeNull()
+    expect(parseTime('01:23,456')).toBeNull()
+    expect(parseTime('-1,00')).toBeNull()
   })
 })

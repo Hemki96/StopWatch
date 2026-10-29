@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { laeufeAlsCsv } from './csv'
-import { createLauf, startAll, tapLane } from '../domain/lauf'
+import { createLauf, korrigiereAnschlag, startAll, tapLane } from '../domain/lauf'
 import type { Lauf, Satz, Schwimmer } from '../domain/types'
 
 const K100 = { beckenlaengeM: 50, streckeM: 100, schwimmart: 'freistil' } as const
@@ -19,6 +19,7 @@ const satz: Satz = {
   datum: '2026-10-29',
   bezeichnung: 'Test; mit Semikolon',
   konfiguration: K100,
+  plan: null,
   erstelltAm: 0,
 }
 
@@ -33,10 +34,10 @@ describe('laeufeAlsCsv', () => {
 
     expect(zeilen).toHaveLength(3)
     expect(zeilen[0]).toBe(
-      'satz;datum;beckenlaenge_m;strecke_m;schwimmart;bahn;schwimmer;laenge_nr;split_ms;split_formatiert;ist_finish',
+      'satz;datum;beckenlaenge_m;strecke_m;schwimmart;bahn;schwimmer;laenge_nr;split_ms;split_formatiert;ist_finish;manuell',
     )
-    expect(zeilen[1]).toContain('1;31250;00:31,25;0')
-    expect(zeilen[2]).toContain('2;64000;01:04,00;1')
+    expect(zeilen[1]).toContain('1;31250;00:31,25;0;0')
+    expect(zeilen[2]).toContain('2;64000;01:04,00;1;0')
   })
 
   it('maskiert Semikolons und setzt ein BOM', () => {
@@ -54,5 +55,20 @@ describe('laeufeAlsCsv', () => {
 
     const csv = laeufeAlsCsv([lauf], [satz], schwimmer)
     expect(csv).toContain('1;;1;30000')
+  })
+})
+
+describe('manuelle Korrektur im CSV', () => {
+  it('markiert korrigierte Anschläge in einer eigenen Spalte', () => {
+    let lauf = createLauf(K100, [{ nummer: 1, schwimmerId: 's1' }], 'satz-1')
+    lauf = startAll(lauf, 0, Date.UTC(2026, 9, 29, 9, 30))
+    const bahn = lauf.bahnen[0]!
+    lauf = tapLane(lauf, bahn.id, 31_250, 0)
+    lauf = tapLane(lauf, bahn.id, 64_000, 0)
+    lauf = korrigiereAnschlag(lauf, bahn.id, 1, 30_000)
+
+    const csv = laeufeAlsCsv([lauf], [satz], schwimmer)
+    expect(csv).toContain('1;30000;00:30,00;0;1')
+    expect(csv).toContain('2;64000;01:04,00;1;0')
   })
 })

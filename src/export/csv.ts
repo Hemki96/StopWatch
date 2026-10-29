@@ -23,6 +23,7 @@ const KOPFZEILE = [
   'split_ms',
   'split_formatiert',
   'ist_finish',
+  'manuell',
 ]
 
 /**
@@ -54,6 +55,7 @@ export function laeufeAlsCsv(laeufe: Lauf[], satze: Satz[], schwimmer: Schwimmer
             anschlag.splitMs,
             formatTime(anschlag.splitMs),
             anschlag.istFinish ? 1 : 0,
+            anschlag.manuell ? 1 : 0,
           ]
             .map(feld)
             .join(TRENNER),

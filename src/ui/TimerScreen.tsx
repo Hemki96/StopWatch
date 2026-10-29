@@ -31,6 +31,23 @@ export function TimerScreen() {
   const schwimmerName = (id: string | null) =>
     id ? (app.schwimmer.find((s) => s.id === id)?.name ?? null) : null
 
+  // Ein zweiter Tab darf nichts messen: die Bahnen wären sonst eine Einladung,
+  // Anschläge zu erfassen, die der aktive Tab nie sieht.
+  if (app.tabGesperrt) {
+    return (
+      <div className="flex h-full flex-col">
+        <h1 className="sr-only">Timer</h1>
+        <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+          <p className="text-sm font-semibold">Messung läuft in einem anderen Tab</p>
+          <p className="mt-2 max-w-xs text-sm leading-relaxed text-muted">
+            Hier kannst du den Verlauf und die Schwimmer ansehen. Starten, Tippen und Ändern sind
+            gesperrt, solange der andere Tab die Messung hält.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   const starte = () => {
     const perf = performance.now()
     const wall = Date.now()
@@ -46,6 +63,7 @@ export function TimerScreen() {
     return (
       <div className="flex h-full flex-col">
         <div className="flex-1 overflow-y-auto px-4 pb-4 pt-6">
+          <h1 className="sr-only">Timer</h1>
           <p className="text-[11px] font-bold uppercase tracking-wider text-muted">Nächster Lauf</p>
           <button
             type="button"
@@ -95,6 +113,7 @@ export function TimerScreen() {
 
   return (
     <div className="flex h-full flex-col">
+      <h1 className="sr-only">Timer</h1>
       <div className="flex items-center gap-2 border-b border-line px-3 py-2">
         <button
           type="button"
@@ -151,23 +170,30 @@ export function TimerScreen() {
             Start alle
           </button>
         ) : alleBeendet ? (
-          <button
-            type="button"
-            onClick={starte}
-            className="h-16 w-full rounded-2xl bg-accent text-xl font-bold text-accent-fg shadow-lg active:scale-[0.99]"
-          >
-            Neuer Lauf
-          </button>
+          <div className="space-y-2">
+            <p className="text-center text-xs font-semibold text-ok">
+              Alle {lauf.bahnen.length} Bahnen im Ziel
+            </p>
+            <button
+              type="button"
+              onClick={starte}
+              className="h-16 w-full rounded-2xl bg-accent text-xl font-bold text-accent-fg shadow-lg active:scale-[0.99]"
+            >
+              Neuer Lauf
+            </button>
+          </div>
         ) : (
           <div className="flex items-center justify-between gap-3">
-            <div>
+            <div className={laeuft && !wach ? 'text-warn' : ''}>
               <p className="tabular text-sm font-semibold">
                 {imZiel} von {lauf.bahnen.length} im Ziel
               </p>
-              <p className="text-xs text-muted">
-                {offeneStrecke
-                  ? '„Ziel“ auf der Kachel beendet eine Bahn.'
-                  : 'Weiter tippen, bis alle im Ziel sind.'}
+              <p className={`text-xs ${laeuft && !wach ? 'text-warn' : 'text-muted'}`}>
+                {laeuft && !wach
+                  ? 'Display-Sperre nicht aktiv — Bildschirm kann sich ausschalten.'
+                  : offeneStrecke
+                    ? '„Ziel“ auf der Kachel beendet eine Bahn.'
+                    : 'Weiter tippen, bis alle im Ziel sind.'}
               </p>
             </div>
             {offeneStrecke ? (
@@ -181,12 +207,6 @@ export function TimerScreen() {
             ) : null}
           </div>
         )}
-
-        {laeuft && !wach ? (
-          <p className="mt-2 text-center text-[11px] text-warn">
-            Display-Sperre nicht aktiv — Bildschirm kann sich ausschalten.
-          </p>
-        ) : null}
       </div>
 
       <KonfigurationSheet open={sheet} onClose={() => setSheet(false)} modus="lauf" />
