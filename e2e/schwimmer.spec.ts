@@ -17,7 +17,7 @@
  */
 
 import { expect, test, type Page } from '@playwright/test'
-import { oeffneApp, warteAufSchwimmerzuordnung, warteAufZielzeiten } from './helfer'
+import { oeffneApp, starteLauf, warteAufSchwimmerzuordnung, warteAufZielzeiten } from './helfer'
 
 /** Legt einen Schwimmer über das Formular an. */
 async function legeSchwimmerAn(page: Page, name: string): Promise<void> {
@@ -38,7 +38,7 @@ async function ordneZuUndMesse(page: Page, name: string): Promise<void> {
   await dialog.getByLabel('Schwimmer für Reihe 1, Bahn 1').selectOption({ label: name })
   await dialog.getByRole('button', { name: 'Schließen', exact: true }).click()
 
-  await page.getByRole('button', { name: 'Start', exact: true }).tap()
+  await starteLauf(page)
   const bahn = page.getByRole('button', { name: new RegExp(`Bahn 1, ${name}, läuft$`) })
   await expect(bahn).toBeVisible()
   await bahn.dispatchEvent('click')

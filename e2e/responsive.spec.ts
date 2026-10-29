@@ -8,7 +8,7 @@
  * Umbau der Klassen nicht unnötig fehlschlägt.
  */
 import { expect, test } from '@playwright/test'
-import { oeffneApp } from './helfer'
+import { oeffneApp, starteLauf } from './helfer'
 
 /**
  * Die Oberfläche wechselt an zwei Stellen ihr Layout: seitliche Navigation auf
@@ -41,7 +41,7 @@ test.describe('Tablet', () => {
     expect(sheetBox!.x).toBeGreaterThan(80)
     await page.keyboard.press('Escape')
 
-    await page.getByRole('button', { name: 'Start', exact: true }).tap()
+    await starteLauf(page)
     const bahnBox = await page.getByRole('button', { name: /Bahn 1, läuft$/ }).boundingBox()
     expect(bahnBox).not.toBeNull()
     // Drei Spalten auf dem Tablet; die Kachel bleibt groß genug zum Treffen.

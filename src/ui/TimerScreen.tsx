@@ -10,7 +10,7 @@
  * Zeit, `useWakeLock` hält den Bildschirm an, solange etwas läuft.
  */
 import { useState } from 'react'
-import { useApp, type AktiverEintrag } from '../app/AppProvider'
+import { useApp, type AktiverEintrag, type Einstellungen } from '../app/AppProvider'
 import { useNow } from '../app/useNow'
 import { useWakeLock } from '../app/useWakeLock'
 import { formatCountdown, formatStrecke, formatTakt, formatTime } from '../domain/format'
@@ -31,6 +31,7 @@ import { KonfigurationSheet } from './KonfigurationSheet'
 import { LaneTile } from './LaneTile'
 import { LaufErgebnis } from './LaufErgebnis'
 import { SerieAnsicht } from './SerieAnsicht'
+import { Startuebersicht, StartuebersichtLauf } from './Startuebersicht'
 import { TrashIcon, XIcon } from './icons'
 
 /** Deutsches Label zur Schwimmart; unbekannte Werte bleiben leer. */
@@ -76,6 +77,20 @@ function kurzTitel(lauf: Lauf, satz: Satz | null): string {
     return `${satz.plan.wiederholungen}×${strecke} · ${art}`
   }
   return `${strecke} · ${art}`
+}
+
+/**
+ * Plan, den die Einstellungen für den nächsten Lauf vorbereiten. Eine einzelne
+ * Wiederholung ist ein normaler Lauf und braucht keinen Plan.
+ */
+function planAusEinstellungen(einstellungen: Einstellungen): SatzPlan | null {
+  return einstellungen.wiederholungen > 1
+    ? {
+        wiederholungen: einstellungen.wiederholungen,
+        taktSek: einstellungen.taktSek,
+        startversatzMs: einstellungen.startversatzMs,
+      }
+    : null
 }
 
 /**
@@ -222,6 +237,9 @@ export function TimerScreen() {
   const runden = app.aktiveRunden
   const [sheet, setSheet] = useState(false)
   const [frageVerwerfen, setFrageVerwerfen] = useState(false)
+  // Startübersicht: `'neu'` prüft die Vorgaben für einen neuen Lauf, `'aktiv'`
+  // den bereits angelegten Lauf, dessen Uhr noch nicht läuft. `null` = zu.
+  const [startPruefen, setStartPruefen] = useState<'neu' | 'aktiv' | null>(null)
 
   // Die Zeit läuft nur, solange irgendwo etwas plant oder läuft; sonst bliebe
   // ein Render-Loop ohne sichtbaren Nutzen. Der Wake-Lock hält den Bildschirm
@@ -273,19 +291,83 @@ export function TimerScreen() {
     app.startAlle(perf, wall)
   }
 
+  /**
+   * Setzt die fehlenden Starts eines bereits angelegten Laufs. `startAlle`
+   * ergänzt nur Bahnen ohne Startzeit; nach einem Reload bleiben so gemessene
+   * Zeiten unangetastet.
+   */
+  const weiter = () => {
+    app.startAlle(performance.now(), Date.now())
+  }
+
+  // Daten der Startübersicht: Die Vorgaben gelten für einen neuen Lauf, der
+  // aktive Lauf für „Start alle“ nach dem Plus in der Leiste.
+  const einstellungen = app.einstellungen
+  const planVorgaben = planAusEinstellungen(einstellungen)
+  const namenVorgaben = Array.from(
+    { length: einstellungen.bahnen * einstellungen.reihen },
+    (_, index) => schwimmerName(einstellungen.schwimmerProBahn[index] ?? null),
+  )
+  const reihenAktiv = lauf ? reihenVon(lauf) : 1
+  const bahnenAktiv = lauf
+    ? Math.max(1, ...bahnenNachReihen(lauf.bahnen).map((gruppe) => gruppe.bahnen.length))
+    : 1
+  const namenAktiv = lauf
+    ? bahnenNachReihen(lauf.bahnen).flatMap((gruppe) =>
+        gruppe.bahnen.map((bahn) => schwimmerName(bahn.schwimmerId)),
+      )
+    : []
+
+  /**
+   * Übersicht vor dem Start. Sie zeigt nur Werte; erst „Jetzt starten“ setzt
+   * den ersten Startzeitstempel. „Ändern“ führt zurück in die Einstellungen,
+   * damit ein falsch gewählter Wert nicht erst nach dem Start auffällt.
+   */
+  const startUebersicht = (
+    <Startuebersicht
+      open={startPruefen !== null}
+      titel="Start prüfen"
+      text="Prüfe Becken, Strecke, Bahnen und Schwimmer. Erst mit „Jetzt starten“ beginnt die Uhr."
+      startLabel="Jetzt starten"
+      onClose={() => setStartPruefen(null)}
+      onStart={() => {
+        const herkunft = startPruefen
+        setStartPruefen(null)
+        // Ein bereits angelegter Lauf braucht nur die fehlenden Starts; ein
+        // neuer Lauf entsteht erst mit `starte`.
+        if (herkunft === 'aktiv') weiter()
+        else starte()
+      }}
+      onAendern={() => {
+        setStartPruefen(null)
+        setSheet(true)
+      }}
+      aendernLabel="Einstellungen ändern"
+    >
+      {startPruefen === 'aktiv' && lauf ? (
+        <StartuebersichtLauf
+          konfiguration={lauf.konfiguration}
+          bahnen={bahnenAktiv}
+          reihen={reihenAktiv}
+          namen={namenAktiv}
+          startversatzMs={lauf.startversatzMs}
+          plan={satz?.plan ?? null}
+        />
+      ) : (
+        <StartuebersichtLauf
+          konfiguration={einstellungen.konfiguration}
+          bahnen={einstellungen.bahnen}
+          reihen={einstellungen.reihen}
+          namen={namenVorgaben}
+          startversatzMs={einstellungen.startversatzMs}
+          plan={planVorgaben}
+        />
+      )}
+    </Startuebersicht>
+  )
+
   // Kein aktiver Lauf: Vorschau der Einstellungen mit Startknopf.
   if (!lauf) {
-    const einstellungen = app.einstellungen
-    // Erst ab zwei Wiederholungen ist der Satz eine Serie mit festem Takt;
-    // eine einzelne Wiederholung braucht keinen Plan.
-    const plan: SatzPlan | null =
-      einstellungen.wiederholungen > 1
-        ? {
-            wiederholungen: einstellungen.wiederholungen,
-            taktSek: einstellungen.taktSek,
-            startversatzMs: einstellungen.startversatzMs,
-          }
-        : null
     return (
       <div className="flex h-full flex-col">
         <LaufLeiste
@@ -315,7 +397,7 @@ export function TimerScreen() {
                   einstellungen.bahnen * einstellungen.reihen,
                   einstellungen.reihen,
                   einstellungen.startversatzMs,
-                  plan,
+                  planVorgaben,
                 )}
               </span>
               <span className="mt-1 block text-sm text-accent">Ändern</span>
@@ -323,8 +405,8 @@ export function TimerScreen() {
 
             <div className="mt-10 space-y-3 text-sm leading-relaxed text-muted">
               <p>
-                Ein Tap startet alle Bahnen. Mit Reihen startet die nächste Gruppe nach dem
-                eingestellten Versatz.
+                „Start“ zeigt zuerst eine Übersicht. Erst dort startet „Jetzt starten“ alle Bahnen.
+                Mit Reihen startet die nächste Gruppe nach dem eingestellten Versatz.
               </p>
               <p>
                 Danach tippst du jede Bahn bei jedem Anschlag an. Der letzte Anschlag ist das Ziel.
@@ -338,7 +420,7 @@ export function TimerScreen() {
           <div className="mx-auto w-full max-w-2xl">
             <button
               type="button"
-              onClick={starte}
+              onClick={() => setStartPruefen('neu')}
               className="h-20 w-full rounded-2xl bg-accent text-2xl font-bold text-accent-fg shadow-lg active:scale-[0.99]"
             >
               Start
@@ -347,6 +429,7 @@ export function TimerScreen() {
         </div>
 
         <KonfigurationSheet open={sheet} onClose={() => setSheet(false)} modus="einstellungen" />
+        {startUebersicht}
       </div>
     )
   }
@@ -425,11 +508,6 @@ export function TimerScreen() {
     runden.some((runde) =>
       runde.bahnen.some((bahn) => bahn.startMs === null && !isFinished(bahn)),
     )
-  const weiter = () => {
-    const perf = performance.now()
-    // startAlle ergänzt nur Bahnen ohne Startzeit; vorhandene bleiben stehen.
-    app.startAlle(perf, Date.now())
-  }
 
   return (
     <div className="flex h-full flex-col">
@@ -557,11 +635,11 @@ export function TimerScreen() {
       <div className="border-t border-line p-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] rail:px-4">
         <div className="mx-auto w-full max-w-3xl">
         {!gestartet ? (
-          // „Start alle“ und „Weiter“ teilen sich denselben Aufruf: startAll
-          // ergänzt nur Bahnen, die noch keine Startzeit haben.
+          // Erst die Übersicht, dann `startAlle` im Bestätigen-Knopf: Auch ein
+          // per Plus angelegter Lauf startet nicht ohne letzte Prüfung.
           <button
             type="button"
-            onClick={weiter}
+            onClick={() => setStartPruefen('aktiv')}
             className="h-16 w-full rounded-2xl bg-accent text-xl font-bold text-accent-fg shadow-lg active:scale-[0.99]"
           >
             Start alle
@@ -581,7 +659,7 @@ export function TimerScreen() {
             </p>
             <button
               type="button"
-              onClick={starte}
+              onClick={() => setStartPruefen('neu')}
               className="h-16 w-full rounded-2xl bg-accent text-xl font-bold text-accent-fg shadow-lg active:scale-[0.99]"
             >
               Neuer Lauf
@@ -646,6 +724,8 @@ export function TimerScreen() {
       {/* Im Lauf entscheidet das Sheet selbst, was noch änderbar ist: Strecke
           ist nach dem ersten Anschlag gesperrt, bei Serien der ganze Plan. */}
       <KonfigurationSheet open={sheet} onClose={() => setSheet(false)} modus="lauf" />
+
+      {startUebersicht}
 
       {/* Verwerfen löscht die Messung samt Zeiten; deshalb Rückfrage und ein
           eigener Text für Serien. */}

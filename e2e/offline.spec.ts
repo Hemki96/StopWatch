@@ -8,7 +8,7 @@
  * Produktions-Build, weil der Dev-Server keinen Service Worker registriert.
  */
 import { expect, test } from '@playwright/test'
-import { oeffneApp } from './helfer'
+import { oeffneApp, starteLauf } from './helfer'
 
 /**
  * Läuft gegen den gebauten Stand (`npm run build` + `npm run preview`).
@@ -38,7 +38,7 @@ test('App lädt offline aus dem Service-Worker-Cache, der Lauf bleibt sichtbar',
   })
   expect(cachesGefuellt).toBeGreaterThan(0)
 
-  await page.getByRole('button', { name: 'Start', exact: true }).tap()
+  await starteLauf(page)
   await page.getByRole('button', { name: /Bahn 1, läuft$/ }).tap()
   await expect(page.locator('[data-anschlaege="1"]')).toBeVisible()
 

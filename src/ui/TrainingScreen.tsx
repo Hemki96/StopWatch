@@ -27,6 +27,7 @@ import type { Training, TrainingsSatz } from '../domain/types'
 import { AktiveSheet } from './AktiveSheet'
 import { Bestaetigung } from './Bestaetigung'
 import { Sheet } from './Sheet'
+import { Startuebersicht, StartuebersichtTraining } from './Startuebersicht'
 import { TrainingsSatzSheet } from './TrainingsSatzSheet'
 import { ChevronLeftIcon, PlusIcon, TrashIcon } from './icons'
 
@@ -112,6 +113,9 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
   const [aktiveOffen, setAktiveOffen] = useState(false)
   const [umbenennen, setUmbenennen] = useState(false)
   const [frageLoeschen, setFrageLoeschen] = useState(false)
+  // Startübersicht: ID des Trainingssatzes, dessen Uhr als Nächstes beginnt.
+  // `null` heißt geschlossen; erst „Jetzt starten“ ruft `starte` auf.
+  const [startPruefen, setStartPruefen] = useState<string | null>(null)
 
   // Eine gemerkte, inzwischen gelöschte ID fällt auf die Liste zurück.
   const training = app.trainings.find((eintrag) => eintrag.id === gewaehlt) ?? null
@@ -207,10 +211,16 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
   const fortschritt = trainingsFortschritt(training, app.satze, app.laeufe)
   // Der nächste Satz ist der laufende/bereite, sonst der erste offene.
   const naechster = naechsterSatz(fortschritt)
+  /** Namen je Platz, Reihe für Reihe; leere Plätze bleiben `null`. */
+  const namenProPlatz = training.aktive.map((id) =>
+    id ? (app.schwimmer.find((eintrag) => eintrag.id === id)?.name ?? null) : null,
+  )
   // Nur besetzte Aktive anzeigen; leere Bahnen bleiben in `training.aktive`.
-  const namen = training.aktive
-    .map((id) => (id ? app.schwimmer.find((eintrag) => eintrag.id === id)?.name : null))
-    .filter((name): name is string => Boolean(name))
+  const namen = namenProPlatz.filter((name): name is string => Boolean(name))
+  // Der Satz, dessen Startübersicht offen ist; eine gelöschte ID fällt weg.
+  const startKandidat = startPruefen
+    ? (fortschritt.find((eintrag) => eintrag.eintrag.id === startPruefen) ?? null)
+    : null
   const bearbeiteterSatz = bearbeitet
     ? (training.saetze.find((eintrag) => eintrag.id === bearbeitet) ?? null)
     : null
@@ -264,7 +274,8 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
 
   /**
    * Ein Tipp auf eine Satzzeile: offene Sätze öffnen den Editor, fertige sind
-   * gesperrt, alles andere führt in die laufende Messung.
+   * gesperrt, ein angelegter Satz zeigt erst die Übersicht und ein laufender
+   * führt zurück in die Messung.
    */
   const oeffneSatz = (eintrag: TrainingsSatzFortschritt) => {
     if (eintrag.status === 'offen') {
@@ -272,6 +283,10 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
       return
     }
     if (eintrag.status === 'fertig') return
+    if (eintrag.status === 'bereit') {
+      setStartPruefen(eintrag.eintrag.id)
+      return
+    }
     starte(eintrag.eintrag.id)
   }
 
@@ -456,7 +471,13 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
         {naechster ? (
           <button
             type="button"
-            onClick={() => starte(naechster.eintrag.id)}
+            onClick={() =>
+              // Ein laufender Satz öffnet nur die Messung; alles, was die Uhr
+              // startet oder fortsetzt, geht über die Startübersicht.
+              naechster.status === 'laeuft'
+                ? starte(naechster.eintrag.id)
+                : setStartPruefen(naechster.eintrag.id)
+            }
             className="h-16 w-full rounded-2xl bg-accent text-lg font-bold text-accent-fg shadow-lg active:scale-[0.99]"
           >
             {naechster.status === 'offen'
@@ -534,6 +555,33 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
             setUmbenennen(false)
           }}
         />
+      ) : null}
+
+      {startKandidat ? (
+        <Startuebersicht
+          open
+          titel="Training starten?"
+          text={`Prüfe Aktive und Reihenfolge. Erst mit „Jetzt starten“ beginnt die Uhr für Satz ${startKandidat.index + 1}.`}
+          startLabel="Jetzt starten"
+          onClose={() => setStartPruefen(null)}
+          onStart={() => {
+            const satzId = startKandidat.eintrag.id
+            setStartPruefen(null)
+            starte(satzId)
+          }}
+          onAendern={() => {
+            setStartPruefen(null)
+            setAktiveOffen(true)
+          }}
+          aendernLabel="Aktive ändern"
+        >
+          <StartuebersichtTraining
+            training={training}
+            fortschritt={fortschritt}
+            namen={namenProPlatz}
+            startSatzId={startKandidat.eintrag.id}
+          />
+        </Startuebersicht>
       ) : null}
 
       <Bestaetigung

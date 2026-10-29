@@ -9,7 +9,7 @@
  * bekommt einen frischen Browser-Kontext und damit eine leere Datenbank.
  */
 import { expect, test } from '@playwright/test'
-import { oeffneApp } from './helfer'
+import { oeffneApp, starteLauf } from './helfer'
 
 // Kernreise: Start → zwei Anschläge → Verlauf → Reload. Der Reload ist der
 // eigentliche Prüfpunkt, weil er die gemessenen Zeiten aus IndexedDB neu lädt.
@@ -17,7 +17,7 @@ test('startet einen Lauf, stoppt eine Bahn und behält den Verlauf nach Reload',
   await oeffneApp(page)
 
   await expect(page.getByText('Nächster Lauf')).toBeVisible()
-  await page.getByRole('button', { name: 'Start', exact: true }).tap()
+  await starteLauf(page)
 
   const bahn1 = page.getByRole('button', { name: /Bahn 1, läuft$/ })
   await expect(bahn1).toBeVisible()
@@ -39,7 +39,7 @@ test('startet einen Lauf, stoppt eine Bahn und behält den Verlauf nach Reload',
 // Destruktive Aktion: Der Lauf darf nicht ohne Bestätigung verschwinden.
 test('verwirft einen Lauf nach Rückfrage', async ({ page }) => {
   await oeffneApp(page)
-  await page.getByRole('button', { name: 'Start', exact: true }).tap()
+  await starteLauf(page)
 
   await page.getByRole('button', { name: 'Lauf verwerfen' }).tap()
   await expect(page.getByText('Lauf verwerfen?')).toBeVisible()

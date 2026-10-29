@@ -15,7 +15,7 @@
  */
 
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { oeffneApp } from './helfer'
+import { oeffneApp, starteLauf } from './helfer'
 
 /**
  * Startet die App mit vorbereiteten Serien-Einstellungen.
@@ -103,7 +103,7 @@ test('Startversatz hält spätere Reihen im Countdown und mehrere Läufe bleiben
     taktSek: 60,
   })
 
-  await page.getByRole('button', { name: 'Start', exact: true }).tap()
+  await starteLauf(page)
 
   // Bei 30 s Versatz startet nur Reihe 1; die zweite Reihe ist „geplant“
   // und zeigt statt der laufenden Zeit einen Countdown („Start in“).
@@ -145,7 +145,7 @@ test('nimmt nach einem Reload fehlende Starts einer angefangenen Runde wieder au
     taktSek: 60,
   })
 
-  await page.getByRole('button', { name: 'Start', exact: true }).tap()
+  await starteLauf(page)
   const bahn1 = page.getByRole('button', { name: /Bahn 1, Runde 1 von 2, läuft$/ })
   // Klick statt Tap: Zwei sehr schnelle Taps können unter Last als Geste
   // abgebrochen werden und dann keine Anschläge erzeugen. Zwei Anschläge
@@ -182,7 +182,7 @@ test('Serie zeigt Runden pro Schwimmer, zählt sie und nimmt den letzten Anschla
     taktSek: 60,
   })
 
-  await page.getByRole('button', { name: 'Start', exact: true }).tap()
+  await starteLauf(page)
   await expect(page.getByText(/Serie ·/)).toBeVisible()
 
   // Zwei Taps pro Bahn schließen Runde 1 ab; der Tap bezieht sich immer auf

@@ -156,7 +156,24 @@ Bottom Sheet auf Basis von `Dialog`:
 - Auf dem Tablet (`rail`) wird daraus ein zentriertes Fenster mit `max-w-xl`; der Griff entfällt,
   die Ziehgeste bleibt als Maus- und Touch-Geste erhalten.
 
-Das Sheet wird für Konfiguration, Aktive, Sätze, Namen, Zeiten und Import verwendet.
+Das Sheet wird für Konfiguration, Aktive, Sätze, Namen, Zeiten, Import und die Startübersicht
+verwendet.
+
+### `Startuebersicht`
+
+`src/ui/Startuebersicht.tsx` ist die letzte Prüfung vor dem Start der Uhr. Der Rahmen ist ein
+`Sheet` mit Titel, einer ruhigen Liste (Label links, Wert rechts), einem bestätigenden **Jetzt
+starten** und optional **Ändern**:
+
+- `StartuebersichtLauf` zeigt Beckenlänge, Strecke, Schwimmart, Bahnen und Reihen, Startzeiten,
+  Takt und die Schwimmer je Bahn; eine leere Bahn heißt ausdrücklich „frei“.
+- `StartuebersichtTraining` zeigt Aktive und alle Sätze in fester Reihenfolge und hebt den Satz
+  hervor, dessen Uhr gleich beginnt.
+
+Der Grundsatz: **Kein Startzeitstempel ohne Bestätigung.** „Start“, „Start alle“, „Satz N starten“
+und „Neuer Lauf“ öffnen die Übersicht; erst deren `onStart` ruft `startAlle` bzw.
+`starteTrainingsSatz`. Schließen ändert nichts, „Ändern“ führt in das passende Formular zurück. Die
+Komponente liest keine Daten selbst — Timer und Training übergeben die Werte.
 
 ### `Bestaetigung`
 

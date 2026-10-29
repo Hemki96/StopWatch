@@ -34,9 +34,16 @@ test('bereitet Sätze und Aktive vor, startet den ersten Satz und passt den Plan
     page.getByRole('button', { name: 'Satz 1: 100 m · Freistil, offen' }),
   ).toBeVisible()
 
-  // Der erste Satz startet sofort im Timer: Erst beim Start entstehen aus dem
-  // Trainingssatz ein Satz und seine Läufe, deshalb wechselt die App dorthin.
+  // Der erste Satz zeigt zuerst die Startübersicht: Aktive, Sätze und die
+  // Reihenfolge stehen dort; erst „Jetzt starten“ legt Satz und Läufe an und
+  // wechselt in den Timer.
   await page.getByRole('button', { name: 'Satz 1 starten' }).tap()
+  const uebersicht = page.getByRole('dialog')
+  await expect(uebersicht.getByText('Training starten?')).toBeVisible()
+  await expect(uebersicht.getByText('6 in 1 Reihe')).toBeVisible()
+  await expect(uebersicht.getByText('100 m · Freistil')).toBeVisible()
+  await expect(uebersicht.getByText('startet jetzt')).toBeVisible()
+  await uebersicht.getByRole('button', { name: 'Jetzt starten' }).tap()
   await expect(page.getByRole('button', { name: /Bahn 1, läuft$/ })).toBeVisible()
 
   // Zurück im Training ist der Satz als laufend markiert. Ein gestarteter

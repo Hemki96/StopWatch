@@ -17,7 +17,7 @@
  */
 
 import { expect, test } from '@playwright/test'
-import { oeffneApp } from './helfer'
+import { oeffneApp, starteLauf } from './helfer'
 
 // Nutzerreise: messen, Backup herunterladen, alles löschen, dasselbe Backup
 // wieder einlesen und den Lauf im Verlauf wiederfinden.
@@ -25,7 +25,7 @@ test('Backup exportieren, alles löschen und wieder einlesen', async ({ page }) 
   await oeffneApp(page)
   // Zwei Taps reichen für einen vollständigen Lauf: Standard sind 100 m im
   // 50-m-Becken, also zwei Längen; der zweite Anschlag ist das Ziel.
-  await page.getByRole('button', { name: 'Start', exact: true }).tap()
+  await starteLauf(page)
   const bahn = page.getByRole('button', { name: /Bahn 1, läuft$/ })
   await bahn.tap()
   await bahn.tap()
@@ -80,7 +80,7 @@ test('Backup exportieren, alles löschen und wieder einlesen', async ({ page }) 
 test('Ungültiges Backup wird abgelehnt, ohne den Bestand zu ändern', async ({ page }) => {
   await oeffneApp(page)
   // Bestand anlegen, an dem sich zeigen lässt, dass der Import nichts ändert.
-  await page.getByRole('button', { name: 'Start', exact: true }).tap()
+  await starteLauf(page)
   await page.getByRole('button', { name: 'Mehr' }).tap()
 
   const [chooser] = await Promise.all([

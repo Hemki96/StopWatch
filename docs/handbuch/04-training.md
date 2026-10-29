@@ -87,7 +87,7 @@ Die Liste **Sätze** zeigt jeden Trainingssatz mit:
 | Status | Bedeutung |
 | --- | --- |
 | **offen** | Nur der Plan existiert. Antippen öffnet die Bearbeitung. |
-| **bereit** | Der Satz wurde angelegt, aber noch keine Bahn gestartet oder erfasst. Antippen führt zum Timer. |
+| **bereit** | Der Satz wurde angelegt, aber noch keine Bahn gestartet oder erfasst. Antippen zeigt die Startübersicht; **Jetzt starten** wechselt zum Timer. |
 | **läuft** | Mindestens eine Bahn wurde gestartet oder hat einen Anschlag. Antippen führt zum Timer. |
 | **fertig** | Alle Läufe des Satzes sind vollständig im Ziel. Der Satz ist nicht mehr bearbeitbar. |
 
@@ -142,6 +142,19 @@ Unten steht immer die nächste sinnvolle Aktion:
 Der nächste Satz ist zuerst ein bereits angelegter oder laufender Satz, sonst der erste noch offene.
 Die feste Reihenfolge wird also eingehalten.
 
+### Startübersicht
+
+**Satz N starten** beginnt nicht sofort zu messen. Zuerst erscheint eine Übersicht der ganzen Einheit:
+
+- **Aktive** in ihrer Aufteilung auf Reihen und Bahnen, leere Plätze als **„frei“**,
+- die Zahl der Sätze mit dem Fortschritt,
+- alle **Sätze in fester Reihenfolge** mit Titel, Metazeile und Status; der Satz, dessen Uhr gleich
+  beginnt, ist hervorgehoben und trägt **„startet jetzt“**.
+
+Unten stehen **Jetzt starten** und **Aktive ändern**. Erst **Jetzt starten** legt Satz und Läufe an
+und wechselt in den Timer. Wurde der Satz schon einmal angelegt (Status **bereit**), zeigt die
+Übersicht erneut und setzt danach die fehlenden Starts.
+
 Beim ersten Start eines Satzes passiert Folgendes:
 
 1. Die App legt den Satz und alle Wiederholungen an.
@@ -151,8 +164,9 @@ Beim ersten Start eines Satzes passiert Folgendes:
    Abstand später.
 5. Die App wechselt in den **Timer**, wo der Satz wie ein normaler Lauf bzw. eine Serie bedient wird.
 
-Bei einem bereits angelegten Satz wird nur zum Timer gewechselt. Ein nach einem Reload
-zurückgesetzter Satz muss dort mit **Start alle** bzw. **Weiter** fortgesetzt werden.
+Bei einem bereits angelegten Satz zeigt die Übersicht erneut; **Jetzt starten** wechselt danach zum
+Timer. Ein nach einem Reload zurückgesetzter Satz muss dort mit **Start alle** bzw. **Weiter**
+fortgesetzt werden.
 
 ## Während des Trainings
 
@@ -213,7 +227,7 @@ Messdaten zu verlieren. Zum Löschen von Messdaten den Verlauf verwenden.
 **Am Becken:**
 
 1. Training öffnen.
-2. **Satz 1 starten**.
+2. **Satz 1 starten**, in der Startübersicht Aktive und Reihenfolge prüfen, dann **Jetzt starten**.
 3. Im Timer messen, wie gewohnt.
 4. Zurück zum Training, Fortschritt prüfen.
 5. **Satz 2 starten** — oder den Plan für die nächsten Sätze anpassen.

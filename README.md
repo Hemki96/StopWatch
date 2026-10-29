@@ -12,12 +12,14 @@ Mehrere Läufe können **gleichzeitig aktiv** sein. Oben in der Leiste wird zwis
 
 Ein **Satz mit Plan** ist eine **Serie**: mehrere Wiederholungen im festen Takt, z. B. 5×100 m alle 2:00. Beim Start stehen alle Runden fest. Die Serien-Ansicht zeigt eine Zeile pro Schwimmer; ein Tap schließt die älteste offene Runde. Läuft die nächste Runde schon, während jemand noch unterwegs ist, bleibt die alte Runde sichtbar und wird als überfällig markiert.
 
-Ein **Training** ist die Vorbereitung einer Einheit: Vorab legst du die **Aktiven** je Bahn und mehrere **Trainingssätze** in fester Reihenfolge an. Im Training startest du Satz für Satz; noch nicht gestartete Sätze lassen sich währenddessen ändern, ergänzen, löschen oder verschieben. Erst beim Start entstehen aus einem Trainingssatz ein Satz und seine Läufe — gemessene Zeiten bleiben unangetastet.
+Ein **Training** ist die Vorbereitung einer Einheit: Vorab legst du die **Aktiven** je Bahn und mehrere **Trainingssätze** in fester Reihenfolge an. Im Training startest du Satz für Satz; vor jedem Start zeigt eine Übersicht Aktive und Reihenfolge. Noch nicht gestartete Sätze lassen sich währenddessen ändern, ergänzen, löschen oder verschieben. Erst beim Start entstehen aus einem Trainingssatz ein Satz und seine Läufe — gemessene Zeiten bleiben unangetastet.
 
 Der **Wettkampfmodus** ist ein eigener Tab: Ein **Wettkampf** bündelt **Disziplinen** (z. B. 100 m Freistil) mit mehreren **Läufen** (Heats). Eine **Meldeliste** lässt sich als CSV importieren; daraus entstehen Disziplinen, Läufe, Bahnen und Schwimmer. Im Wettkampf ist ein Tap nach dem Start sofort die **Zielzeit** — keine Längen-Splits, dafür ein Stift für eine von Hand nachgetragene oder korrigierte Zeit. Nach dem Lauf zeigt jede Bahn ihren Platz und den Rückstand; die Ergebnisliste lässt sich als CSV teilen.
 
 - Zeiten auf Hundertstel, abgeschnitten statt gerundet
 - Messung aus Zeitstempeln (`performance.now()`), unabhängig von Rendering
+- **Startübersicht** vor jedem Start: Becken, Strecke, Bahnen, Schwimmer, Startzeiten, Takt und die
+  Reihenfolge der Trainingssätze prüfen, dann erst startet die Uhr
 - Splits, Bestzeiten je Schwimmer/Strecke/Schwimmart/Beckenlänge, Pace pro 100 m
 - Startversatz zwischen Reihen, mehrere aktive Läufe, Serien mit festem Takt
 - Trainingsplan mit Aktiven, mehreren Sätzen in fester Reihenfolge und Anpassung während des Trainings

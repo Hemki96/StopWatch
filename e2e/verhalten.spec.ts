@@ -15,7 +15,7 @@
  */
 
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { oeffneApp, warteAufSchwimmerzuordnung } from './helfer'
+import { oeffneApp, starteLauf, warteAufSchwimmerzuordnung } from './helfer'
 
 const BAHN1 = /Bahn 1, läuft$/
 
@@ -48,7 +48,7 @@ async function langdruck(page: Page, ziel: Locator): Promise<void> {
 // zurückgenommen werden — durch langes Drücken auf der Kachel.
 test('Long-Press nimmt den letzten Anschlag zurück', async ({ page }) => {
   await oeffneApp(page)
-  await page.getByRole('button', { name: 'Start', exact: true }).tap()
+  await starteLauf(page)
 
   // Geprüft wird über Datenattribute: `data-anschlaege` zählt die Anschläge,
   // der Text nennt die nächste Länge. Beides zusammen belegt, dass der Tap als
@@ -71,7 +71,7 @@ test('Long-Press nimmt den letzten Anschlag zurück', async ({ page }) => {
 // Screenreader-Nutzer unbedienbar.
 test('Screenreader-Klick löst einen Anschlag aus', async ({ page }) => {
   await oeffneApp(page)
-  await page.getByRole('button', { name: 'Start', exact: true }).tap()
+  await starteLauf(page)
 
   // `dispatchEvent('click')` erzeugt genau diesen Fall: kein pointerdown/up,
   // also kein Halte-Overlay und kein Doppelzählen.
@@ -99,7 +99,7 @@ test('Offene Strecke: Ziel beendet die Bahn, weitere Taps ändern nichts', async
   // Bei offener Strecke gibt es keinen automatischen Finish: Der Zielknopf
   // sitzt in der Kachel und stoppt Pointer- und Klickweitergabe, damit das
   // Ziel nicht zusätzlich als Anschlag zählt.
-  await page.getByRole('button', { name: 'Start', exact: true }).tap()
+  await starteLauf(page)
   const bahn = page.getByRole('button', { name: BAHN1 })
   await bahn.tap()
   await expect(bahn).toHaveAttribute('data-anschlaege', '1')
@@ -138,7 +138,7 @@ test('Schwimmer anlegen, Bahn zuordnen und Reload überstehen', async ({ page })
   await dialog.getByLabel('Schwimmer für Reihe 1, Bahn 1').selectOption({ label: 'Mia' })
   await dialog.getByRole('button', { name: 'Schließen', exact: true }).click()
 
-  await page.getByRole('button', { name: 'Start', exact: true }).tap()
+  await starteLauf(page)
   await expect(page.getByRole('button', { name: /Bahn 1, Mia, läuft$/ })).toBeVisible()
   // Erst wenn die Zuordnung in IndexedDB liegt, ist der Reload verlustfrei:
   // Die Anzeige ist sofort da, das Schreiben läuft asynchron.
@@ -156,7 +156,7 @@ test('Schwimmer anlegen, Bahn zuordnen und Reload überstehen', async ({ page })
 // Satz gelöscht; die Rückfrage nennt vorher, wie viele Läufe mitgehen.
 test('Satz löschen entfernt den Satz samt Läufen', async ({ page }) => {
   await oeffneApp(page)
-  await page.getByRole('button', { name: 'Start', exact: true }).tap()
+  await starteLauf(page)
   // „Start“ allein legt den Satz samt einem Lauf an; der Verlauf zählt ihn
   // schon, obwohl noch kein Anschlag gesetzt ist.
   await page.getByRole('button', { name: 'Verlauf' }).tap()

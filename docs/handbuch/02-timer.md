@@ -10,7 +10,10 @@ Der Tab **Timer** ist die Grundlage jeder Messung. Ein **Lauf** besteht aus eine
 Nächster Lauf konfigurieren
         │
         ▼
-   Start / Start alle
+   Start → Start prüfen (Übersicht)
+        │
+        ▼
+      Jetzt starten
         │
         ├── Bahn 1: läuft ── Anschlag ── Anschlag ── Ziel
         ├── Bahn 2: läuft ── Anschlag ────────────── Ziel
@@ -24,9 +27,28 @@ Es gibt drei Wege, einen Lauf zu beginnen:
 
 | Weg | Was passiert |
 | --- | --- |
-| **Start** auf der Karte „Nächster Lauf“ | Legt einen Lauf aus den aktuellen Einstellungen an und startet alle Bahnen sofort. |
-| **+** in der Lauf-Leiste | Legt einen weiteren Lauf aus den aktuellen Einstellungen an, startet ihn aber noch nicht. Danach **Start alle** tippen. |
-| **Start alle** im bereits angelegten Lauf | Startet alle Bahnen, die noch nicht gestartet oder beendet sind. |
+| **Start** auf der Karte „Nächster Lauf“ | Öffnet die **Startübersicht** mit Becken, Strecke, Bahnen, Schwimmern und Startzeiten. Erst **Jetzt starten** legt den Lauf aus den aktuellen Einstellungen an und startet alle Bahnen. |
+| **+** in der Lauf-Leiste | Legt einen weiteren Lauf aus den aktuellen Einstellungen an, startet ihn aber noch nicht. Danach **Start alle** tippen; auch dieser Knopf zeigt zuerst die Startübersicht. |
+| **Start alle** im bereits angelegten Lauf | Öffnet die Startübersicht des Laufs; **Jetzt starten** setzt den Start für alle noch nicht gestarteten Bahnen. |
+
+## Startübersicht
+
+Vor jedem Start hält die App einmal inne: Sie zeigt die Werte, mit denen die Uhr gleich läuft, und
+setzt den ersten Startzeitstempel erst mit **Jetzt starten**. Damit fällt eine falsche Einstellung
+auf, bevor Zeiten entstehen, die sich nicht mehr ändern lassen.
+
+Die Übersicht zeigt:
+
+- **Beckenlänge**, **Strecke** (bei einer Serie als `5×100 m`) und **Schwimmart**,
+- **Bahnen** je Reihe und die Zahl der **Reihen** samt Personenzahl,
+- den **Startversatz** und, falls gesetzt, die konkreten Startzeiten `R1 0 s · R2 10 s`,
+- bei einer Serie den **Takt**,
+- alle **Schwimmer** Reihe für Reihe; eine leere Bahn steht ausdrücklich als **„frei“**,
+- eine Warnung, wenn der Takt kürzer als der Versatz der letzten Reihe ist.
+
+Unten stehen **Jetzt starten** und **Einstellungen ändern**. „Ändern“ schließt die Übersicht und
+öffnet das Konfigurations-Sheet; ein Schließen ohne Start ändert nichts. Ein Lauf, der über **+**
+angelegt wurde, zeigt dieselbe Übersicht beim **Start alle**.
 
 ## Die Lauf-Leiste
 
@@ -258,8 +280,8 @@ die noch völlig unberührt sind. Vollständige Runden bleiben erhalten. Siehe
 
 ## Tipps für den Beckenrand
 
-- Vor dem Start prüfen, ob Beckenlänge und Strecke stimmen. Nach dem ersten Anschlag sind sie
-  gesperrt.
+- Die **Startübersicht** vor dem Start prüfen: Beckenlänge, Strecke, Bahnen und Schwimmer stehen dort
+  noch einmal. Nach dem ersten Anschlag sind Beckenlänge, Strecke und Schwimmart gesperrt.
 - Bei vielen Bahnen die Kacheln nicht zu klein werden lassen: 10 Bahnen sind auf einem kleinen
   Handy eng. Für 8–10 Bahnen ein größeres Gerät oder Querformat verwenden — die App zeigt dann
   mehr Spalten und rückt auf dem Tablet die Navigation an die Seite. Auf einem kleinen Handy im

@@ -14,7 +14,7 @@
 
 import { readFile } from 'node:fs/promises'
 import { expect, test } from '@playwright/test'
-import { oeffneApp, warteAufSatzbezeichnung } from './helfer'
+import { oeffneApp, starteLauf, warteAufSatzbezeichnung } from './helfer'
 
 /**
  * Legt einen vollständigen Lauf mit zwei Anschlägen an.
@@ -31,7 +31,7 @@ import { oeffneApp, warteAufSatzbezeichnung } from './helfer'
  */
 async function starteUndStoppe(page: import('@playwright/test').Page) {
   await oeffneApp(page)
-  await page.getByRole('button', { name: 'Start', exact: true }).tap()
+  await starteLauf(page)
 
   // Klick statt Tap: Ein unter Last verzögerter Pointer-Up würde sonst als
   // Long-Press gelten und den Start wieder zurücknehmen.

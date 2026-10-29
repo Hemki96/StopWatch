@@ -105,8 +105,8 @@ aktuellen Konfiguration, z. B.:
 
 > `50 m · 100 m · Freistil · 6 Bahnen`
 
-Ein Tipp auf die Karte öffnet das Konfigurations-Sheet. Der große **Start**-Knopf beginnt die
-Messung sofort mit diesen Werten.
+Ein Tipp auf die Karte öffnet das Konfigurations-Sheet. Der große **Start**-Knopf öffnet zuerst die
+**Startübersicht** mit allen Werten; erst **Jetzt starten** beginnt die Messung.
 
 ## Die erste Messung in fünf Minuten
 
@@ -115,7 +115,8 @@ Messung sofort mit diesen Werten.
 3. Beckenlänge, Strecke und Schwimmart prüfen. Für den ersten Test passen 50 m, 100 m und Freistil.
 4. Unter **Bahnen** die Anzahl einstellen, z. B. 4.
 5. Optional unter **Schwimmer für den nächsten Lauf** Namen zuordnen.
-6. Das Sheet schließen und **Start** tippen. Alle Bahnen starten gemeinsam.
+6. Das Sheet schließen, **Start** tippen und in der Startübersicht **Jetzt starten** bestätigen. Alle
+   Bahnen starten gemeinsam.
 7. Bei jeder Wandberührung die Kachel der Bahn antippen.
    - 100 m im 50 m-Becken: zwei Tipps (50 m und Ziel).
    - 100 m im 25 m-Becken: vier Tipps.

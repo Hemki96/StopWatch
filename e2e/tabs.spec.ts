@@ -8,7 +8,7 @@
  * dieselbe IndexedDB und denselben `BroadcastChannel` sehen.
  */
 import { expect, test } from '@playwright/test'
-import { oeffneApp, oeffneZweitenTab } from './helfer'
+import { oeffneApp, oeffneZweitenTab, starteLauf } from './helfer'
 
 // Übernahme: Der zweite Tab startet lesend, übernimmt den laufenden Lauf samt
 // bereits erfasstem Anschlag und gibt nach dem Schließen wieder frei.
@@ -16,7 +16,7 @@ test('zweiter Tab ist lesend, übernimmt auf Wunsch und gibt nach dem Schließen
   page,
 }) => {
   await oeffneApp(page)
-  await page.getByRole('button', { name: 'Start', exact: true }).tap()
+  await starteLauf(page)
   await page.getByRole('button', { name: /Bahn 1, läuft$/ }).tap()
   await expect(page.locator('[data-anschlaege="1"]')).toBeVisible()
 
@@ -40,7 +40,7 @@ test('zweiter Tab ist lesend, übernimmt auf Wunsch und gibt nach dem Schließen
 // Auch ohne Messrechte bleibt der Verlauf lesbar; nur Aktionen sind gesperrt.
 test('der lesende Tab zeigt den Verlauf weiterhin an', async ({ page }) => {
   await oeffneApp(page)
-  await page.getByRole('button', { name: 'Start', exact: true }).tap()
+  await starteLauf(page)
   await page.getByRole('button', { name: 'Verlauf' }).tap()
 
   const zweiter = await oeffneZweitenTab(page)

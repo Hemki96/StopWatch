@@ -12,7 +12,7 @@
  */
 
 import { expect, test, type Page } from '@playwright/test'
-import { oeffneApp } from './helfer'
+import { oeffneApp, starteLauf } from './helfer'
 
 /**
  * Startet die App mit einer einzelnen Bahn auf 100 m.
@@ -47,7 +47,7 @@ async function oeffneMitEinemLauf(page: Page, reihen = 1): Promise<void> {
 
 test('zeigt die Laufzeit, zählt sie hoch und friert beim letzten Ziel ein', async ({ page }) => {
   await oeffneMitEinemLauf(page)
-  await page.getByRole('button', { name: 'Start', exact: true }).tap()
+  await starteLauf(page)
 
   const laufzeit = page.locator('[data-laufzeit]')
   await expect(laufzeit).toContainText('Laufzeit')
@@ -79,7 +79,7 @@ test('zeigt die Laufzeit, zählt sie hoch und friert beim letzten Ziel ein', asy
 
 test('beginnt mit dem Startversatz beim ersten Start', async ({ page }) => {
   await oeffneMitEinemLauf(page, 2)
-  await page.getByRole('button', { name: 'Start', exact: true }).tap()
+  await starteLauf(page)
 
   // Reihe 2 startet eine Sekunde später; die Laufzeit beginnt trotzdem mit
   // Reihe 1 und ist deshalb schon größer als null, bevor Reihe 2 dran ist.
@@ -97,7 +97,7 @@ test('färbt die Laufzeit bei fehlendem Wake-Lock amber', async ({ page }) => {
     Object.defineProperty(navigator, 'wakeLock', { value: undefined, configurable: true })
   })
   await oeffneMitEinemLauf(page)
-  await page.getByRole('button', { name: 'Start', exact: true }).tap()
+  await starteLauf(page)
 
   const laufzeit = page.locator('[data-laufzeit]')
   await expect(laufzeit).toBeVisible()

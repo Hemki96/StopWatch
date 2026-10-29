@@ -22,7 +22,8 @@ Serien werden über die Standardwerte für den nächsten Lauf angelegt:
 4. Bei mehr als einer Wiederholung erscheint die Auswahl **Takt (Start zu Start)**: gängige Werte
    als Chip, jeder andere Takt über die Felder **Minuten** und **Sekunden**.
 5. Optional **Startversatz** zwischen den Reihen innerhalb einer Runde wählen.
-6. Das Sheet schließen und **Start** tippen.
+6. Das Sheet schließen und **Start** tippen. In der Startübersicht stehen Wiederholungen und Takt
+   noch einmal; **Jetzt starten** beginnt die Serie.
 
 **1×** bedeutet einzelner Lauf. Erst ab **2×** entsteht eine Serie.
 
@@ -200,7 +201,7 @@ Serie sinnvoll.
 1. Unter **Mehr → Nächster Lauf** oder direkt im Timer-Sheet: Strecke 100 m, Schwimmart Freistil,
    Becken 50 m, Bahnen 4.
 2. **Serie** auf 5× stellen, **Takt** 2:00 wählen.
-3. **Start** tippen.
+3. **Start** tippen, in der Startübersicht `5×100 m` und den Takt prüfen, dann **Jetzt starten**.
 4. Runde 1 startet auf allen vier Bahnen. Der Takt läuft ab dem Startknopf.
 5. Bei jeder Ankunft die Zeile der Schwimmerin antippen. Der Tipp schließt die älteste offene Runde.
 6. Nach 2:00 startet Runde 2 automatisch. Wer noch in Runde 1 ist, wird als **überfällig** markiert.

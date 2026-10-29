@@ -12,9 +12,11 @@
  * Specs selbst über `addInitScript` (etwa die Serien-Einstellungen), nicht
  * diese Helfer.
  *
- * Die Helfer bedienen die Oberfläche nicht, sondern schreiben nur den
+ * Die meisten Helfer bedienen die Oberfläche nicht, sondern schreiben nur den
  * Onboarding-Merker in `localStorage` und lesen IndexedDB. So bleiben sie
- * unabhängig von Layout und Beschriftungen.
+ * unabhängig von Layout und Beschriftungen. Eine Ausnahme ist `starteLauf`:
+ * Die Startübersicht ist Teil jeder Messreise und wird deshalb an einer Stelle
+ * bedient, damit eine Änderung der Beschriftung nicht durch alle Specs wandert.
  */
 
 import { expect, type Page } from '@playwright/test'
@@ -46,6 +48,21 @@ export async function oeffneApp(page: Page): Promise<void> {
   })
   await page.goto('/')
   await expect(page.locator('[data-tab-status="aktiv"]')).toBeVisible()
+}
+
+/**
+ * Startet den nächsten Lauf über die Startübersicht.
+ *
+ * „Start“ auf der Karte „Nächster Lauf“ öffnet seit der Startübersicht zuerst
+ * ein Sheet mit allen Einstellungen; erst „Jetzt starten“ setzt den
+ * Startzeitstempel. Beide Schritte gehören zur Nutzerreise, deshalb tippt der
+ * Helfer sie zusammen.
+ *
+ * @param page - Seite mit geöffneter App im Timer-Tab.
+ */
+export async function starteLauf(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Start', exact: true }).tap()
+  await page.getByRole('button', { name: 'Jetzt starten', exact: true }).tap()
 }
 
 /**

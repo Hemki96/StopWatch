@@ -16,7 +16,7 @@
  */
 
 import { expect, test } from '@playwright/test'
-import { oeffneApp } from './helfer'
+import { oeffneApp, starteLauf } from './helfer'
 
 // Nutzerreise: erster Start auf einem neuen Gerät — der Assistent erklärt die
 // Grundbegriffe und sammelt die Konfiguration ein.
@@ -143,7 +143,7 @@ test('teilt den nächsten Lauf in Reihen und startet sie versetzt', async ({ pag
   await sheet.getByRole('button', { name: 'Schließen' }).tap()
 
   await expect(page.getByText('6 Personen in 2 Reihen')).toBeVisible()
-  await page.getByRole('button', { name: 'Start', exact: true }).tap()
+  await starteLauf(page)
 
   // Beide Reihen sind sichtbar, aber nur Reihe 1 läuft; Reihe 2 wartet auf
   // ihren Startzeitpunkt.
@@ -185,7 +185,7 @@ test('stellt einen eigenen Takt frei ein', async ({ page }) => {
 // ändern — sonst wären bereits erfasste Splits ungültig.
 test('sperrt die Strecke nach dem ersten Anschlag auch in der Oberfläche', async ({ page }) => {
   await oeffneApp(page)
-  await page.getByRole('button', { name: 'Start', exact: true }).tap()
+  await starteLauf(page)
   // Ein Anschlag genügt, um die Strecke zu sperren.
   await page.getByRole('button', { name: /Bahn 1, läuft$/ }).tap()
 
