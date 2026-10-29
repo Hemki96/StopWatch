@@ -250,16 +250,19 @@ die noch völlig unberührt sind. Vollständige Runden bleiben erhalten. Siehe
 - **Startversatz** von 0 bis 120 s zwischen zwei Reihen.
 - **Takt** von 10 s bis 60 min in den Einstellungen; gängige Werte stehen als Chip bereit, jeder
   andere lässt sich über Minuten und Sekunden eingeben.
-- **Strecken** 50, 100, 200, 400, 800, 1.500 m oder offen. Die Strecke muss ein Vielfaches der
-  Beckenlänge sein.
+- **Einheiten** Meter oder Yards. Bei Yards gibt es nur das 25-Yard-Becken (22,86 m); Strecken
+  werden in ganzen Yards gewählt. Gespeichert wird kanonisch in Metern, die Anzeige folgt der
+  Einheit des Laufs.
+- **Strecken** 50, 100, 200, 400, 800, 1.500 in der gewählten Einheit oder offen. Die Strecke muss
+  ein Vielfaches der Beckenlänge sein.
 - Ein Lauf gehört zu genau einem **Satz**. Ein einzelner Lauf aus dem Timer mit gleicher
   Konfiguration am selben Tag landet im selben Satz; eine Serie und ein gestarteter Trainingssatz
   haben immer einen eigenen Satz.
 
 ## Tipps für den Beckenrand
 
-- Vor dem Start prüfen, ob Beckenlänge und Strecke stimmen. Nach dem ersten Anschlag sind sie
-  gesperrt.
+- Vor dem Start prüfen, ob Einheit, Beckenlänge und Strecke stimmen. Nach dem ersten Anschlag sind
+  sie gesperrt.
 - Bei vielen Bahnen die Kacheln nicht zu klein werden lassen: 10 Bahnen sind auf einem kleinen
   Handy eng. Für 8–10 Bahnen ein größeres Gerät oder Querformat verwenden — die App zeigt dann
   mehr Spalten und rückt auf dem Tablet die Navigation an die Seite. Auf einem kleinen Handy im

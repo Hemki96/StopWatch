@@ -11,6 +11,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useApp } from '../app/AppProvider'
 import { berechnePbs, pacePro100, pbDelta } from '../domain/analyse'
 import { formatDelta, formatStrecke, formatTakt, formatTime, parseTime } from '../domain/format'
+import { einheitVon, formatBeckenlaenge } from '../domain/einheit'
 import {
   finishMs,
   hatBegonnen,
@@ -90,6 +91,7 @@ export function LaufDetail({
   }
 
   const art = SCHWIMMARTEN.find((s) => s.wert === lauf.konfiguration.schwimmart)?.label ?? ''
+  const einheit = einheitVon(lauf.konfiguration)
   const satz = app.satze.find((eintrag) => eintrag.id === lauf.satzId) ?? null
   // Unbegonnene Läufe und unvollständige Läufe werden unterschiedlich erklärt:
   // Der erste Fall hat noch keine Zeiten, der zweite zählt nicht als Bestzeit.
@@ -149,10 +151,10 @@ export function LaufDetail({
         </p>
         <h1 className="mt-1 text-xl font-semibold">
           {lauf.bahnen.length} {reihenVon(lauf) > 1 ? 'Personen' : 'Bahnen'} ·{' '}
-          {formatStrecke(lauf.konfiguration.streckeM)}
+          {formatStrecke(lauf.konfiguration.streckeM, einheit)}
         </h1>
         <p className="text-sm text-muted">
-          {lauf.konfiguration.beckenlaengeM} m-Becken · {art}
+          {formatBeckenlaenge(lauf.konfiguration.beckenlaengeM, einheit)}-Becken · {art}
           {reihenVon(lauf) > 1 ? ` · ${reihenVon(lauf)} Reihen` : ''}
           {lauf.startversatzMs > 0 && reihenVon(lauf) > 1
             ? ` · ${lauf.startversatzMs / 1000} s Reihenversatz`
@@ -268,7 +270,10 @@ export function LaufDetail({
                           <span className="tabular w-14 shrink-0 text-muted">
                             {lauf.modus === 'wettkampf'
                               ? 'Ziel'
-                              : `${anschlag.laengeNr * lauf.konfiguration.beckenlaengeM} m`}
+                              : formatStrecke(
+                                  anschlag.laengeNr * lauf.konfiguration.beckenlaengeM,
+                                  einheit,
+                                )}
                           </span>
                           {/*
                             Korrektur: Erst die Eingabe parsen, dann die
@@ -397,7 +402,7 @@ export function LaufDetail({
                     gekennzeichnet. */}
                 {ms !== null && !wettkampfStatus && lauf.konfiguration.streckeM ? (
                   <p className="tabular mt-2 text-[11px] text-muted">
-                    Pace {formatTime(pacePro100(ms, lauf.konfiguration.streckeM))} / 100 m
+                    Pace {formatTime(pacePro100(ms, lauf.konfiguration.streckeM, einheit))} / 100 {einheit}
                     {status === 'beendet' ? '' : ' · unvollständig'}
                   </p>
                 ) : null}

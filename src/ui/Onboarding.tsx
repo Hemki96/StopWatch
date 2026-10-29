@@ -10,8 +10,26 @@
  */
 import { useState } from 'react'
 import { useApp } from '../app/AppProvider'
-import { STANDARD_KONFIGURATION, lengthCount, validateKonfiguration } from '../domain/lauf'
-import { SCHWIMMARTEN, type Beckenlaenge, type LaufKonfiguration } from '../domain/types'
+import {
+  anzeigeZuMeter,
+  beckenlaengenFuer,
+  einheitVon,
+  formatBeckenlaenge,
+  standardBeckenlaenge,
+  streckeAnzeige,
+} from '../domain/einheit'
+import {
+  STANDARD_KONFIGURATION,
+  istVielfacheDerBeckenlaenge,
+  lengthCount,
+  validateKonfiguration,
+} from '../domain/lauf'
+import {
+  SCHWIMMARTEN,
+  type Beckenlaenge,
+  type Einheit,
+  type LaufKonfiguration,
+} from '../domain/types'
 
 const STRECKEN = [50, 100, 200, 400, 800, 1500] as const
 
@@ -76,7 +94,30 @@ export function Onboarding({ onFertig }: { onFertig: () => void }) {
       ...konfiguration,
       beckenlaengeM,
       streckeM:
-        strecke !== null && strecke % beckenlaengeM !== 0 ? beckenlaengeM * 2 : strecke,
+        strecke !== null && !istVielfacheDerBeckenlaenge(strecke, beckenlaengeM)
+          ? beckenlaengeM * 2
+          : strecke,
+    })
+  }
+
+  /**
+   * Wechselt Meter/Yards. Die angezeigte Streckenzahl bleibt erhalten; passt
+   * sie nicht zum neuen Becken, gelten zwei Beckenlängen.
+   */
+  const setzeEinheit = (einheit: Einheit) => {
+    if (einheit === einheitVon(konfiguration)) return
+    const anzeige = streckeAnzeige(konfiguration.streckeM, einheitVon(konfiguration))
+    const beckenlaengeM = standardBeckenlaenge(einheit)
+    setKonfiguration({
+      ...konfiguration,
+      einheit,
+      beckenlaengeM,
+      streckeM:
+        anzeige === null
+          ? null
+          : istVielfacheDerBeckenlaenge(anzeigeZuMeter(anzeige, einheit), beckenlaengeM)
+            ? anzeigeZuMeter(anzeige, einheit)
+            : beckenlaengeM * 2,
     })
   }
 
@@ -176,16 +217,33 @@ export function Onboarding({ onFertig }: { onFertig: () => void }) {
           <div className="space-y-6">
             <section>
               <h2 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted">
-                Beckenlänge
+                Einheit
               </h2>
               <div className="flex gap-2">
-                {([25, 50] as const).map((wert) => (
+                {(['m', 'yd'] as const).map((wert) => (
+                  <Auswahl
+                    key={wert}
+                    aktiv={einheitVon(konfiguration) === wert}
+                    onClick={() => setzeEinheit(wert)}
+                  >
+                    {wert === 'm' ? 'Meter' : 'Yards'}
+                  </Auswahl>
+                ))}
+              </div>
+            </section>
+
+            <section>
+              <h2 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted">
+                Beckenlänge
+              </h2>
+              <div className="flex flex-wrap gap-2">
+                {beckenlaengenFuer(einheitVon(konfiguration)).map((wert) => (
                   <Auswahl
                     key={wert}
                     aktiv={konfiguration.beckenlaengeM === wert}
                     onClick={() => setzeBeckenlaenge(wert)}
                   >
-                    {wert} m
+                    {formatBeckenlaenge(wert, einheitVon(konfiguration))}
                   </Auswahl>
                 ))}
               </div>
@@ -199,10 +257,17 @@ export function Onboarding({ onFertig }: { onFertig: () => void }) {
                 {STRECKEN.map((wert) => (
                   <Auswahl
                     key={wert}
-                    aktiv={konfiguration.streckeM === wert}
-                    onClick={() => setKonfiguration({ ...konfiguration, streckeM: wert })}
+                    aktiv={
+                      streckeAnzeige(konfiguration.streckeM, einheitVon(konfiguration)) === wert
+                    }
+                    onClick={() =>
+                      setKonfiguration({
+                        ...konfiguration,
+                        streckeM: anzeigeZuMeter(wert, einheitVon(konfiguration)),
+                      })
+                    }
                   >
-                    {wert} m
+                    {wert} {einheitVon(konfiguration)}
                   </Auswahl>
                 ))}
                 <Auswahl

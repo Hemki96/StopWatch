@@ -14,6 +14,7 @@ import { useApp, type AktiverEintrag } from '../app/AppProvider'
 import { useNow } from '../app/useNow'
 import { useWakeLock } from '../app/useWakeLock'
 import { formatCountdown, formatStrecke, formatTakt, formatTime } from '../domain/format'
+import { einheitVon, formatBeckenlaenge } from '../domain/einheit'
 import {
   bahnenNachReihen,
   hasStarted,
@@ -44,15 +45,21 @@ function artLabel(schwimmart: string): string {
  * Personenzahl samt Reihen und – falls gesetzt – Reihenversatz und Takt.
  */
 function beschriftung(
-  konfiguration: { beckenlaengeM: number; streckeM: number | null; schwimmart: string },
+  konfiguration: {
+    beckenlaengeM: number
+    streckeM: number | null
+    schwimmart: string
+    einheit?: 'm' | 'yd'
+  },
   personen: number,
   reihen: number,
   startversatzMs: number,
   plan: SatzPlan | null,
 ): string {
-  const strecke = formatStrecke(konfiguration.streckeM)
+  const einheit = einheitVon(konfiguration)
+  const strecke = formatStrecke(konfiguration.streckeM, einheit)
   const teile = [
-    `${konfiguration.beckenlaengeM} m`,
+    formatBeckenlaenge(konfiguration.beckenlaengeM as 25 | 50 | 22.86, einheit),
     plan && plan.wiederholungen > 1 ? `${plan.wiederholungen}×${strecke}` : strecke,
     artLabel(konfiguration.schwimmart),
     reihen > 1
@@ -70,7 +77,7 @@ function beschriftung(
 
 /** Kurztitel für die Laufleiste; Serien nennen die Wiederholungszahl mit. */
 function kurzTitel(lauf: Lauf, satz: Satz | null): string {
-  const strecke = formatStrecke(lauf.konfiguration.streckeM)
+  const strecke = formatStrecke(lauf.konfiguration.streckeM, einheitVon(lauf.konfiguration))
   const art = artLabel(lauf.konfiguration.schwimmart)
   if (istSerie(satz) && satz?.plan) {
     return `${satz.plan.wiederholungen}×${strecke} · ${art}`

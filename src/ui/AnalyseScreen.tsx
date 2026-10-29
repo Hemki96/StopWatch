@@ -24,6 +24,7 @@ import {
   rundenzahl,
 } from '../domain/analyse'
 import { formatDelta, formatStrecke, formatTakt, formatTime } from '../domain/format'
+import { einheitVon, formatBeckenlaenge } from '../domain/einheit'
 import { isComplete, isFinished } from '../domain/lauf'
 import { SCHWIMMARTEN, type Satz } from '../domain/types'
 import { ChevronLeftIcon, ChevronRightIcon } from './icons'
@@ -58,15 +59,16 @@ function artLabel(schwimmart: string): string {
 /** Titel eines Satzes: eigene Bezeichnung oder Strecke und Schwimmart. */
 function satzTitel(satz: Satz): string {
   if (satz.bezeichnung) return satz.bezeichnung
-  return `${formatStrecke(satz.konfiguration.streckeM)} · ${artLabel(satz.konfiguration.schwimmart)}`
+  return `${formatStrecke(satz.konfiguration.streckeM, einheitVon(satz.konfiguration))} · ${artLabel(satz.konfiguration.schwimmart)}`
 }
 
 /** Kurzbeschreibung der Konfiguration für die Satzzeile. */
 function satzMeta(satz: Satz, runden: number): string {
+  const einheit = einheitVon(satz.konfiguration)
   return [
-    `${satz.konfiguration.beckenlaengeM} m-Becken`,
+    `${formatBeckenlaenge(satz.konfiguration.beckenlaengeM, einheit)}-Becken`,
     satz.plan ? `${satz.plan.wiederholungen}×` : `${runden}×`,
-    formatStrecke(satz.konfiguration.streckeM),
+    formatStrecke(satz.konfiguration.streckeM, einheit),
     artLabel(satz.konfiguration.schwimmart),
   ].join(' · ')
 }
@@ -262,7 +264,10 @@ function SatzMatrix({
         titel={satzTitel(satz)}
         untertitel={[
           datumText(satz.datum),
-          `${satz.konfiguration.beckenlaengeM} m-Becken · ${formatStrecke(satz.konfiguration.streckeM)} · ${artLabel(satz.konfiguration.schwimmart)}`,
+          `${formatBeckenlaenge(satz.konfiguration.beckenlaengeM, einheitVon(satz.konfiguration))}-Becken · ${formatStrecke(
+            satz.konfiguration.streckeM,
+            einheitVon(satz.konfiguration),
+          )} · ${artLabel(satz.konfiguration.schwimmart)}`,
           `${rundenzahl(satz, app.laeufe)} ${rundenzahl(satz, app.laeufe) === 1 ? 'Runde' : 'Runden'}`,
           satz.plan ? `Takt ${formatTakt(satz.plan.taktSek)}` : null,
         ]
@@ -430,7 +435,7 @@ function PersonDrilldown({
         untertitel={[
           `Bahn ${basis?.nummer ?? '—'}`,
           `${runden.length} ${runden.length === 1 ? 'Runde' : 'Runden'}`,
-          formatStrecke(satz.konfiguration.streckeM),
+          formatStrecke(satz.konfiguration.streckeM, einheitVon(satz.konfiguration)),
           live !== null ? `zuletzt ${formatDelta(live)}` : null,
         ]
           .filter((teil): teil is string => Boolean(teil))
@@ -464,7 +469,9 @@ function PersonDrilldown({
               {matrix.zeilen.map((zeile) => (
                 <tr key={zeile.laengeNr} className="border-t border-line">
                   <th className="tabular sticky left-0 z-10 bg-surface px-2 py-1.5 text-left text-[11px] font-semibold text-muted">
-                    {zeile.meter === null ? `Länge ${zeile.laengeNr}` : `${zeile.meter} m`}
+                    {zeile.meter === null
+                      ? `Länge ${zeile.laengeNr}`
+                      : formatStrecke(zeile.meter, einheitVon(satz.konfiguration))}
                   </th>
                   {zeile.zellen.map((zelle, rundeIndex) => (
                     <td

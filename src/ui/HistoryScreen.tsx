@@ -13,6 +13,7 @@ import { hatBegonnen, isComplete } from '../domain/lauf'
 import { istAnalyseSatz } from '../domain/analyse'
 import { schnellsteZeit } from '../domain/analyse'
 import { formatStrecke, formatTakt, formatTime } from '../domain/format'
+import { einheitVon } from '../domain/einheit'
 import { SCHWIMMARTEN, type Lauf, type SatzPlan } from '../domain/types'
 import { AnalyseScreen } from './AnalyseScreen'
 import { Bestaetigung } from './Bestaetigung'
@@ -108,7 +109,10 @@ export function HistoryScreen() {
         const titel =
           satz?.bezeichnung ||
           (konfiguration
-            ? `${satz?.plan ? `${satz.plan.wiederholungen}×` : ''}${formatStrecke(konfiguration.streckeM)} · ${art}`
+            ? `${satz?.plan ? `${satz.plan.wiederholungen}×` : ''}${formatStrecke(
+                konfiguration.streckeM,
+                einheitVon(konfiguration),
+              )} · ${art}`
             : 'Ohne Satz')
         // Disziplinen eines Wettkampfs tragen dessen Namen als Zusatz.
         const wettkampfName = satz?.wettkampfId
@@ -266,7 +270,10 @@ export function HistoryScreen() {
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold">
                           {lauf.bahnen.length} Bahnen ·{' '}
-                          {formatStrecke(lauf.konfiguration.streckeM)}
+                          {formatStrecke(
+                            lauf.konfiguration.streckeM,
+                            einheitVon(lauf.konfiguration),
+                          )}
                           {!vollstaendig ? (
                             <span className="ml-2 rounded bg-warn/15 px-1.5 py-0.5 text-[10px] font-bold text-warn">
                               unvollständig
