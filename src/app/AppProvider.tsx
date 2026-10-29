@@ -33,7 +33,6 @@ import {
   type ReactNode,
 } from 'react'
 import {
-  SCHWIMMARTEN,
   type Beckenlaenge,
   type Lauf,
   type LaufKonfiguration,
@@ -82,7 +81,6 @@ import {
 } from '../domain/serie'
 import {
   MAX_BAHNEN,
-  MAX_REIHEN,
   bahnenGesamt,
   beschreibeTrainingsSatz,
   neuerTrainingsSatz,
@@ -109,42 +107,25 @@ import {
   saveWettkampf,
 } from '../storage/repository'
 import type { Backup } from '../storage/backup'
+import {
+  STANDARD_EINSTELLUNGEN,
+  begrenzeEinstellungen,
+  begrenzeReihen,
+  begrenzeTakt,
+  begrenzeVersatz,
+  begrenzeWiederholungen,
+  leseEinstellungen,
+  leseThemeEinstellung,
+  schreibeEinstellungen,
+  schreibeThemeEinstellung,
+  type Einstellungen,
+  type Theme,
+  type ThemeEinstellung,
+} from './einstellungen'
+import { entferneText, leseText, schreibeText } from './lokalSpeicher'
 
-/** Das tatsächlich angewendete Design. */
-export type Theme = 'dark' | 'light'
-
-/**
- * Die gespeicherte Wahl. `system` folgt der Betriebssystem-Einstellung und wird
- * erst über `theme` im Kontext in ein konkretes `Theme` aufgelöst.
- */
-export type ThemeEinstellung = Theme | 'system'
-
-/**
- * Vorbelegung für den nächsten Lauf.
- *
- * Diese Werte werden beim Anlegen kopiert und nicht von laufenden Läufen
- * geteilt; eine Änderung hier darf eine laufende Messung nicht umschreiben.
- * Gespeichert wird in `localStorage`, nicht in IndexedDB — die Einstellungen
- * sind deshalb nicht Teil des JSON-Backups.
- */
-export interface Einstellungen {
-  konfiguration: LaufKonfiguration
-  /** Bahnen je Reihe; zusammen mit `reihen` ergibt das die Personenzahl. */
-  bahnen: number
-  /** Reihen (Startgruppen); Reihe 1 startet sofort, jede weitere versetzt. */
-  reihen: number
-  /**
-   * Vorbelegung der Bahnen für den nächsten Lauf, Reihe für Reihe: erst alle
-   * Bahnen der Reihe 1, dann Reihe 2. Die Länge ist `bahnen × reihen`.
-   */
-  schwimmerProBahn: (string | null)[]
-  /** Abstand zwischen den Starts der Reihen in ms. 0 = gemeinsam. */
-  startversatzMs: number
-  /** Wiederholungen der nächsten Serie; 1 = einzelner Lauf. */
-  wiederholungen: number
-  /** Takt zwischen zwei Wiederholungen in Sekunden. */
-  taktSek: number
-}
+export { leseEinstellungen } from './einstellungen'
+export type { Einstellungen, Theme, ThemeEinstellung } from './einstellungen'
 
 /**
  * Ein Eintrag der Leiste oben.
@@ -160,35 +141,6 @@ export interface AktiverEintrag {
   lauf: Lauf
   satz: Satz | null
   serie: boolean
-}
-
-/** Standard-Bahnenzahl, wenn weder gespeichert noch eingegeben etwas Brauchbares vorliegt. */
-const STANDARD_BAHNEN = 6
-
-/** Nur der allererste Start (kein lesbarer Speicher) verwendet diese Werte. */
-const STANDARD_EINSTELLUNGEN: Einstellungen = {
-  konfiguration: { beckenlaengeM: 50, streckeM: 100, schwimmart: 'freistil' },
-  bahnen: STANDARD_BAHNEN,
-  reihen: 1,
-  schwimmerProBahn: Array.from({ length: STANDARD_BAHNEN }, () => null),
-  startversatzMs: 0,
-  wiederholungen: 1,
-  taktSek: 120,
-}
-
-/**
- * Bringt eine beliebige gespeicherte Bahnbelegung auf genau `anzahl` Plätze.
- *
- * Zu kurze Listen werden mit `null` aufgefüllt, zu lange abgeschnitten, leere
- * Zeichenketten gelten als „keine Zuordnung“. So kann eine geänderte
- * Bahnenzahl oder Reihenzahl nie zu einer verschobenen Zuordnung führen.
- */
-function normalisiereSchwimmerProBahn(liste: unknown, anzahl: number): (string | null)[] {
-  const werte = Array.isArray(liste) ? liste : []
-  return Array.from({ length: anzahl }, (_, i) => {
-    const wert = werte[i]
-    return typeof wert === 'string' && wert.length > 0 ? wert : null
-  })
 }
 
 /**
@@ -336,88 +288,10 @@ const AppContext = createContext<AppContextValue | null>(null)
 /**
  * `localStorage`-Schlüssel der Oberflächenauswahl. Bewusst flach und stabil
  * gehalten, weil sie auch das Onboarding-Gate in `App.tsx` und die E2E-Tests
- * lesen. Sie enthalten nur Verweise (IDs) und Einstellungen, keine Zeiten.
+ * lesen. Sie enthalten nur Verweise (IDs), keine Zeiten.
  */
-const THEME_KEY = 'beckenrand.theme'
 const ACTIVE_KEY = 'beckenrand.aktiverLauf'
 const ACTIVE_LIST_KEY = 'beckenrand.aktiveLaeufe'
-const EINSTELLUNGEN_KEY = 'beckenrand.einstellungen'
-
-/**
- * Safari im privaten Modus und blockierte Cookies lassen `localStorage`
- * bereits beim Lesen werfen. Die App muss dann weiterlaufen — nur ohne
- * gemerkte Auswahl, nicht mit einer weißen Seite.
- */
-function leseText(schluessel: string): string | null {
-  try {
-    return typeof localStorage === 'undefined' ? null : localStorage.getItem(schluessel)
-  } catch {
-    return null
-  }
-}
-
-/**
- * Schreibt einen Wert nach `localStorage` und schluckt Fehler.
- *
- * Ein voller oder gesperrter Speicher darf die Bedienung nicht unterbrechen;
- * die Sitzung läuft dann ohne gemerkte Auswahl weiter. Persistente Daten
- * (Läufe, Sätze, …) gehen dagegen über IndexedDB und melden Fehler über das
- * Banner.
- */
-function schreibeText(schluessel: string, wert: string): void {
-  try {
-    if (typeof localStorage !== 'undefined') localStorage.setItem(schluessel, wert)
-  } catch {
-    // ohne Speicher bleibt die Sitzung bedienbar
-  }
-}
-
-function entferneText(schluessel: string): void {
-  try {
-    if (typeof localStorage !== 'undefined') localStorage.removeItem(schluessel)
-  } catch {
-    // siehe oben
-  }
-}
-
-/**
- * Klemmt den Startversatz auf 0 … 120 s und rundet auf ganze Sekunden.
- *
- * Die Grenze ist eine Bedienentscheidung, keine Domänenregel: Ein Versatz über
- * zwei Minuten ist am Beckenrand nicht mehr sinnvoll und würde nur die
- * Countdown-Anzeige verstopfen.
- */
-function begrenzeVersatz(wert: unknown): number {
-  if (typeof wert !== 'number' || !Number.isFinite(wert)) return 0
-  return Math.min(120_000, Math.max(0, Math.round(wert / 1000) * 1000))
-}
-
-/**
- * Begrenzt die Reihen auf 1 … `MAX_REIHEN`. Fehlende oder unbrauchbare Werte
- * gelten als eine Reihe, damit ältere Einstellungen unverändert weiterlaufen.
- */
-function begrenzeReihen(wert: unknown): number {
-  if (typeof wert !== 'number' || !Number.isFinite(wert)) return 1
-  return Math.min(MAX_REIHEN, Math.max(1, Math.round(wert)))
-}
-
-/**
- * Begrenzt die Wiederholungen einer Serie auf 1 … 20 (wie `MAX_WIEDERHOLUNGEN`
- * im Trainingsmodell). 1 bedeutet „kein Plan“, also einen einzelnen Lauf.
- */
-function begrenzeWiederholungen(wert: unknown): number {
-  if (typeof wert !== 'number' || !Number.isFinite(wert)) return 1
-  return Math.min(20, Math.max(1, Math.round(wert)))
-}
-
-/**
- * Begrenzt den Takt auf 10 … 3600 s. Unter 10 s wäre ein Takt kein Takt mehr,
- * über einer Stunde passt er nicht mehr zu einer Trainingseinheit.
- */
-function begrenzeTakt(wert: unknown): number {
-  if (typeof wert !== 'number' || !Number.isFinite(wert)) return 120
-  return Math.min(3600, Math.max(10, Math.round(wert)))
-}
 
 /**
  * Liest die aktiven Lauf-IDs; die alte Einzel-ID bleibt als Migration lesbar.
@@ -482,83 +356,6 @@ function bereinigeAktiveIds(ids: string[], laeufe: Lauf[], satze: Satz[]): strin
 }
 
 /**
- * Liest und bereinigt die gespeicherten Einstellungen. Für Tests exportiert.
- *
- * Jedes Feld wird einzeln geprüft: Ein kaputter Teil fällt auf seinen
- * Standardwert zurück, statt alle Einstellungen zu verwerfen. Nur ein
- * unlesbarer Datensatz führt komplett zu `STANDARD_EINSTELLUNGEN`.
- * Die Strecke muss positiv und ein Vielfaches der Beckenlänge sein; sonst gilt
- * der Standard. `null` ist dagegen ein gültiger Wert (offene Strecke).
- */
-export function leseEinstellungen(): Einstellungen {
-  const roh = leseText(EINSTELLUNGEN_KEY)
-  if (!roh) return STANDARD_EINSTELLUNGEN
-  try {
-    const geparst: unknown = JSON.parse(roh)
-    if (typeof geparst !== 'object' || geparst === null) return STANDARD_EINSTELLUNGEN
-    const parsed = geparst as Partial<Einstellungen>
-    const roheKonfiguration: Partial<LaufKonfiguration> =
-      typeof parsed.konfiguration === 'object' && parsed.konfiguration !== null
-        ? parsed.konfiguration
-        : STANDARD_EINSTELLUNGEN.konfiguration
-    // Fehlt die Einheit, gelten Meter; eine unbekannte Yard-Kombination wird
-    // auf ein 25-Yard-Becken zurückgeführt, statt stillschweigend Meter zu
-    // zeigen. So bleibt jede gespeicherte Einstellung in sich stimmig.
-    const einheit: Einheit = einheitVon(roheKonfiguration)
-    // Meter kennt 25/50, Yards nur 25 yd (22,86 m). Alles andere fällt auf die
-    // Vorgabe der Einheit zurück.
-    const beckenlaengeM: Beckenlaenge =
-      einheit === 'yd'
-        ? 22.86
-        : roheKonfiguration.beckenlaengeM === 25
-          ? 25
-          : 50
-    const roheStrecke = roheKonfiguration.streckeM
-    // `null` bleibt erhalten und bedeutet „offene Strecke“; nur ein
-    // unbrauchbarer Zahlenwert fällt auf den Standard der Einheit zurück.
-    const streckeM =
-      roheStrecke === null
-        ? null
-        : typeof roheStrecke === 'number' &&
-            Number.isFinite(roheStrecke) &&
-            roheStrecke > 0 &&
-            istVielfacheDerBeckenlaenge(roheStrecke, beckenlaengeM)
-          ? Math.round(roheStrecke * 100) / 100
-          : einheit === 'yd'
-            ? 91.44
-            : STANDARD_EINSTELLUNGEN.konfiguration.streckeM
-    const schwimmart =
-      SCHWIMMARTEN.find((eintrag) => eintrag.wert === roheKonfiguration.schwimmart)?.wert ??
-      'freistil'
-    const bahnen =
-      typeof parsed.bahnen === 'number' && Number.isFinite(parsed.bahnen)
-        ? parsed.bahnen
-        : STANDARD_EINSTELLUNGEN.bahnen
-    const begrenzt = Math.min(MAX_BAHNEN, Math.max(1, Math.round(bahnen)))
-    const reihen = begrenzeReihen(parsed.reihen)
-    return {
-      konfiguration: {
-        beckenlaengeM,
-        streckeM,
-        schwimmart,
-        ...(einheit === 'yd' ? { einheit: 'yd' as const } : {}),
-      },
-      bahnen: begrenzt,
-      reihen,
-      schwimmerProBahn: normalisiereSchwimmerProBahn(
-        parsed.schwimmerProBahn,
-        bahnenGesamt(begrenzt, reihen),
-      ),
-      startversatzMs: begrenzeVersatz(parsed.startversatzMs),
-      wiederholungen: begrenzeWiederholungen(parsed.wiederholungen),
-      taktSek: begrenzeTakt(parsed.taktSek),
-    }
-  } catch {
-    return STANDARD_EINSTELLUNGEN
-  }
-}
-
-/**
  * Heutiges Datum als `YYYY-MM-DD` in lokaler Zeit.
  *
  * Bewusst nicht `toISOString()`: Das liefert UTC und würde am Abend bereits den
@@ -618,19 +415,6 @@ function schwimmerIdFuer(
   }
   neue.push(eintrag)
   return eintrag.id
-}
-
-/**
- * Liest die Designwahl. Unbekannte oder fehlende Werte ergeben `system`, damit
- * eine ältere oder manipulierte Einstellung nie zu einem unsichtbaren Design
- * führt.
- */
-function leseThemeEinstellung(): ThemeEinstellung {
-  const gespeichert = leseText(THEME_KEY)
-  if (gespeichert === 'light' || gespeichert === 'dark' || gespeichert === 'system') {
-    return gespeichert
-  }
-  return 'system'
 }
 
 /**
@@ -1062,7 +846,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    */
   const setzeTheme = useCallback((einstellung: ThemeEinstellung) => {
     setThemeEinstellung(einstellung)
-    schreibeText(THEME_KEY, einstellung)
+    schreibeThemeEinstellung(einstellung)
   }, [])
 
   /**
@@ -1073,25 +857,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
    * darauf verlassen, dass jeder Aufrufer brav validiert.
    */
   const setzeEinstellungen = useCallback((naechste: Einstellungen) => {
-    const bahnen =
-      typeof naechste.bahnen === 'number' && Number.isFinite(naechste.bahnen)
-        ? Math.min(MAX_BAHNEN, Math.max(1, Math.round(naechste.bahnen)))
-        : STANDARD_EINSTELLUNGEN.bahnen
-    const reihen = begrenzeReihen(naechste.reihen)
-    const bereinigt: Einstellungen = {
-      ...naechste,
-      bahnen,
-      reihen,
-      schwimmerProBahn: normalisiereSchwimmerProBahn(
-        naechste.schwimmerProBahn,
-        bahnenGesamt(bahnen, reihen),
-      ),
-      startversatzMs: begrenzeVersatz(naechste.startversatzMs),
-      wiederholungen: begrenzeWiederholungen(naechste.wiederholungen),
-      taktSek: begrenzeTakt(naechste.taktSek),
-    }
+    const bereinigt = begrenzeEinstellungen(naechste)
     setEinstellungenState(bereinigt)
-    schreibeText(EINSTELLUNGEN_KEY, JSON.stringify(bereinigt))
+    schreibeEinstellungen(bereinigt)
   }, [])
 
   // Abgeleitete Anzeige. Alle drei lesen nur aus dem Bestand; es gibt keinen
