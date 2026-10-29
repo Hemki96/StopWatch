@@ -18,7 +18,7 @@
  *   Wettkämpfe sind Rahmen; Serienrunden und Fortschritt werden daraus
  *   abgeleitet, nicht zusätzlich gespeichert.
  * - Jede Aktion ist No-Op, solange dieser Tab nicht die Messung hält
- *   (`tabAktivRef`). Das verhindert doppelte Schreibvorgänge aus zwei Tabs.
+ *   (`istAktiv`). Das verhindert doppelte Schreibvorgänge aus zwei Tabs.
  * - Geschrieben wird unmittelbar nach jeder Änderung, nicht gebündelt: Ein
  *   Tab-Wechsel oder Absturz darf höchstens den letzten Tap kosten.
  */
@@ -132,6 +132,7 @@ import {
   waehleOffenenLauf,
   type AktiverEintrag,
 } from './aktiveLaeufe'
+import { useSchreibpfad } from './schreibpfad'
 
 export { leseEinstellungen } from './einstellungen'
 export type { Einstellungen, Theme, ThemeEinstellung } from './einstellungen'
@@ -374,7 +375,7 @@ function setzeStatusleistenStil(theme: Theme): void {
  *
  * Fehlerbehandlung: Ein Lesefehler beim Start ergibt eine leere, aber
  * bedienbare App mit Banner; Schreibfehler setzen dasselbe Banner, werden aber
- * gesammelt gemeldet (siehe `meldeSpeicherFehler`).
+ * gesammelt gemeldet (siehe `useSchreibpfad`).
  */
 export function AppProvider({ children }: { children: ReactNode }) {
   // ---- Zustandsgruppen -----------------------------------------------------
@@ -408,8 +409,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     themeEinstellung === 'system' ? (systemDunkel ? 'dark' : 'light') : themeEinstellung
   const [einstellungen, setEinstellungenState] = useState<Einstellungen>(() => leseEinstellungen())
   const [toast, setToast] = useState<string | null>(null)
-  const [speicherFehler, setSpeicherFehler] = useState(false)
   const [tabRolle, setTabRolle] = useState<TabRolle>('startet')
+  const schreibpfad = useSchreibpfad()
+  const { istAktiv, setzeAktiv, verfolge, warteAufOffene, speicherFehler, meldeFehler } =
+    schreibpfad
 
   // Ref-Spiegel des States. Aktionen laufen in `useCallback`s und sähen sonst
   // den Stand des letzten Renders; mehrere Taps im selben Frame würden sich
@@ -422,14 +425,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const trainingsRef = useRef<Training[]>([])
   const aktiverLaufIdRef = useRef<string | null>(null)
   const aktiveIdsRef = useRef<string[]>([])
-  const speicherFehlerRef = useRef(false)
-  // Spiegelt die Tab-Rolle für Aktionen. Die Wahrheit hält der Koordinator;
-  // hier steht nur, ob dieser Tab schreiben darf.
-  const tabAktivRef = useRef(false)
   const koordinatorRef = useRef<TabKoordinator | null>(null)
-  // Offene Schreibvorgänge, damit eine Tab-Übergabe auf sie warten kann
-  // (siehe `vorUebergabe` beim Koordinator).
-  const schreibvorgaengeRef = useRef(new Set<Promise<unknown>>())
   // Immer die aktuelle Lade-Funktion. Der Koordinator wird vor dem Lade-Effekt
   // erzeugt; über diese Ref kann er trotzdem nachladen, wenn er die Rolle
   // „aktiv“ erhält, ohne dass der Effekt neu laufen muss.
@@ -503,53 +499,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const zeigeToast = useCallback((nachricht: string) => {
     setToast(nachricht)
     window.setTimeout(() => setToast((aktuell) => (aktuell === nachricht ? null : aktuell)), 3200)
-  }, [])
-
-  /**
-   * Speicherfehler werden zu einem dauerhaften Banner. Ein Toast pro Tap wäre
-   * bei sechs Bahnen sechsmal dieselbe Meldung und damit unlesbar.
-   */
-  const meldeSpeicherFehler = useCallback(() => {
-    console.error('Speichern im lokalen Speicher fehlgeschlagen.')
-    if (speicherFehlerRef.current) return
-    speicherFehlerRef.current = true
-    setSpeicherFehler(true)
-  }, [])
-
-  /**
-   * Verfolgt Schreibvorgänge, damit eine Tab-Übergabe nichts verliert.
-   *
-   * Fehler landen gesammelt im Banner statt in einem unbehandelten Promise;
-   * eine Tab-Übergabe wartet über `warteAufSchreibvorgaenge` auf alle offenen
-   * Vorgänge. Der Eintrag wird in jedem Fall entfernt, damit die Menge nicht
-   * wächst.
-   */
-  const verfolge = useCallback(
-    <T,>(vorgang: Promise<T>): Promise<T> => {
-      schreibvorgaengeRef.current.add(vorgang)
-      vorgang
-        .catch(() => meldeSpeicherFehler())
-        .finally(() => schreibvorgaengeRef.current.delete(vorgang))
-      return vorgang
-    },
-    [meldeSpeicherFehler],
-  )
-
-  /**
-   * Wartet auf alle offenen Schreibvorgänge, ohne zu scheitern.
-   *
-   * `allSettled` ist bewusst gewählt: Ein fehlgeschlagener Schreibvorgang darf
-   * eine Tab-Übergabe nicht blockieren, sonst bliebe der neue Tab lesend.
-   */
-  const warteAufSchreibvorgaenge = useCallback(async () => {
-    // Zuerst das Schreibtor schließen: Sonst könnte ein Tap während des
-    // Wartens noch einen Schreibvorgang starten, der nicht mehr im Snapshot
-    // liegt und beim Wechsel verloren ginge. Danach so lange leeren, bis keine
-    // neuen Vorgänge mehr dazukommen (durch das geschlossene Tor endlich).
-    tabAktivRef.current = false
-    while (schreibvorgaengeRef.current.size > 0) {
-      await Promise.allSettled([...schreibvorgaengeRef.current])
-    }
   }, [])
 
   /**
@@ -636,7 +585,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    */
   const importiereBackup = useCallback(
     async (backup: Backup) => {
-      if (!tabAktivRef.current) {
+      if (!istAktiv()) {
         throw new Error('Nur der aktive Tab darf ein Backup importieren.')
       }
       const vorgang = importBackup(backup).then(() => ladeDaten())
@@ -648,7 +597,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   /** Leert alle Bestände und lädt neu; nur der aktive Tab darf das. */
   const loescheAlles = useCallback(async () => {
-    if (!tabAktivRef.current) {
+    if (!istAktiv()) {
       throw new Error('Nur der aktive Tab darf alle Daten löschen.')
     }
     const vorgang = clearAll().then(() => ladeDaten())
@@ -677,15 +626,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const uebernahme = rolle === 'aktiv' && (warAktivRef.current || warGesperrtRef.current)
         if (rolle === 'aktiv') warAktivRef.current = true
         if (rolle === 'gesperrt') warGesperrtRef.current = true
-        tabAktivRef.current = rolle === 'aktiv'
+        setzeAktiv(rolle === 'aktiv')
         setTabRolle(rolle)
         if (rolle === 'aktiv') {
           // Nach einer Übergabe den Stand des vorherigen Tabs übernehmen.
           // Schlägt das Lesen fehl, bleibt der aktuelle Stand bedienbar.
-          void ladeDatenRef.current?.(uebernahme).catch(() => meldeSpeicherFehler())
+          void ladeDatenRef.current?.(uebernahme).catch(() => meldeFehler())
         }
       },
-      vorUebergabe: warteAufSchreibvorgaenge,
+      vorUebergabe: warteAufOffene,
     })
     koordinatorRef.current = koordinator
     koordinator.start()
@@ -700,7 +649,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       koordinator.start()
       void ladeDatenRef
         .current?.(warAktivRef.current || warGesperrtRef.current)
-        .catch(() => meldeSpeicherFehler())
+        .catch(() => meldeFehler())
     }
     window.addEventListener('pagehide', beiSeitenende)
     window.addEventListener('pageshow', beiSeitenAnzeige)
@@ -710,7 +659,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       koordinator.stop()
       koordinatorRef.current = null
     }
-  }, [meldeSpeicherFehler, warteAufSchreibvorgaenge])
+  }, [meldeFehler, setzeAktiv, warteAufOffene])
 
   /**
    * Erstladung des Bestands. `geladen` wird in jedem Fall wahr — auch wenn
@@ -727,12 +676,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .catch(() => {
         if (abgebrochen) return
         setGeladen(true)
-        meldeSpeicherFehler()
+        meldeFehler()
       })
     return () => {
       abgebrochen = true
     }
-  }, [ladeDaten, meldeSpeicherFehler])
+  }, [ladeDaten, meldeFehler])
 
   // Systemdesign live verfolgen. Der Listener hängt auch dann, wenn fest
   // gewählt wurde — das ist billiger als ihn ab- und anzuhängen, und `theme`
@@ -829,7 +778,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    */
   const aktualisiereAktiven = useCallback(
     (fn: (lauf: Lauf) => Lauf) => {
-      if (!tabAktivRef.current) return
+      if (!istAktiv()) return
       const id = aktiverLaufIdRef.current
       if (!id) return
       const aktuell = laeufeRef.current.find((l) => l.id === id)
@@ -839,7 +788,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setLaeufeSafe(laeufeRef.current.map((l) => (l.id === id ? naechster : l)))
       verfolge(saveLauf(naechster))
     },
-    [setLaeufeSafe, meldeSpeicherFehler],
+    [setLaeufeSafe, verfolge],
   )
 
   /**
@@ -860,7 +809,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    */
   const startAlle = useCallback(
     (now: number, wallNow: number) => {
-      if (!tabAktivRef.current) return
+      if (!istAktiv()) return
       const id = aktiverLaufIdRef.current
       if (!id) return
       const lauf = laeufeRef.current.find((eintrag) => eintrag.id === id)
@@ -1017,7 +966,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    */
   const tippeSerie = useCallback(
     (bahnIndex: number, now: number, wallNow: number) => {
-      if (!tabAktivRef.current) return
+      if (!istAktiv()) return
       const serie = holeAktiveSerie()
       if (!serie) return
       const ziel = serie.runden.find((runde) => {
@@ -1038,7 +987,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    */
   const beendeSerie = useCallback(
     (bahnIndex: number, now: number, wallNow: number) => {
-      if (!tabAktivRef.current) return
+      if (!istAktiv()) return
       const serie = holeAktiveSerie()
       if (!serie) return
       const ziel = serie.runden.find((runde) => {
@@ -1062,7 +1011,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    */
   const rueckgaengigSerie = useCallback(
     (bahnIndex: number) => {
-      if (!tabAktivRef.current) return
+      if (!istAktiv()) return
       const serie = holeAktiveSerie()
       if (!serie) return
       const treffer = letzterAnschlag(serie.runden, bahnIndex)
@@ -1081,7 +1030,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    */
   const setzeSchwimmerSerie = useCallback(
     (bahnIndex: number, schwimmerId: string | null) => {
-      if (!tabAktivRef.current) return
+      if (!istAktiv()) return
       const serie = holeAktiveSerie()
       if (!serie) return
       const geaendert: Lauf[] = []
@@ -1111,7 +1060,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   /** Bahnzuordnung in einem beliebigen Lauf, etwa beim Nachtragen im Wettkampf oder im Detail. */
   const setzeSchwimmerImLauf = useCallback(
     (laufId: string, bahnId: string, schwimmerId: string | null) => {
-      if (!tabAktivRef.current) return
+      if (!istAktiv()) return
       const lauf = laeufeRef.current.find((l) => l.id === laufId)
       if (!lauf) return
       const naechster = setSchwimmerOnLane(lauf, bahnId, schwimmerId)
@@ -1119,7 +1068,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setLaeufeSafe(laeufeRef.current.map((l) => (l.id === laufId ? naechster : l)))
       verfolge(saveLauf(naechster))
     },
-    [setLaeufeSafe, meldeSpeicherFehler],
+    [setLaeufeSafe, verfolge],
   )
 
   /**
@@ -1129,7 +1078,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    */
   const korrigiereAnschlag = useCallback(
     (laufId: string, bahnId: string, laengeNr: number, splitMs: number) => {
-      if (!tabAktivRef.current) return
+      if (!istAktiv()) return
       const lauf = laeufeRef.current.find((l) => l.id === laufId)
       if (!lauf) return
       const naechster = korrigiereAnschlagImLauf(lauf, bahnId, laengeNr, splitMs)
@@ -1137,7 +1086,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setLaeufeSafe(laeufeRef.current.map((l) => (l.id === laufId ? naechster : l)))
       verfolge(saveLauf(naechster))
     },
-    [setLaeufeSafe, meldeSpeicherFehler],
+    [setLaeufeSafe, verfolge],
   )
 
   /**
@@ -1173,7 +1122,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       schwimmerProBahn: (string | null)[] = [],
       optionen: { startversatzMs?: number; wiederholungen?: number; taktSek?: number; reihen?: number } = {},
     ): string | null => {
-      if (!tabAktivRef.current) return null
+      if (!istAktiv()) return null
       if (validateKonfiguration(konfiguration) !== null) return null
       const anzahlBahnen = Number.isFinite(bahnen)
         ? Math.min(MAX_BAHNEN, Math.max(1, Math.round(bahnen)))
@@ -1312,7 +1261,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    * vollständig; danach wird der erste verbleibende Eintrag sichtbar.
    */
   const schliesseAktivenLauf = useCallback(() => {
-    if (!tabAktivRef.current) return
+    if (!istAktiv()) return
     const id = aktiverLaufIdRef.current
     if (!id) return
     const naechste = aktiveIdsRef.current.filter((eintrag) => eintrag !== id)
@@ -1329,7 +1278,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    * Für „nur aus der Leiste nehmen“ siehe `schliesseAktivenLauf`.
    */
   const verwerfeAktivenLauf = useCallback(() => {
-    if (!tabAktivRef.current) return
+    if (!istAktiv()) return
     const id = aktiverLaufIdRef.current
     if (!id) return
     const lauf = laeufeRef.current.find((eintrag) => eintrag.id === id)
@@ -1382,7 +1331,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    */
   const loescheLauf = useCallback(
     (id: string) => {
-      if (!tabAktivRef.current) return
+      if (!istAktiv()) return
       const lauf = laeufeRef.current.find((eintrag) => eintrag.id === id)
       const satz = lauf?.satzId
         ? satzeRef.current.find((eintrag) => eintrag.id === lauf.satzId)
@@ -1420,7 +1369,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    */
   const loescheSatz = useCallback(
     (id: string) => {
-      if (!tabAktivRef.current) return
+      if (!istAktiv()) return
       const betroffen = laeufeRef.current.filter((l) => l.satzId === id)
       setSatzeSafe(satzeRef.current.filter((s) => s.id !== id))
       setLaeufeSafe(laeufeRef.current.filter((l) => l.satzId !== id))
@@ -1444,7 +1393,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    */
   const speichereSchwimmer = useCallback(
     (daten: { id?: string; name: string; jahrgang: number | null; notiz: string }) => {
-      if (!tabAktivRef.current) return null
+      if (!istAktiv()) return null
       const name = daten.name.trim()
       if (!name) return null
       const vorhanden = daten.id
@@ -1477,7 +1426,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    */
   const loescheSchwimmer = useCallback(
     (id: string) => {
-      if (!tabAktivRef.current) return
+      if (!istAktiv()) return
       setSchwimmerSafe(schwimmerRef.current.filter((s) => s.id !== id))
       verfolge(deleteSchwimmer(id))
 
@@ -1548,7 +1497,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   /** Benennt einen Satz um (Freitext im Verlauf). Leerer Text entfernt die Bezeichnung. */
   const benenneSatz = useCallback(
     (id: string, bezeichnung: string) => {
-      if (!tabAktivRef.current) return
+      if (!istAktiv()) return
       const satz = satzeRef.current.find((eintrag) => eintrag.id === id)
       if (!satz) return
       const naechster = { ...satz, bezeichnung: bezeichnung.trim() }
@@ -1564,7 +1513,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    */
   const erstelleWettkampf = useCallback(
     (daten: { name: string; datum: string; beckenlaengeM: Beckenlaenge; einheit?: Einheit }) => {
-      if (!tabAktivRef.current) return null
+      if (!istAktiv()) return null
       const name = daten.name.trim()
       if (!name || !/^\d{4}-\d{2}-\d{2}$/.test(daten.datum)) return null
       const wettkampf = createWettkampf({ ...daten, name })
@@ -1578,7 +1527,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   /** Benennt einen Wettkampf um; ein leerer Name lässt den bisherigen stehen. */
   const benenneWettkampf = useCallback(
     (id: string, name: string) => {
-      if (!tabAktivRef.current) return
+      if (!istAktiv()) return
       const wettkampf = wettkampfeRef.current.find((eintrag) => eintrag.id === id)
       if (!wettkampf) return
       const naechster = { ...wettkampf, name: name.trim() || wettkampf.name }
@@ -1605,7 +1554,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    */
   const importiereWettkampf = useCallback(
     (plan: WettkampfPlan, wettkampfId: string | null = null): string | null => {
-      if (!tabAktivRef.current) return null
+      if (!istAktiv()) return null
       const name = plan.name.trim()
       if (!name || plan.disziplinen.length === 0) return null
 
@@ -1694,7 +1643,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         bahnen: number
       },
     ): string | null => {
-      if (!tabAktivRef.current) return null
+      if (!istAktiv()) return null
       const wettkampf = wettkampfeRef.current.find((eintrag) => eintrag.id === wettkampfId)
       if (!wettkampf) return null
       const streckeM = Math.round(disziplin.streckeM * 100) / 100
@@ -1748,7 +1697,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    */
   const loescheWettkampf = useCallback(
     (id: string) => {
-      if (!tabAktivRef.current) return
+      if (!istAktiv()) return
       const satzIds = new Set(
         satzeRef.current
           .filter((satz) => satz.wettkampfId === id)
@@ -1797,7 +1746,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    */
   const starteWettkampfLauf = useCallback(
     (laufId: string, now: number, wallNow: number) => {
-      if (!tabAktivRef.current) return
+      if (!istAktiv()) return
       const lauf = laeufeRef.current.find((eintrag) => eintrag.id === laufId)
       if (!lauf) return
       aendereLauf(lauf, startAll(lauf, now, wallNow))
@@ -1814,7 +1763,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    */
   const tippeWettkampf = useCallback(
     (laufId: string, bahnId: string, now: number, wallNow: number) => {
-      if (!tabAktivRef.current) return
+      if (!istAktiv()) return
       const lauf = laeufeRef.current.find((eintrag) => eintrag.id === laufId)
       if (!lauf) return
       aendereLauf(lauf, tapLane(lauf, bahnId, now, wallNow))
@@ -1825,7 +1774,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   /** Nimmt den Zielanschlag eines Heats zurück (Fehleingabe beim Tippen). */
   const rueckgaengigWettkampf = useCallback(
     (laufId: string, bahnId: string) => {
-      if (!tabAktivRef.current) return
+      if (!istAktiv()) return
       const lauf = laeufeRef.current.find((eintrag) => eintrag.id === laufId)
       if (!lauf) return
       aendereLauf(lauf, undoLane(lauf, bahnId))
@@ -1839,7 +1788,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    */
   const setzeWettkampfZeit = useCallback(
     (laufId: string, bahnId: string, splitMs: number) => {
-      if (!tabAktivRef.current) return
+      if (!istAktiv()) return
       const lauf = laeufeRef.current.find((eintrag) => eintrag.id === laufId)
       if (!lauf) return
       aendereLauf(lauf, setzeZielzeit(lauf, bahnId, splitMs))
@@ -1854,7 +1803,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    */
   const setzeWettkampfStatus = useCallback(
     (laufId: string, bahnId: string, status: WettkampfStatus | null) => {
-      if (!tabAktivRef.current) return
+      if (!istAktiv()) return
       const lauf = laeufeRef.current.find((eintrag) => eintrag.id === laufId)
       if (!lauf) return
       aendereLauf(lauf, setzeWettkampfStatusImLauf(lauf, bahnId, status))
@@ -1872,7 +1821,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    */
   const setzeWettkampfNamen = useCallback(
     (laufId: string, namen: string[]) => {
-      if (!tabAktivRef.current) return
+      if (!istAktiv()) return
       const lauf = laeufeRef.current.find((eintrag) => eintrag.id === laufId)
       if (!lauf) return
       const neueSchwimmer: Schwimmer[] = []
@@ -1927,7 +1876,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    * beim Start eines Trainingssatzes.
    */
   const anlegeTraining = useCallback((): string | null => {
-    if (!tabAktivRef.current) return null
+    if (!istAktiv()) return null
     const werte = einstellungen
     const training = neuesTraining({
       datum: heute(),
@@ -1958,7 +1907,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    */
   const speichereTraining = useCallback(
     (training: Training) => {
-      if (!tabAktivRef.current) return
+      if (!istAktiv()) return
       if (pruefeTraining(training) !== null) return
       const vorhanden = trainingsRef.current.some((eintrag) => eintrag.id === training.id)
       setTrainingsSafe(
@@ -1980,7 +1929,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
    */
   const loescheTraining = useCallback(
     (id: string) => {
-      if (!tabAktivRef.current) return
+      if (!istAktiv()) return
       setTrainingsSafe(trainingsRef.current.filter((eintrag) => eintrag.id !== id))
       verfolge(deleteTraining(id))
     },
@@ -2013,7 +1962,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       now: number,
       wallNow: number,
     ): string | null => {
-      if (!tabAktivRef.current) return null
+      if (!istAktiv()) return null
       const training = trainingsRef.current.find((eintrag) => eintrag.id === trainingId)
       const eintrag = training?.saetze.find((satz) => satz.id === trainingsSatzId)
       if (!training || !eintrag) return null
