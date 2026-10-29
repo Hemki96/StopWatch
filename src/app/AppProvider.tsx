@@ -42,26 +42,12 @@ import {
   type Training,
   type Wettkampf,
   type WettkampfStatus,
-  type Einheit,
 } from '../domain/types'
-import { einheitVon } from '../domain/einheit'
 import {
   createLauf,
-  istVielfacheDerBeckenlaenge,
   rebaseLauf,
-  setzeWettkampfStatus as setzeWettkampfStatusImLauf,
-  setzeZielzeit,
-  startAll,
-  tapLane,
-  undoLane,
-  setSchwimmer as setSchwimmerOnLane,
 } from '../domain/lauf'
 import {
-  createWettkampf,
-  createWettkampfLauf,
-  createWettkampfSatz,
-  disziplinBezeichnung,
-  type WettkampfDisziplinPlan,
   type WettkampfPlan,
 } from '../domain/wettkampf'
 import {
@@ -82,14 +68,12 @@ import {
   clearAll,
   deleteSchwimmer,
   deleteTraining,
-  deleteWettkampfUndDaten,
   importBackup,
   loadAll,
   saveLauf,
   saveMehrere,
   saveSchwimmer,
   saveTraining,
-  saveWettkampf,
 } from '../storage/repository'
 import type { Backup } from '../storage/backup'
 import {
@@ -114,6 +98,7 @@ import {
   type AktiverEintrag,
 } from './aktiveLaeufe'
 import { createLaufAktionen } from './laufAktionen'
+import { createWettkampfAktionen } from './wettkampfAktionen'
 import { useSchreibpfad } from './schreibpfad'
 
 export { leseEinstellungen } from './einstellungen'
@@ -276,41 +261,6 @@ function heute(): string {
   return `${d.getFullYear()}-${monat}-${tag}`
 }
 
-
-/**
- * Löst einen Namen aus einer Meldeliste auf. Vorhandene Schwimmer werden
- * wiederverwendet, neue nur einmal pro Import angelegt. Leere Namen bleiben
- * ohne Zuordnung — so entstehen manuell angelegte, noch namenlose Bahnen.
- *
- * Verglichen wird ohne Rücksicht auf Groß-/Kleinschreibung und umgebende
- * Leerzeichen (deutsche Locale), damit derselbe Mensch nicht als zweiter
- * Datensatz mit eigener Bestzeit erscheint. `neue` ist der Puffer des laufenden
- * Imports: Er verhindert Dubletten innerhalb eines Aufrufs, bevor der State
- * aktualisiert ist, und wird vom Aufrufer gespeichert.
- */
-function schwimmerIdFuer(
-  name: string,
-  jahrgang: number | null,
-  vorhandene: Schwimmer[],
-  neue: Schwimmer[],
-): string | null {
-  const bereinigt = name.trim()
-  if (!bereinigt) return null
-  const normal = bereinigt.toLocaleLowerCase('de')
-  const treffer = [...vorhandene, ...neue].find(
-    (eintrag) => eintrag.name.toLocaleLowerCase('de') === normal,
-  )
-  if (treffer) return treffer.id
-  const eintrag: Schwimmer = {
-    id: newId(),
-    name: bereinigt,
-    jahrgang,
-    notiz: '',
-    erstelltAm: Date.now(),
-  }
-  neue.push(eintrag)
-  return eintrag.id
-}
 
 /**
  * Fragt die Systemeinstellung ab. Gefragt wird nach „hell“, nicht nach „dunkel“:
@@ -529,6 +479,52 @@ export function AppProvider({ children }: { children: ReactNode }) {
     aktiviereSatz,
     aendereLauf,
   } = laufAktionen
+
+  /** Wettkampfaktionen: Meldeliste, Heats und Disziplinen. */
+  const wettkampfAktionen = useMemo(
+    () =>
+      createWettkampfAktionen({
+        istAktiv,
+        verfolge,
+        laeufeRef,
+        satzeRef,
+        wettkampfeRef,
+        schwimmerRef,
+        aktiveIdsRef,
+        aktiverLaufIdRef,
+        setLaeufe: setLaeufeSafe,
+        setSatze: setSatzeSafe,
+        setWettkampfe: setWettkampfeSafe,
+        setSchwimmer: setSchwimmerSafe,
+        setAktiveIds,
+        setAktivenLaufId,
+        aendereLauf,
+      }),
+    [
+      istAktiv,
+      verfolge,
+      setLaeufeSafe,
+      setSatzeSafe,
+      setWettkampfeSafe,
+      setSchwimmerSafe,
+      setAktiveIds,
+      setAktivenLaufId,
+      aendereLauf,
+    ],
+  )
+  const {
+    erstelleWettkampf,
+    benenneWettkampf,
+    importiereWettkampf,
+    erstelleWettkampfDisziplin,
+    loescheWettkampf,
+    starteWettkampfLauf,
+    tippeWettkampf,
+    rueckgaengigWettkampf,
+    setzeWettkampfZeit,
+    setzeWettkampfStatus,
+    setzeWettkampfNamen,
+  } = wettkampfAktionen
 
   /**
    * Lädt den kompletten Bestand und gleicht die Auswahl damit ab.
@@ -906,344 +902,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const uebernehmen = useCallback(() => {
     koordinatorRef.current?.uebernehmen()
   }, [])
-
-  /**
-   * Legt einen leeren Wettkampf an. Name und Datum werden geprüft; das Datum
-   * muss `YYYY-MM-DD` sein (Formularformat), sonst wird abgelehnt.
-   */
-  const erstelleWettkampf = useCallback(
-    (daten: { name: string; datum: string; beckenlaengeM: Beckenlaenge; einheit?: Einheit }) => {
-      if (!istAktiv()) return null
-      const name = daten.name.trim()
-      if (!name || !/^\d{4}-\d{2}-\d{2}$/.test(daten.datum)) return null
-      const wettkampf = createWettkampf({ ...daten, name })
-      setWettkampfeSafe([wettkampf, ...wettkampfeRef.current])
-      verfolge(saveWettkampf(wettkampf))
-      return wettkampf.id
-    },
-    [setWettkampfeSafe, verfolge],
-  )
-
-  /** Benennt einen Wettkampf um; ein leerer Name lässt den bisherigen stehen. */
-  const benenneWettkampf = useCallback(
-    (id: string, name: string) => {
-      if (!istAktiv()) return
-      const wettkampf = wettkampfeRef.current.find((eintrag) => eintrag.id === id)
-      if (!wettkampf) return
-      const naechster = { ...wettkampf, name: name.trim() || wettkampf.name }
-      setWettkampfeSafe(
-        wettkampfeRef.current.map((eintrag) => (eintrag.id === id ? naechster : eintrag)),
-      )
-      verfolge(saveWettkampf(naechster))
-    },
-    [setWettkampfeSafe, verfolge],
-  )
-
-  /**
-   * Schreibt einen geprüften Meldelisten-Plan in die Datenhaltung.
-   *
-   * Mit `wettkampfId` wird ein bestehender Wettkampf ergänzt; sein Name bleibt.
-   * Ohne ID entsteht ein neuer Wettkampf aus den Planangaben. Der Import ist
-   * eine Transaktion: Erst werden alle Sätze, Läufe und Schwimmer gesammelt,
-   * dann gemeinsam gesetzt und geschrieben. Ein halb importierter Wettkampf
-   * kann so nicht entstehen.
-   *
-   * Bereits bekannte Namen werden wiederverwendet (siehe `schwimmerIdFuer`),
-   * damit Bestzeiten über Importe hinweg zusammenpassen. Rückgabe ist die
-   * Wettkampf-ID oder `null` bei leerem Plan.
-   */
-  const importiereWettkampf = useCallback(
-    (plan: WettkampfPlan, wettkampfId: string | null = null): string | null => {
-      if (!istAktiv()) return null
-      const name = plan.name.trim()
-      if (!name || plan.disziplinen.length === 0) return null
-
-      const vorhanden = wettkampfId
-        ? wettkampfeRef.current.find((eintrag) => eintrag.id === wettkampfId)
-        : undefined
-      const wettkampf =
-        vorhanden ??
-        createWettkampf({
-          name,
-          datum: plan.datum,
-          beckenlaengeM: plan.beckenlaengeM,
-          ...(plan.einheit ? { einheit: plan.einheit } : {}),
-        })
-      if (!vorhanden) {
-        setWettkampfeSafe([wettkampf, ...wettkampfeRef.current])
-      }
-
-      const neueSchwimmer: Schwimmer[] = []
-      const neueSatze: Satz[] = []
-      const neueLaeufe: Lauf[] = []
-      // Die Sätze bekommen gestaffelte Zeitstempel, damit die Sortierung im
-      // Verlauf der Reihenfolge der Disziplinen in der Meldeliste folgt.
-      const jetzt = Date.now()
-
-      plan.disziplinen.forEach((disziplin, index) => {
-        // Ein Wettkampf-Satz ist eine Disziplin; seine Läufe sind die Heats.
-        const satz = createWettkampfSatz(wettkampf, disziplin, jetzt + index)
-        neueSatze.push(satz)
-        for (const laufPlan of disziplin.laeufe) {
-          neueLaeufe.push(
-            createWettkampfLauf(satz, laufPlan, (start) =>
-              schwimmerIdFuer(
-                start.name,
-                start.jahrgang ?? null,
-                schwimmerRef.current,
-                neueSchwimmer,
-              ),
-            ),
-          )
-        }
-      })
-
-      if (neueSchwimmer.length > 0) {
-        setSchwimmerSafe(
-          [...schwimmerRef.current, ...neueSchwimmer].sort((a, b) =>
-            a.name.localeCompare(b.name, 'de'),
-          ),
-        )
-      }
-
-      setSatzeSafe([...neueSatze, ...satzeRef.current])
-      setLaeufeSafe([...neueLaeufe, ...laeufeRef.current])
-      // Ein Wettkampf mit Disziplinen, Heats und neuen Schwimmern gehört
-      // zusammen: eine Transaktion statt bis zu tausender Einzel-Schreibvorgänge.
-      verfolge(
-        saveMehrere({
-          wettkampfe: vorhanden ? [] : [wettkampf],
-          schwimmer: neueSchwimmer,
-          satze: neueSatze,
-          laeufe: neueLaeufe,
-        }),
-      )
-      return wettkampf.id
-    },
-    [setSchwimmerSafe, setLaeufeSafe, setSatzeSafe, setWettkampfeSafe, verfolge],
-  )
-
-  /**
-   * Legt eine Disziplin von Hand an — ohne Meldeliste, etwa wenn kurzfristig
-   * ein Heat ergänzt wird.
-   *
-   * Die Strecke muss ein Vielfaches der Beckenlänge des Wettkampfs sein.
-   * Läufe und Bahnen werden begrenzt (20 bzw. 10). Fehlt eine Bezeichnung,
-   * wird sie aus Strecke und Schwimmart gebildet. Alle Bahnen bleiben leer und
-   * werden später im Wettkampf besetzt.
-   */
-  const erstelleWettkampfDisziplin = useCallback(
-    (
-      wettkampfId: string,
-      disziplin: {
-        bezeichnung: string
-        streckeM: number
-        schwimmart: Schwimmart
-        laeufe: number
-        bahnen: number
-      },
-    ): string | null => {
-      if (!istAktiv()) return null
-      const wettkampf = wettkampfeRef.current.find((eintrag) => eintrag.id === wettkampfId)
-      if (!wettkampf) return null
-      const streckeM = Math.round(disziplin.streckeM * 100) / 100
-      if (
-        !Number.isFinite(streckeM) ||
-        streckeM <= 0 ||
-        !istVielfacheDerBeckenlaenge(streckeM, wettkampf.beckenlaengeM)
-      ) {
-        return null
-      }
-      const einheit: Einheit = einheitVon(wettkampf)
-      const laeufe = Math.min(20, Math.max(1, Math.round(disziplin.laeufe)))
-      const bahnen = Math.min(10, Math.max(1, Math.round(disziplin.bahnen)))
-      const plan: WettkampfDisziplinPlan = {
-        // Ohne eigene Bezeichnung heißt die Disziplin wie ihre Strecke, z. B.
-        // „100 m Freistil“; das ist auch der Name im Verlauf.
-        bezeichnung:
-          disziplin.bezeichnung.trim() ||
-          disziplinBezeichnung(streckeM, disziplin.schwimmart, einheit),
-        streckeM,
-        schwimmart: disziplin.schwimmart,
-        einheit,
-        laeufe: Array.from({ length: laeufe }, (_, index) => ({
-          nummer: index + 1,
-          starts: Array.from({ length: bahnen }, (_, bahnIndex) => ({
-            name: '',
-            bahn: bahnIndex + 1,
-          })),
-        })),
-      }
-
-      const satz = createWettkampfSatz(wettkampf, plan)
-      const neueLaeufe = plan.laeufe.map((laufPlan) =>
-        createWettkampfLauf(satz, laufPlan, (start) =>
-          schwimmerIdFuer(start.name, start.jahrgang ?? null, schwimmerRef.current, []),
-        ),
-      )
-      setSatzeSafe([satz, ...satzeRef.current])
-      setLaeufeSafe([...neueLaeufe, ...laeufeRef.current])
-      verfolge(saveMehrere({ satze: [satz], laeufe: neueLaeufe }))
-      return satz.id
-    },
-    [setLaeufeSafe, setSatzeSafe, verfolge],
-  )
-
-  /**
-   * Löscht einen Wettkampf mit allen Disziplinen, Heats und Ergebnissen.
-   *
-   * Die betroffenen IDs werden vor dem Filtern bestimmt: Danach sind die Läufe
-   * aus der Ref verschwunden und ließen sich nicht mehr zuordnen.
-   */
-  const loescheWettkampf = useCallback(
-    (id: string) => {
-      if (!istAktiv()) return
-      const satzIds = new Set(
-        satzeRef.current
-          .filter((satz) => satz.wettkampfId === id)
-          .map((satz) => satz.id),
-      )
-      // Vor dem Filtern bestimmen: Danach sind die betroffenen Läufe aus dem
-      // Ref verschwunden und ließen sich nicht mehr zuordnen.
-      const geloeschteLaufIds = new Set(
-        laeufeRef.current
-          .filter((lauf) => lauf.satzId !== null && satzIds.has(lauf.satzId))
-          .map((lauf) => lauf.id),
-      )
-      setWettkampfeSafe(wettkampfeRef.current.filter((eintrag) => eintrag.id !== id))
-      setSatzeSafe(satzeRef.current.filter((satz) => !satzIds.has(satz.id)))
-      setLaeufeSafe(
-        laeufeRef.current.filter((lauf) => !lauf.satzId || !satzIds.has(lauf.satzId)),
-      )
-      const naechsteAktive = aktiveIdsRef.current.filter(
-        (eintrag) => !geloeschteLaufIds.has(eintrag),
-      )
-      if (naechsteAktive.length !== aktiveIdsRef.current.length) {
-        setAktiveIds(naechsteAktive)
-        if (!naechsteAktive.includes(aktiverLaufIdRef.current ?? '')) {
-          setAktivenLaufId(naechsteAktive[0] ?? null)
-        }
-      }
-      verfolge(deleteWettkampfUndDaten(id))
-    },
-    [
-      setAktiveIds,
-      setAktivenLaufId,
-      setLaeufeSafe,
-      setSatzeSafe,
-      setWettkampfeSafe,
-      verfolge,
-    ],
-  )
-
-  /**
-   * Startet einen Heat im Wettkampf-Tab.
-   *
-   * Heats stehen nicht in der Trainingsleiste; deshalb geht der Start direkt
-   * über `aendereLauf` statt über den „aktiven Lauf“. Gestartet wird mit
-   * `startAll`, also alle Bahnen gemeinsam (Wettkampf-Läufe haben keinen
-   * Startversatz).
-   */
-  const starteWettkampfLauf = useCallback(
-    (laufId: string, now: number, wallNow: number) => {
-      if (!istAktiv()) return
-      const lauf = laeufeRef.current.find((eintrag) => eintrag.id === laufId)
-      if (!lauf) return
-      aendereLauf(lauf, startAll(lauf, now, wallNow))
-    },
-    [aendereLauf],
-  )
-
-  /**
-   * Tap im Wettkampf: Der erste Tap nach dem Start ist das Ziel.
-   *
-   * Das Verzweigen übernimmt `tapLane` anhand von `lauf.modus`; hier wird nur
-   * der richtige Lauf gewählt. Splits pro Länge gibt es im Wettkampf bewusst
-   * nicht.
-   */
-  const tippeWettkampf = useCallback(
-    (laufId: string, bahnId: string, now: number, wallNow: number) => {
-      if (!istAktiv()) return
-      const lauf = laeufeRef.current.find((eintrag) => eintrag.id === laufId)
-      if (!lauf) return
-      aendereLauf(lauf, tapLane(lauf, bahnId, now, wallNow))
-    },
-    [aendereLauf],
-  )
-
-  /** Nimmt den Zielanschlag eines Heats zurück (Fehleingabe beim Tippen). */
-  const rueckgaengigWettkampf = useCallback(
-    (laufId: string, bahnId: string) => {
-      if (!istAktiv()) return
-      const lauf = laeufeRef.current.find((eintrag) => eintrag.id === laufId)
-      if (!lauf) return
-      aendereLauf(lauf, undoLane(lauf, bahnId))
-    },
-    [aendereLauf],
-  )
-
-  /**
-   * Trägt eine Zielzeit von Hand ein oder korrigiert sie. Die Zeit wird als
-   * `manuell` markiert, damit sie in CSV und Bestzeiten erkennbar bleibt.
-   */
-  const setzeWettkampfZeit = useCallback(
-    (laufId: string, bahnId: string, splitMs: number) => {
-      if (!istAktiv()) return
-      const lauf = laeufeRef.current.find((eintrag) => eintrag.id === laufId)
-      if (!lauf) return
-      aendereLauf(lauf, setzeZielzeit(lauf, bahnId, splitMs))
-    },
-    [aendereLauf],
-  )
-
-  /**
-   * Markiert eine Bahn als DNS/DNF oder hebt die Markierung auf. Die Domäne
-   * lehnt gewertete Bahnen und Trainingsläufe ab; hier wird nur der richtige
-   * Lauf gewählt und geschrieben.
-   */
-  const setzeWettkampfStatus = useCallback(
-    (laufId: string, bahnId: string, status: WettkampfStatus | null) => {
-      if (!istAktiv()) return
-      const lauf = laeufeRef.current.find((eintrag) => eintrag.id === laufId)
-      if (!lauf) return
-      aendereLauf(lauf, setzeWettkampfStatusImLauf(lauf, bahnId, status))
-    },
-    [aendereLauf],
-  )
-
-  /**
-   * Setzt die Namen aller Bahnen eines Heats in einem Schritt.
-   *
-   * Wird genutzt, wenn eine Startliste erst am Beckenrand eingetragen wird.
-   * Unbekannte Namen legen neue Schwimmer an, leere Namen entfernen die
-   * Zuordnung. Da alle Bahnen über `aendereLauf` in einem Lauf landen, gibt es
-   * nur einen Schreibvorgang.
-   */
-  const setzeWettkampfNamen = useCallback(
-    (laufId: string, namen: string[]) => {
-      if (!istAktiv()) return
-      const lauf = laeufeRef.current.find((eintrag) => eintrag.id === laufId)
-      if (!lauf) return
-      const neueSchwimmer: Schwimmer[] = []
-      const ids = namen.map((name) =>
-        schwimmerIdFuer(name, null, schwimmerRef.current, neueSchwimmer),
-      )
-      let naechster = lauf
-      lauf.bahnen.forEach((bahn, index) => {
-        naechster = setSchwimmerOnLane(naechster, bahn.id, ids[index] ?? null)
-      })
-      if (neueSchwimmer.length > 0) {
-        setSchwimmerSafe(
-          [...schwimmerRef.current, ...neueSchwimmer].sort((a, b) =>
-            a.name.localeCompare(b.name, 'de'),
-          ),
-        )
-        for (const eintrag of neueSchwimmer) verfolge(saveSchwimmer(eintrag))
-      }
-      aendereLauf(lauf, naechster)
-    },
-    [aendereLauf, setSchwimmerSafe, verfolge],
-  )
 
   /**
    * Legt ein neues Training aus den aktuellen Einstellungen an.
