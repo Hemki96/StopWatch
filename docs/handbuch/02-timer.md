@@ -140,6 +140,20 @@ Nach dem letzten Ziel bleibt der Wert stehen; er zählt nicht weiter.
 Eine Serie behält ihre Rundenanzeige (`3 von 5 Runden vollständig`) und zeigt keine zusätzliche
 Laufzeit.
 
+### Nach dem letzten Ziel
+
+Sind bei einem einzelnen Lauf alle Bahnen im Ziel, ersetzt eine **Ergebnisübersicht** die Kacheln.
+Je Bahn stehen Bahnnummer, Schwimmer, Zielzeit und der Vergleich mit der persönlichen Bestzeit:
+
+- **Bestzeit**, wenn die Zeit die schnellste dieser Kombination aus Strecke, Schwimmart und
+  Beckenlänge ist.
+- Andernfalls der Rückstand, z. B. `+06,00 zum PB`.
+- **kein PB**, wenn die Bahn keinen Schwimmer hat oder die Strecke offen ist.
+- **korrigiert**, wenn die Zielzeit von Hand geändert wurde.
+
+**Zurück** an einer Zeile nimmt das Ziel dieser Bahn zurück; der Lauf läuft dann weiter und die
+Kacheln erscheinen wieder. **Neuer Lauf** bleibt der nächste Schritt.
+
 ## Rückgängig machen
 
 Langes Drücken (etwa 0,45 s) auf einer Bahn nimmt die letzte Aktion zurück:

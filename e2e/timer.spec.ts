@@ -64,7 +64,11 @@ test('zeigt die Laufzeit, zählt sie hoch und friert beim letzten Ziel ein', asy
   await bahn.dispatchEvent('click')
   await page.waitForTimeout(120)
   await bahn.dispatchEvent('click')
-  await expect(page.getByRole('button', { name: /Bahn 1, im Ziel$/ })).toBeVisible()
+  // Mit dem letzten Ziel wechselt der Timer von den Kacheln zur
+  // Ergebnisübersicht; die Bahn steht dort mit ihrer Zielzeit.
+  await expect(page.getByRole('heading', { name: 'Ergebnis' })).toBeVisible()
+  // Ohne Schwimmer gibt es bewusst kein PB-Badge; die Zeit steht trotzdem da.
+  await expect(page.locator('li[data-bahn="1"]')).toContainText('kein PB')
 
   // Nach dem Ziel bleibt der Wert stehen, auch wenn die Uhr weiterläuft.
   const eingefroren = await page.locator('[data-laufzeit]').getAttribute('data-laufzeit')

@@ -29,6 +29,7 @@ import { SCHWIMMARTEN, type Bahn, type Lauf, type Satz, type SatzPlan } from '..
 import { Bestaetigung } from './Bestaetigung'
 import { KonfigurationSheet } from './KonfigurationSheet'
 import { LaneTile } from './LaneTile'
+import { LaufErgebnis } from './LaufErgebnis'
 import { SerieAnsicht } from './SerieAnsicht'
 import { TrashIcon, XIcon } from './icons'
 
@@ -502,6 +503,15 @@ export function TimerScreen() {
           onTap={app.tippeSerie}
           onUndo={app.rueckgaengigSerie}
           onFinish={app.beendeSerie}
+        />
+      ) : !serie && alleBeendet && gestartet ? (
+        // Ein einzelner, vollständig beendeter Lauf zeigt die Ergebnisübersicht
+        // statt der Kacheln. „Neuer Lauf“ bleibt darunter der nächste Schritt.
+        <LaufErgebnis
+          lauf={lauf}
+          laeufe={app.laeufe}
+          schwimmerName={schwimmerName}
+          onUndo={app.rueckgaengig}
         />
       ) : (
         <div
