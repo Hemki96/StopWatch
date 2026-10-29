@@ -18,14 +18,22 @@ Veröffentlicht wird über GitHub Pages.
 | `npm run dev` | Vite-Dev-Server auf `http://localhost:5173` |
 | `npm run build` | `tsc --noEmit` und `vite build` nach `dist/` |
 | `npm run preview` | gebauten Stand lokal ausliefern |
+| `npm run lint` | ESLint mit Hook-Regeln (`rules-of-hooks`, `exhaustive-deps`) |
 | `npm run typecheck` | nur TypeScript |
 | `npm test` | Vitest |
 | `npm run test:e2e` | Playwright gegen Dev und Produktion |
-| `npm run verify` | typecheck + Unit-Tests + Build |
+| `npm run verify` | lint + typecheck + Unit-Tests + Build |
 | `npm run icons` | PWA-Icons neu erzeugen |
 
-`npm run build` bricht bei Typfehlern ab. Es gibt keinen separaten Lint-Schritt; die Typprüfung und
-die Tests übernehmen diese Rolle.
+`npm run build` bricht bei Typfehlern ab. ESLint prüft zusätzlich die React-Hook-Regeln;
+`exhaustive-deps` ist ein Fehler, damit eine fehlende Abhängigkeit nicht als Warnung untergeht.
+Für den TypeScript-Code sind weitere Stilregeln bewusst nicht aktiv; `@eslint/js` gilt nur für
+die JS-Werkzeugdateien.
+
+TypeScript 7 liefert den `tsc`-Befehl, stellt aber noch keine stabile API für Werkzeuge bereit.
+Deshalb liegt `typescript` als Alias auf `@typescript/typescript6` (API für typescript-eslint) und
+`@typescript/native` auf TypeScript 7 (der `tsc`, den `npm run typecheck` und `npm run build`
+verwenden). Beide werden gemeinsam installiert; `npm ci` bleibt reproduzierbar.
 
 ## Der Build
 

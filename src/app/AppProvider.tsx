@@ -625,7 +625,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       verfolge(vorgang)
       await vorgang
     },
-    [ladeDaten, verfolge],
+    [istAktiv, ladeDaten, verfolge],
   )
 
   /** Leert alle Bestände und lädt neu; nur der aktive Tab darf das. */
@@ -636,7 +636,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const vorgang = clearAll().then(() => ladeDaten())
     verfolge(vorgang)
     await vorgang
-  }, [ladeDaten, verfolge])
+  }, [istAktiv, ladeDaten, verfolge])
 
   /**
    * Startet die Tab-Abstimmung.

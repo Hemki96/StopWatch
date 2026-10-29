@@ -10,7 +10,8 @@ npm test                          # alle Unit- und Komponententests
 npm test -- lauf                  # nur Dateien/Testnamen mit "lauf"
 npm run test:watch                # Vitest im Watch-Modus
 npm run test:e2e                  # Playwright, Projekte dev + produktion
-npm run verify                    # typecheck + Unit-Tests + Build
+npm run lint                      # ESLint (Hook-Regeln)
+npm run verify                    # lint + typecheck + Unit-Tests + Build
 npx playwright test e2e/serie.spec.ts
 npx playwright test --project=dev
 npx playwright test --project=produktion

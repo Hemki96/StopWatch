@@ -42,7 +42,8 @@ npm run dev          # http://localhost:5173
 npm test             # Unit-Tests (Zeitkern, Storage, Hooks, Dialoge, Backup)
 npm run test:coverage # Unit-Tests mit Abdeckungsbericht und Schwellen
 npm run test:e2e     # Playwright gegen Dev-Server und Produktions-Build
-npm run verify       # Typprüfung, Unit-Tests und Produktions-Build
+npm run lint         # ESLint (Hook-Regeln)
+npm run verify       # Lint, Typprüfung, Unit-Tests und Produktions-Build
 npm run build        # Typprüfung + Produktions-Build mit Service Worker
 ```
 

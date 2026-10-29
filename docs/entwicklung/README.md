@@ -12,7 +12,8 @@ npm ci                 # reproduzierbare Installation
 npm run dev            # http://localhost:5173
 npm test               # Unit-Tests (Vitest)
 npm run test:e2e       # Playwright gegen Dev- und Produktions-Build
-npm run verify         # Typprüfung + Unit-Tests + Produktions-Build
+npm run lint           # ESLint (Hook-Regeln)
+npm run verify         # Lint + Typprüfung + Unit-Tests + Produktions-Build
 npm run build          # tsc --noEmit + vite build
 npm run preview        # gebauten Stand lokal ansehen
 npm run icons          # PWA-Icons neu erzeugen
