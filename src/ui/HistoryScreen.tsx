@@ -32,6 +32,15 @@ const datumFormat = new Intl.DateTimeFormat('de-DE', {
 const uhrzeitFormat = new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit' })
 
 /**
+ * Höchstzahl der Satzgruppen, die der Verlauf zunächst rendert.
+ *
+ * Ein großer Bestand soll das Öffnen nicht ausbremsen: 50 Gruppen füllen auch
+ * auf dem Tablet mehrere Bildschirme und begrenzen die DOM-Größe, ohne dass
+ * die erste Ansicht leer wirkt.
+ */
+const GRUPPEN_JE_SEITE = 50
+
+/**
  * Formatiert das ISO-Datum eines Satzes (`YYYY-MM-DD`). Die Uhrzeit 12:00
  * verhindert, dass die Zeitzone den Tag auf den Vortag verschiebt; ein
  * unlesbares Datum wird unverändert durchgereicht.
@@ -72,6 +81,9 @@ export function HistoryScreen() {
   const [satzEdit, setSatzEdit] = useState<{ id: string; wert: string } | null>(null)
   // Zu löschender Satz samt Anzahl der mitgelöschten Läufe für den Dialog.
   const [satzLoeschen, setSatzLoeschen] = useState<{ id: string; anzahl: number } | null>(null)
+  // Bereits angeforderte Seiten. „Mehr laden“ erhöht nur diese Zahl; die
+  // bereits sichtbaren Gruppen bleiben stehen, damit nichts springt.
+  const [seiten, setSeiten] = useState(1)
 
   // Der Name wird beim Verlassen des Felds oder mit Enter übernommen.
   const speichereSatz = () => {
@@ -139,6 +151,11 @@ export function HistoryScreen() {
   const begonneneLaeufe = app.laeufe.filter((lauf) => hatBegonnen(lauf)).length
   const auswertbareSaetze = app.satze.filter((satz) => istAnalyseSatz(satz, app.laeufe)).length
 
+  // Die Seitengröße wächst seitenweise; `slice` hält Reihenfolge und
+  // Gruppierung unverändert und lässt keine Gruppe doppelt erscheinen.
+  const sichtbareGruppen = gruppen.slice(0, seiten * GRUPPEN_JE_SEITE)
+  const weitereGruppen = gruppen.length - sichtbareGruppen.length
+
   return (
     <div className="flex h-full flex-col">
       <header className="border-b border-line px-4 py-3 rail:px-6">
@@ -185,7 +202,7 @@ export function HistoryScreen() {
         ) : null}
 
         <div className="grid grid-cols-1 items-start gap-6 rail:grid-cols-2">
-        {gruppen.map((gruppe) => (
+        {sichtbareGruppen.map((gruppe) => (
           <section key={gruppe.id} className="min-w-0">
             {/* Kopfzeile: Datum links, Bezeichnung und Kennzeichen rechts.
                 Auf schmalen Geräten darf sie umbrechen, statt den Titel zu
@@ -304,6 +321,32 @@ export function HistoryScreen() {
           </section>
         ))}
         </div>
+
+        {/* Der Zähler sagt, wie viel vom Bestand bereits im DOM liegt; die
+            Statusrolle liest die Ergänzung nach „Mehr laden“ vor. Der Knopf
+            bleibt unter der Liste, damit neue Gruppen darunter wachsen und die
+            aktuelle Scrollposition nicht verschieben. */}
+        {gruppen.length > 0 ? (
+          <div className="mt-6 flex flex-col items-center gap-2">
+            <p className="text-xs text-muted" role="status">
+              {`${sichtbareGruppen.length} von ${gruppen.length} ${
+                gruppen.length === 1 ? 'Satz' : 'Sätzen'
+              } angezeigt`}
+            </p>
+            {weitereGruppen > 0 ? (
+              <button
+                type="button"
+                onClick={() => setSeiten((anzahl) => anzahl + 1)}
+                className="h-12 w-full max-w-sm rounded-xl border border-line bg-surface text-sm font-semibold"
+              >
+                Mehr laden
+                <span className="ml-2 text-xs font-normal text-muted">
+                  {weitereGruppen} {weitereGruppen === 1 ? 'weiterer Satz' : 'weitere Sätze'}
+                </span>
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
       )}
 

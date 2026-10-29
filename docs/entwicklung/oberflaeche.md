@@ -114,8 +114,10 @@ Jede Ebene hat einen eigenen Zurück-Pfad: Heat → Disziplinen → Wettkämpfe.
 
 ### Verlauf und Detail
 
-Der Verlauf ist eine Liste von Satzgruppen. Das Detail ist ein Vollbild-Screen (`fixed inset-0`),
-kein Sheet, weil es viel Inhalt und eigene Aktionen hat.
+Der Verlauf ist eine Liste von Satzgruppen, zunächst auf die neuesten 50 begrenzt. „Mehr laden“
+ergänzt weitere Gruppen unterhalb der Liste, ohne Gruppierung, Sortierung oder Scrollposition zu
+verändern. Das Detail ist ein Vollbild-Screen (`fixed inset-0`), kein Sheet, weil es viel Inhalt und
+eigene Aktionen hat.
 
 ### Einstellungen
 
