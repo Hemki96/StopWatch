@@ -44,7 +44,8 @@ bereits in 0.1.0 vorhanden; 1.0 schließt die offenen Lücken und ergänzt die A
 - Trainingsvorlagen, Anwesenheit und Saisonkalender
 - Diagramme und Sparklines
 - Die Design-Referenz [#14](https://github.com/Hemki96/StopWatch/issues/14) ist ein separates
-  Design-Artefakt und kein Release-Blocker; das Redesign ist bereits umgesetzt.
+  Design-Artefakt und kein Release-Blocker; das Redesign ist bereits umgesetzt. Die inhaltliche
+  Fassung liegt unter [`design/redesign-referenz/`](design/redesign-referenz/README.md).
 
 ### Release-Kriterien
 

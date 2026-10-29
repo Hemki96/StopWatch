@@ -193,7 +193,7 @@ Komponente liest keine Daten selbst — Timer und Training übergeben die Werte.
 
 Die Kachel eines einzelnen Laufs:
 
-- großes Zeitfeld mit `clamp(1.5rem, 7.6vw, 3.25rem)`,
+- großes Zeitfeld mit `clamp(1.35rem, 15cqw, 3.25rem)`,
 - Bahnnummer, Name, Status, letzter Split,
 - Fortschrittslinie unten (ein Segment pro Länge),
 - **Ziel**-Knopf nur bei offener Strecke, als eigene Fläche unter der Messfläche,
@@ -292,6 +292,12 @@ vorhanden; auf iPhone-Safari bleibt sie wirkungslos. Haptik ist nie die einzige 
 
 ## Gestaltung
 
+> **Zielbild:** Die verbindlichen Sollwerte für das Redesign — inklusive der offenen
+> Designentscheidungen — stehen in der
+> [Design-Referenz](../../design/redesign-referenz/README.md). Dieses Kapitel beschreibt den
+> umgesetzten Stand. Wo beide abweichen, gilt für neue Arbeit die Referenz; die wichtigsten
+> Abweichungen sind dort in „Brief gegen Referenz“ und „Offene Entscheidungen“ genannt.
+
 ### Farben
 
 Die Tokens stehen in `src/index.css`:
@@ -329,7 +335,8 @@ immer Text und Status.
 - Keine Glass-Effekte, keine Verläufe, keine dekorativen Bilder.
 - Ein weicher Schatten liegt unter primären Aktionen, Sheets, Dialogen und dem Toast.
 - Primäre Aktionen sind 56–80 px hoch und am unteren Rand verankert.
-- Touchziele sind mindestens 36–44 px; die wichtigsten 56–80 px.
+- Touchziele sind mindestens 36–44 px; die wichtigsten 56–80 px. Zielwert der Referenz:
+  44 px für jedes interaktive Element, primäre Aktionen 56–80 px.
 
 ## Zustandsgrenzen
 
@@ -378,6 +385,7 @@ Fehler werden nicht als Alert-Box mitten im Inhalt versteckt:
 
 ## Weiterlesen
 
+- [Design-Referenz](../../design/redesign-referenz/README.md) — Zielbild und Sollmaße der Oberfläche
 - [Architektur](architektur.md)
 - [Testen](testen.md) — wie die Oberfläche getestet wird
 - [Handbuch](../handbuch/README.md) — was Anwender:innen sehen

@@ -106,6 +106,7 @@ Erkannt werden auch englische Spaltennamen (`lane`, `heat`, `distance`, `stroke`
 - [`docs/README.md`](docs/README.md) — Einstieg in die vollständige Dokumentation
 - [`docs/handbuch/`](docs/handbuch/README.md) — Bedienung für Trainer:innen: Timer, Serien, Training, Wettkampf, Verlauf, Backup und FAQ
 - [`docs/entwicklung/`](docs/entwicklung/README.md) — Architektur, Datenmodell, Domänenreferenz, Oberfläche, Tests und Deployment
+- [`design/redesign-referenz/`](design/redesign-referenz/README.md) — Design-Referenz: Screens, Raster, Tokens, Zustände und Barrierefreiheit
 - [`ROADMAP.md`](ROADMAP.md) — Funktionsumfang je Major-Version und bewusste Nicht-Ziele
 - [`GLOSSARY.md`](GLOSSARY.md) — die Begriffe der Domäne (Lauf, Bahn, Reihe, Länge, Split, Anschlag, Satz, Serie, Training, Aktive, Startversatz, Takt, PB, Wettkampf, Disziplin, Meldeliste)
 - [`docs/adr/`](docs/adr/) — getroffene Entscheidungen und ihre Alternativen
