@@ -15,6 +15,7 @@ import { formatStrecke, formatTime } from '../domain/format'
 import { finishMs } from '../domain/lauf'
 import { SCHWIMMARTEN, type Lauf, type Schwimmer } from '../domain/types'
 import { Bestaetigung } from './Bestaetigung'
+import { LaufDetail } from './LaufDetail'
 import { Sheet } from './Sheet'
 import { ChevronRightIcon, PlusIcon } from './icons'
 
@@ -103,8 +104,32 @@ function datumKurz(ms: number): string {
   return new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit' }).format(ms)
 }
 
-/** Aufgeklappte Bestzeiten eines Schwimmers; ohne Gruppen steht ein Hinweis. */
-function Bestzeiten({ gruppen }: { gruppen: BestzeitenGruppe[] }) {
+/**
+ * Vollständiges Datum für den Vorlesetext einer Bestzeit. Die sichtbare Zeile
+ * bleibt kurz (Tag/Monat); der Screenreader nennt Schwimmer, Datum und Zeit.
+ * Ohne Wanduhr-Anker tritt ein neutraler Platzhalter an die Stelle des Datums.
+ */
+const datumLang = new Intl.DateTimeFormat('de-DE', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+})
+
+/**
+ * Aufgeklappte Bestzeiten eines Schwimmers; ohne Gruppen steht ein Hinweis.
+ *
+ * Jede Zeit ist ein Knopf und öffnet das Lauf-Detail des Laufs, in dem sie
+ * gemessen wurde — unabhängig davon, ob sie aus Training oder Wettkampf stammt.
+ */
+function Bestzeiten({
+  gruppen,
+  schwimmerName,
+  onOpen,
+}: {
+  gruppen: BestzeitenGruppe[]
+  schwimmerName: string
+  onOpen: (laufId: string) => void
+}) {
   if (gruppen.length === 0) {
     return (
       <p className="rounded-xl bg-surface2 px-3 py-2 text-xs leading-relaxed text-muted">
@@ -125,19 +150,31 @@ function Bestzeiten({ gruppen }: { gruppen: BestzeitenGruppe[] }) {
           <ol className="mt-1 space-y-0.5">
             {/* Schlüssel aus Lauf und Zeit; Bestzeit und Korrektur sind
                 zusätzlich als Text markiert, nicht nur farblich. */}
-            {gruppe.eintraege.map((eintrag) => (
-              <li
-                key={`${eintrag.laufId}-${eintrag.ms}`}
-                className="tabular flex items-baseline justify-between text-[11px] text-muted"
-              >
-                <span>{datumKurz(eintrag.startWallMs)}</span>
-                <span className={eintrag.istPb ? 'font-semibold text-ok' : ''}>
-                  {formatTime(eintrag.ms)}
-                  {eintrag.istPb ? ' · Bestzeit' : ''}
-                  {eintrag.istManuell ? ' · korrigiert' : ''}
-                </span>
-              </li>
-            ))}
+            {gruppe.eintraege.map((eintrag) => {
+              const datum = eintrag.startWallMs
+                ? datumLang.format(eintrag.startWallMs)
+                : 'ohne Datum'
+              return (
+                <li key={`${eintrag.laufId}-${eintrag.ms}`}>
+                  {/* Die ganze Zeile ist der Einstieg ins Lauf-Detail; nach dem
+                      Schließen bleibt derselbe Schwimmer aufgeklappt, weil der
+                      Zustand im Screen liegt. */}
+                  <button
+                    type="button"
+                    onClick={() => onOpen(eintrag.laufId)}
+                    aria-label={`${schwimmerName}, ${datum}, ${formatTime(eintrag.ms)}`}
+                    className="tabular flex w-full items-baseline justify-between gap-2 rounded-md px-1 py-0.5 text-left text-[11px] text-muted"
+                  >
+                    <span>{datumKurz(eintrag.startWallMs)}</span>
+                    <span className={eintrag.istPb ? 'font-semibold text-ok' : ''}>
+                      {formatTime(eintrag.ms)}
+                      {eintrag.istPb ? ' · Bestzeit' : ''}
+                      {eintrag.istManuell ? ' · korrigiert' : ''}
+                    </span>
+                  </button>
+                </li>
+              )
+            })}
           </ol>
         </section>
       ))}
@@ -281,6 +318,8 @@ export function SchwimmerScreen() {
   const app = useApp()
   const [bearbeitung, setBearbeitung] = useState<Bearbeitung>(null)
   const [offen, setOffen] = useState<string | null>(null)
+  // Lauf, dessen Detail über eine Bestzeit geöffnet wurde. `null` heißt zu.
+  const [offenerLauf, setOffenerLauf] = useState<string | null>(null)
 
   // IDs aller Schwimmer, die aktuell oder früher auf einer Bahn standen.
   // Dient nur der Unterscheidung „noch keine Zielzeit“ vs. „keiner Bahn
@@ -380,7 +419,11 @@ export function SchwimmerScreen() {
 
                 {aufgeklappt ? (
                   <div className="border-t border-line px-3 py-3">
-                    <Bestzeiten gruppen={gruppen} />
+                    <Bestzeiten
+                      gruppen={gruppen}
+                      schwimmerName={schwimmer.name}
+                      onOpen={setOffenerLauf}
+                    />
                   </div>
                 ) : null}
               </li>
@@ -400,6 +443,16 @@ export function SchwimmerScreen() {
 
       {bearbeitung ? (
         <SchwimmerFormular eintrag={bearbeitung} onClose={() => setBearbeitung(null)} />
+      ) : null}
+
+      {/* Das Lauf-Detail liegt als Vollbild über der Liste. Der Rückweg führt
+          zu genau diesem Schwimmer; `offen` bleibt dabei unverändert. */}
+      {offenerLauf ? (
+        <LaufDetail
+          laufId={offenerLauf}
+          onClose={() => setOffenerLauf(null)}
+          zurueck={{ label: 'Schwimmer', aria: 'Zurück zu den Schwimmern' }}
+        />
       ) : null}
     </div>
   )

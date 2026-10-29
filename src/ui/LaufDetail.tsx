@@ -40,7 +40,16 @@ const zeitFormat = new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '
  * Detailansicht eines gespeicherten Laufs. Der Lauf wird über die Id aus dem
  * App-Kontext gelesen, damit Korrekturen sofort in der Ansicht erscheinen.
  */
-export function LaufDetail({ laufId, onClose }: { laufId: string; onClose: () => void }) {
+export function LaufDetail({
+  laufId,
+  onClose,
+  zurueck = { label: 'Verlauf', aria: 'Zurück zum Verlauf' },
+}: {
+  laufId: string
+  onClose: () => void
+  /** Beschriftung und Vorlesetext des Rückwegs; der Schwimmer-Tab öffnet es mit. */
+  zurueck?: { label: string; aria: string }
+}) {
   const app = useApp()
   // Der Lauf wird bei jedem Render frisch im App-Kontext gesucht, damit
   // Korrekturen sofort ankommen; fehlt er, wurde er inzwischen gelöscht.
@@ -105,11 +114,11 @@ export function LaufDetail({ laufId, onClose }: { laufId: string; onClose: () =>
         <button
           type="button"
           onClick={onClose}
-          aria-label="Zurück zum Verlauf"
+          aria-label={zurueck.aria}
           className="flex h-10 items-center gap-1 rounded-xl px-2 text-sm font-medium text-accent"
         >
           <ChevronLeftIcon className="h-5 w-5" />
-          Verlauf
+          {zurueck.label}
         </button>
         <div className="flex-1" />
         <button

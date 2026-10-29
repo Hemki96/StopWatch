@@ -158,6 +158,10 @@ Ein Tipp klappt die Bestzeiten auf:
 - Ein Eintrag ohne Zielzeit zeigt „noch keine Zielzeit“; ohne Bahnzuordnung „noch keiner Bahn
   zugeordnet“.
 
+Jede Zeit ist antippbar und öffnet das **Lauf-Detail** des Laufs, in dem sie gemessen wurde — aus
+Training und Wettkampf gleichermaßen. Der Rückweg führt zum selben aufgeklappten Schwimmer; der
+Screenreader-Text nennt Schwimmer, Datum und Zeit.
+
 Ein Klick auf **Bearbeiten** öffnet Name, Jahrgang und Notiz. Beim Löschen einer Person bleiben die
 gemessenen Zeiten erhalten, verlieren aber ihre Zuordnung. Die Person wird außerdem aus den
 Standardwerten und aus vorbereiteten Trainings entfernt.
