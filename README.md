@@ -2,6 +2,8 @@
 
 Zeitmessung für Schwimmtrainer am Beckenrand. Mobile-first PWA, offline, ohne Konto.
 
+**Läuft unter <https://hemki96.github.io/StopWatch/>.** Am Handy öffnen und über „Zum Home-Bildschirm“ bzw. „App installieren“ hinzufügen — danach startet sie ohne Browserleiste und funktioniert offline.
+
 ## Was die App tut
 
 Ein **Lauf** besteht aus bis zu zehn **Bahnen**. „Start alle“ gibt allen Bahnen denselben Startzeitstempel, danach tippt der Trainer jede Bahn bei jedem **Anschlag** an. Bei konfigurierter Strecke ist der letzte Anschlag das Ziel und erzeugt einen **Split** pro **Länge**.
