@@ -10,8 +10,17 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { formatTime, lokalesDatum, parseTime } from '../domain/format'
 import {
+  anzeigeZuMeter,
+  beckenlaengenFuer,
+  formatBeckenlaenge,
+  standardBeckenlaenge,
+  streckeAnzeige,
+} from '../domain/einheit'
+import { istVielfacheDerBeckenlaenge } from '../domain/lauf'
+import {
   SCHWIMMARTEN,
   type Beckenlaenge,
+  type Einheit,
   type Lauf,
   type Schwimmart,
   type WettkampfStatus,
@@ -110,17 +119,24 @@ export function WettkampfAnlegenSheet({
 }: {
   open: boolean
   onClose: () => void
-  onCreate: (daten: { name: string; datum: string; beckenlaengeM: Beckenlaenge }) => void
+  onCreate: (daten: {
+    name: string
+    datum: string
+    beckenlaengeM: Beckenlaenge
+    einheit: Einheit
+  }) => void
 }) {
   const [name, setName] = useState('')
   const [datum, setDatum] = useState(() => lokalesDatum(Date.now()))
+  const [einheit, setEinheit] = useState<Einheit>('m')
   const [beckenlaengeM, setBeckenlaengeM] = useState<Beckenlaenge>(50)
 
-  // Jedes Öffnen startet mit leerem Namen, heutigem Datum und 50-m-Becken.
+  // Jedes Öffnen startet mit leerem Namen, heutigem Datum, Meter und 50-m-Becken.
   useEffect(() => {
     if (!open) return
     setName('')
     setDatum(lokalesDatum(Date.now()))
+    setEinheit('m')
     setBeckenlaengeM(50)
   }, [open])
 
@@ -147,11 +163,32 @@ export function WettkampfAnlegenSheet({
         />
       </Feld>
 
-      <Feld label="Beckenlänge" hint="Gilt für alle Disziplinen dieses Wettkampfs.">
+      <Feld label="Einheit" hint="Gilt für alle Disziplinen und die Ergebnis-CSV.">
         <div className="flex gap-2">
-          {([25, 50] as const).map((wert) => (
-            <Chip key={wert} aktiv={beckenlaengeM === wert} onClick={() => setBeckenlaengeM(wert)}>
-              {wert} m
+          {(['m', 'yd'] as const).map((wert) => (
+            <Chip
+              key={wert}
+              aktiv={einheit === wert}
+              onClick={() => {
+                setEinheit(wert)
+                setBeckenlaengeM(standardBeckenlaenge(wert))
+              }}
+            >
+              {wert === 'm' ? 'Meter' : 'Yards'}
+            </Chip>
+          ))}
+        </div>
+      </Feld>
+
+      <Feld label="Beckenlänge" hint="Gilt für alle Disziplinen dieses Wettkampfs.">
+        <div className="flex flex-wrap gap-2">
+          {beckenlaengenFuer(einheit).map((wert) => (
+            <Chip
+              key={wert}
+              aktiv={beckenlaengeM === wert}
+              onClick={() => setBeckenlaengeM(wert)}
+            >
+              {formatBeckenlaenge(wert, einheit)}
             </Chip>
           ))}
         </div>
@@ -160,7 +197,7 @@ export function WettkampfAnlegenSheet({
       <button
         type="button"
         disabled={!name.trim() || !datum}
-        onClick={() => onCreate({ name: name.trim(), datum, beckenlaengeM })}
+        onClick={() => onCreate({ name: name.trim(), datum, beckenlaengeM, einheit })}
         className="h-14 w-full rounded-xl bg-accent text-base font-bold text-accent-fg disabled:opacity-40"
       >
         Wettkampf anlegen
@@ -180,11 +217,14 @@ export function DisziplinSheet({
   open,
   onClose,
   beckenlaengeM,
+  einheit,
   onCreate,
 }: {
   open: boolean
   onClose: () => void
   beckenlaengeM: Beckenlaenge
+  /** Anzeige-Einheit des Wettkampfs; Strecken werden darin gewählt. */
+  einheit: Einheit
   onCreate: (daten: {
     bezeichnung: string
     streckeM: number
@@ -193,7 +233,7 @@ export function DisziplinSheet({
     bahnen: number
   }) => void
 }) {
-  const [streckeM, setStreckeM] = useState(100)
+  const [streckeM, setStreckeM] = useState(() => anzeigeZuMeter(100, einheit))
   const [schwimmart, setSchwimmart] = useState<Schwimmart>('freistil')
   const [laeufe, setLaeufe] = useState(1)
   const [bahnen, setBahnen] = useState(6)
@@ -201,25 +241,35 @@ export function DisziplinSheet({
   // Vorgaben bei jedem Öffnen; die Beckenlänge kommt vom Wettkampf.
   useEffect(() => {
     if (!open) return
-    setStreckeM(100)
+    setStreckeM(anzeigeZuMeter(100, einheit))
     setSchwimmart('freistil')
     setLaeufe(1)
     setBahnen(6)
-  }, [open])
+  }, [open, einheit])
 
   const art = SCHWIMMARTEN.find((eintrag) => eintrag.wert === schwimmart)?.label ?? ''
   // Ein Lauf ist ein Heat; die Strecke muss ganzzahlig in Becken passen.
-  const ungueltig = streckeM % beckenlaengeM !== 0
+  const ungueltig = !istVielfacheDerBeckenlaenge(streckeM, beckenlaengeM)
 
   return (
     <Sheet open={open} onClose={onClose} titel="Disziplin anlegen">
-      <Feld label="Strecke" hint={ungueltig ? `Passt nicht zu ${beckenlaengeM} m.` : undefined}>
+      <Feld
+        label="Strecke"
+        hint={ungueltig ? `Passt nicht zu ${formatBeckenlaenge(beckenlaengeM, einheit)}.` : undefined}
+      >
         <div className="flex flex-wrap gap-2">
-          {STRECKEN.map((wert) => (
-            <Chip key={wert} aktiv={streckeM === wert} onClick={() => setStreckeM(wert)}>
-              {wert} m
-            </Chip>
-          ))}
+          {STRECKEN.map((wert) => {
+            const kanonisch = anzeigeZuMeter(wert, einheit)
+            return (
+              <Chip
+                key={wert}
+                aktiv={streckeM === kanonisch}
+                onClick={() => setStreckeM(kanonisch)}
+              >
+                {wert} {einheit}
+              </Chip>
+            )
+          })}
         </div>
       </Feld>
 
@@ -250,7 +300,7 @@ export function DisziplinSheet({
         disabled={ungueltig}
         onClick={() =>
           onCreate({
-            bezeichnung: `${streckeM} m ${art}`,
+            bezeichnung: `${streckeAnzeige(streckeM, einheit)} ${einheit} ${art}`,
             streckeM,
             schwimmart,
             laeufe,
@@ -259,7 +309,7 @@ export function DisziplinSheet({
         }
         className="h-14 w-full rounded-xl bg-accent text-base font-bold text-accent-fg disabled:opacity-40"
       >
-        {`${streckeM} m ${art} anlegen`}
+        {`${streckeAnzeige(streckeM, einheit)} ${einheit} ${art} anlegen`}
       </button>
     </Sheet>
   )

@@ -228,8 +228,10 @@ Die Datei heißt `beckenrand-JJJJ-MM-TT.csv` und enthält:
 | --- | --- |
 | `satz` | Satzbezeichnung, ggf. leer |
 | `datum` | lokales Datum des Laufs |
-| `beckenlaenge_m` | 25 oder 50 |
-| `strecke_m` | Strecke oder leer bei offener Strecke |
+| `beckenlaenge_m` | kanonische Beckenlänge in Metern: 25, 50 oder 22,86 |
+| `einheit` | `m` oder `yd` — die Anzeige-Einheit des Laufs |
+| `strecke_m` | kanonische Strecke in Metern oder leer bei offener Strecke |
+| `strecke` | Anzeige-Strecke in der Einheit, z. B. `100` bei 100 yd |
 | `schwimmart` | interner Wert, z. B. `freistil` |
 | `bahn` | Bahnnummer |
 | `schwimmer` | Name oder leer |
@@ -259,8 +261,8 @@ Wichtige Eigenschaften:
 
 Typische Auswertungen:
 
-- **Zielzeiten:** `ist_finish = 1` filtern, dann nach `schwimmer`, `strecke_m`, `schwimmart` und
-  `beckenlaenge_m` gruppieren.
+- **Zielzeiten:** `ist_finish = 1` filtern, dann nach `schwimmer`, `strecke_m`, `einheit`,
+  `schwimmart` und `beckenlaenge_m` gruppieren. Meter- und Yard-Zeiten nie mischen.
 - **Splits:** `split_ms` in Sekunden umrechnen (`/1000`) und pro `lauf`/`bahn` sortieren.
 - **Serien:** nach `satz` und `wiederholung` gruppieren; `takt_s` und `startversatz_ms` stehen in
   jeder Zeile.

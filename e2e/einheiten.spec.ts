@@ -167,3 +167,27 @@ test('zeigt einen Yard-Lauf in Verlauf, Detail und getrennten Bestzeiten', async
   await page.getByRole('button', { name: /6 Bahnen · 100 yd/ }).tap()
   await expect(page.getByRole('heading', { name: /6 Bahnen · 100 yd/ })).toBeVisible()
 })
+
+test('legt einen Trainingssatz in Yards an und startet ihn im Timer', async ({ page }) => {
+  await oeffneApp(page)
+  await page.getByRole('button', { name: 'Training' }).tap()
+  await page.getByRole('button', { name: 'Neues Training' }).tap()
+
+  // Der erste Satz übernimmt die Meter-Vorgabe; im Satz-Sheet wird er auf
+  // Yards umgestellt. Die angezeigte Streckenzahl bleibt 100.
+  await page.getByRole('button', { name: 'Satz 1: 100 m · Freistil, offen' }).tap()
+  const sheet = page.getByRole('dialog')
+  await sheet
+    .locator('section', { hasText: 'Einheit' })
+    .getByRole('button', { name: 'Yards' })
+    .tap()
+  await sheet.getByRole('button', { name: '100 yd' }).tap()
+  await sheet.getByRole('button', { name: 'Satz speichern' }).tap()
+
+  await expect(
+    page.getByRole('button', { name: 'Satz 1: 100 yd · Freistil, offen' }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: 'Satz 1 starten' }).tap()
+  await expect(page.getByText('25 yd · 100 yd · Freistil · 6 Bahnen')).toBeVisible()
+  await expect(page.getByRole('button', { name: /Bahn 1, läuft$/ })).toBeVisible()
+})

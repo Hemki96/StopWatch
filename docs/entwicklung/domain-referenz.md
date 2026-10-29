@@ -480,20 +480,23 @@ Ablauf:
 4. Kopfzeile erkennen; sonst nur 1 oder 2 Spalten erlauben.
 5. Jede Datenzeile parsen:
    - Name aus `name` oder `vorname` + `nachname`,
-   - Strecke aus `strecke` oder Disziplintext oder Vorgabe,
+   - Strecke aus `strecke` oder Disziplintext oder Vorgabe; Suffixe `m`, `yd`, `yard(s)`, `y`
+     werden erkannt, ohne Suffix gilt `vorgabe.einheit` (Default `m`),
+   - eine ausdrücklich genannte Einheit, die nicht zur Vorgabe passt, bricht mit Zeilennummer ab,
    - Schwimmart aus `schwimmart` oder Disziplintext oder Vorgabe,
    - Lauf aus `lauf` oder Vorgabe (Default 1),
    - Bahn aus `bahn` oder nächste freie 1..10,
    - Jahrgang optional.
-6. Nach Disziplin (Name|Strecke|Art) und Lauf gruppieren.
+6. Nach Disziplin (Name|Strecke|Art|Einheit) und Lauf gruppieren.
 7. Disziplinen in Dateireihenfolge, Heats und Bahnen sortiert zurückgeben.
 
 Fehler nennen die Zeilennummer. Warnungen (z. B. unbekannte Schwimmart) landen in
 `meldeliste.warnungen` und blockieren nicht.
 
-### `meldelisteVorlage(): string`
+### `meldelisteVorlage(einheit = 'm'): string`
 
-UTF-8-BOM, Semikolon, CRLF, Beispielzeilen. Wird von „Vorlage laden“ verwendet.
+UTF-8-BOM, Semikolon, CRLF, Beispielzeilen in der Einheit des Wettkampfs. Wird von „Vorlage laden“
+verwendet.
 
 ### `meldelisteZusammenfassung(meldeliste): string`
 

@@ -8,11 +8,20 @@
  * Löschen sind angebunden, aber nur bei bestehenden Sätzen sichtbar.
  */
 import { useState } from 'react'
-import { validateKonfiguration } from '../domain/lauf'
+import {
+  anzeigeZuMeter,
+  beckenlaengenFuer,
+  einheitVon,
+  formatBeckenlaenge,
+  standardBeckenlaenge,
+  streckeAnzeige,
+} from '../domain/einheit'
+import { istVielfacheDerBeckenlaenge, validateKonfiguration } from '../domain/lauf'
 import { pruefeTrainingsSatz } from '../domain/training'
 import {
   SCHWIMMARTEN,
   type Beckenlaenge,
+  type Einheit,
   type LaufKonfiguration,
   type TrainingsSatz,
 } from '../domain/types'
@@ -96,10 +105,25 @@ export function TrainingsSatzSheet({
   const setzeBeckenlaenge = (beckenlaengeM: Beckenlaenge) => {
     const strecke = entwurf.konfiguration.streckeM
     const naechste =
-      strecke !== null && strecke % beckenlaengeM !== 0
+      strecke !== null && !istVielfacheDerBeckenlaenge(strecke, beckenlaengeM)
         ? { beckenlaengeM, streckeM: beckenlaengeM * 2 }
         : { beckenlaengeM }
     aendereKonfiguration(naechste)
+  }
+
+  /** Wechselt Meter/Yards; die angezeigte Streckenzahl bleibt erhalten. */
+  const setzeEinheit = (einheit: Einheit) => {
+    const aktuell = entwurf.konfiguration
+    if (einheit === einheitVon(aktuell)) return
+    const anzeige = streckeAnzeige(aktuell.streckeM, einheitVon(aktuell))
+    const beckenlaengeM = standardBeckenlaenge(einheit)
+    const streckeM =
+      anzeige === null
+        ? null
+        : istVielfacheDerBeckenlaenge(anzeigeZuMeter(anzeige, einheit), beckenlaengeM)
+          ? anzeigeZuMeter(anzeige, einheit)
+          : beckenlaengeM * 2
+    aendereKonfiguration({ einheit, beckenlaengeM, streckeM })
   }
 
   return (
@@ -121,15 +145,29 @@ export function TrainingsSatzSheet({
         />
       </Feld>
 
-      <Feld label="Beckenlänge">
+      <Feld label="Einheit" hint="Gilt für Strecke, Becken und Pace dieses Satzes.">
         <div className="flex gap-2">
-          {([25, 50] as const).map((wert) => (
+          {(['m', 'yd'] as const).map((wert) => (
+            <Chip
+              key={wert}
+              aktiv={einheitVon(entwurf.konfiguration) === wert}
+              onClick={() => setzeEinheit(wert)}
+            >
+              {wert === 'm' ? 'Meter' : 'Yards'}
+            </Chip>
+          ))}
+        </div>
+      </Feld>
+
+      <Feld label="Beckenlänge">
+        <div className="flex flex-wrap gap-2">
+          {beckenlaengenFuer(einheitVon(entwurf.konfiguration)).map((wert) => (
             <Chip
               key={wert}
               aktiv={entwurf.konfiguration.beckenlaengeM === wert}
               onClick={() => setzeBeckenlaenge(wert)}
             >
-              {wert} m
+              {formatBeckenlaenge(wert, einheitVon(entwurf.konfiguration))}
             </Chip>
           ))}
         </div>
@@ -140,10 +178,19 @@ export function TrainingsSatzSheet({
           {STRECKEN.map((wert) => (
             <Chip
               key={wert}
-              aktiv={entwurf.konfiguration.streckeM === wert}
-              onClick={() => aendereKonfiguration({ streckeM: wert })}
+              aktiv={
+                streckeAnzeige(
+                  entwurf.konfiguration.streckeM,
+                  einheitVon(entwurf.konfiguration),
+                ) === wert
+              }
+              onClick={() =>
+                aendereKonfiguration({
+                  streckeM: anzeigeZuMeter(wert, einheitVon(entwurf.konfiguration)),
+                })
+              }
             >
-              {wert} m
+              {wert} {einheitVon(entwurf.konfiguration)}
             </Chip>
           ))}
           <Chip

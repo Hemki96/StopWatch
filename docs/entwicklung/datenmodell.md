@@ -99,7 +99,8 @@ interface Wettkampf {
   id: string
   name: string
   datum: string                  // YYYY-MM-DD
-  beckenlaengeM: Beckenlaenge
+  beckenlaengeM: Beckenlaenge   // kanonisch in Metern
+  einheit?: 'm' | 'yd'          // Anzeige-Einheit; fehlt = 'm'
   erstelltAm: number
 }
 ```

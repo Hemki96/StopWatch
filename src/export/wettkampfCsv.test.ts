@@ -65,9 +65,9 @@ describe('wettkampfErgebnisseAlsCsv', () => {
     const zeilen = csv.replace(/^\uFEFF/, '').trim().split('\r\n')
 
     expect(zeilen[0]).toBe(
-      'wettkampf;datum;disziplin;strecke_m;schwimmart;lauf;platz;bahn;schwimmer;zeit_ms;zeit_formatiert;status;manuell',
+      'wettkampf;datum;disziplin;strecke_m;strecke;einheit;schwimmart;lauf;platz;bahn;schwimmer;zeit_ms;zeit_formatiert;status;manuell',
     )
-    expect(zeilen[1]).toContain('Herbstpokal;2026-10-29;100 m Freistil;100;freistil;1;1;4;Ben;60000;01:00,00;Ziel;0')
+    expect(zeilen[1]).toContain('Herbstpokal;2026-10-29;100 m Freistil;100;100;m;freistil;1;1;4;Ben;60000;01:00,00;Ziel;0')
     expect(zeilen[2]).toContain(';2;3;Anna;61000;01:01,00;Ziel;0')
   })
 
@@ -91,6 +91,36 @@ describe('wettkampfErgebnisseAlsCsv', () => {
     const csv = wettkampfErgebnisseAlsCsv(wettkampf, [satz], [lauf], schwimmer)
     expect(csv).toContain(';1;3;Anna;61000;01:01,00;Ziel;0')
     expect(csv).toContain(';;4;Ben;;;offen;0')
+  })
+
+  // Ein Yard-Wettkampf exportiert Strecke und Einheit eindeutig; die
+  // Bezeichnung trägt die Einheit bereits im Namen.
+  it('weist Strecke und Einheit eines Yard-Wettkampfs aus', () => {
+    const yardWettkampf = createWettkampf({
+      name: 'Hallencup',
+      datum: '2026-10-29',
+      beckenlaengeM: 22.86,
+      einheit: 'yd',
+    })
+    const yardSatz = createWettkampfSatz(yardWettkampf, {
+      bezeichnung: '100 yd Freistil',
+      streckeM: 91.44,
+      schwimmart: 'freistil',
+      einheit: 'yd',
+      laeufe: [],
+    })
+    let lauf = createWettkampfLauf(
+      yardSatz,
+      { nummer: 1, starts: [{ name: 'Anna', bahn: 1 }] },
+      () => 'a',
+    )
+    lauf = startAll(lauf, 0, 0)
+    lauf = tapLane(lauf, lauf.bahnen[0]!.id, 60_000, 60_000)
+
+    const csv = wettkampfErgebnisseAlsCsv(yardWettkampf, [yardSatz], [lauf], schwimmer)
+    expect(csv).toContain(
+      'Hallencup;2026-10-29;100 yd Freistil;91.44;100;yd;freistil;1;1;1;Anna;60000;01:00,00;Ziel;0',
+    )
   })
 
   // DNS und DNF stehen als eigener Status in der Ergebnisliste; Zeit- und

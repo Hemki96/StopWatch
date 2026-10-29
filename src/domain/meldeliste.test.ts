@@ -105,6 +105,47 @@ describe('parseMeldeliste', () => {
     expect(ergebnis.meldeliste.disziplinen[0]?.schwimmart).toBe('ruecken')
   })
 
+  // Yard-Wettkämpfe lesen „100 yd“ und rechnen kanonisch in 91,44 m um. Ohne
+  // Suffix gilt die Einheit des Wettkampfs.
+  it('erkennt Yard-Angaben und die Einheit des Wettkampfs', () => {
+    const yard = {
+      beckenlaengeM: 22.86 as const,
+      einheit: 'yd' as const,
+      streckeM: 91.44,
+      schwimmart: 'freistil' as const,
+    }
+    const mitSuffix = parseMeldeliste('disziplin;name\n100 yd Freistil;Anna\n', yard)
+    expect(mitSuffix.ok).toBe(true)
+    if (!mitSuffix.ok) return
+    const disziplin = mitSuffix.meldeliste.disziplinen[0]!
+    expect(disziplin.streckeM).toBe(91.44)
+    expect(disziplin.einheit).toBe('yd')
+    expect(disziplin.bezeichnung).toBe('100 yd Freistil')
+
+    const ohneSuffix = parseMeldeliste('strecke;name\n100;Ben\n', yard)
+    expect(ohneSuffix.ok).toBe(true)
+    if (!ohneSuffix.ok) return
+    expect(ohneSuffix.meldeliste.disziplinen[0]?.streckeM).toBe(91.44)
+    expect(ohneSuffix.meldeliste.disziplinen[0]?.einheit).toBe('yd')
+  })
+
+  // Ein Meter-Eintrag in einem Yard-Wettkampf (und umgekehrt) wäre still falsch;
+  // die Meldung nennt die Zeile und die erwartete Einheit.
+  it('lehnt eine unpassende Einheit mit Zeilennummer ab', () => {
+    const yard = {
+      beckenlaengeM: 22.86 as const,
+      einheit: 'yd' as const,
+      streckeM: 91.44,
+      schwimmart: 'freistil' as const,
+    }
+    const falsch = parseMeldeliste('disziplin;name\n100 m Freistil;Anna\n', yard)
+    expect(falsch.ok).toBe(false)
+    if (falsch.ok) return
+    expect(falsch.fehler).toContain('Zeile 2')
+    expect(falsch.fehler).toContain('passt nicht')
+    expect(falsch.fehler).toContain('25 yd')
+  })
+
   // Ein Semikolon innerhalb von Anführungszeichen ist Text, `""` ist ein
   // wörtliches Anführungszeichen; die Spaltenstruktur bleibt intakt.
   it('liest Semikolons und Anführungszeichen in Namen', () => {

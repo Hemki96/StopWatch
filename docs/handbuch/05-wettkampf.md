@@ -61,6 +61,18 @@ Fehlende Namen lassen sich auch nach dem Start noch ergänzen — der Knopf ersc
 mindestens eine Bahn ohne Namen ist. Eine bereits vorhandene Zuordnung lässt sich im
 **Verlauf → Lauf-Detail** über die Schwimmer-Auswahl ändern.
 
+## Einheiten: Meter und Yards
+
+Ein Wettkampf wird in **Meter** oder **Yards** angelegt. Die Wahl gilt für alle Disziplinen und die
+Ergebnis-CSV:
+
+- Bei Yards steht nur das **25-Yard-Becken** (`25 yd`, kanonisch 22,86 m) bereit.
+- Disziplinen werden in der Einheit des Wettkampfs gewählt, z. B. `100 yd Freistil`; intern
+  gespeichert werden 91,44 m.
+- Die Meldeliste erkennt `m`, `yd`, `yard(s)` und `y`. Ohne Suffix gilt die Einheit des
+  Wettkampfs. Ein Meter-Eintrag in einem Yard-Wettkampf wird **mit Zeilennummer** abgelehnt.
+- Der CSV-Export weist `strecke_m` (kanonisch) und `strecke` + `einheit` (Anzeige) aus.
+
 ## Meldeliste importieren
 
 Der Import ist der schnellste Weg zu einem vollständigen Wettkampf. Er akzeptiert eine CSV aus einer
@@ -80,12 +92,14 @@ importieren erzeugt deshalb Duplikate.
 Die App kann unter **Vorlage laden** eine CSV speichern:
 
 ```csv
-disziplin;strecke_m;schwimmart;lauf;bahn;name;jahrgang
-100 m Freistil;100;freistil;1;3;Anna Muster;2010
-100 m Freistil;100;freistil;1;4;Ben Beispiel;2011
-100 m Freistil;100;freistil;2;3;Clara Muster;2010
-50 m Brust;50;brust;1;1;Dana Beispiel;2012
+disziplin;strecke;schwimmart;lauf;bahn;name;jahrgang
+100 m Freistil;100 m;freistil;1;3;Anna Muster;2010
+100 m Freistil;100 m;freistil;1;4;Ben Beispiel;2011
+100 m Freistil;100 m;freistil;2;3;Clara Muster;2010
+50 m Brust;50 m;brust;1;1;Dana Beispiel;2012
 ```
+
+In einem Yard-Wettkampf stehen in den ersten beiden Spalten z. B. `100 yd Freistil;100 yd`.
 
 Die Datei ist UTF-8 mit BOM und Semikolon, damit deutsches Excel sie direkt öffnet.
 
@@ -264,15 +278,17 @@ Es gibt zwei CSV-Exporte:
 Die Datei heißt `beckenrand-wettkampf-JJJJ-MM-TT.csv` und enthält eine Zeile pro Start:
 
 ```csv
-wettkampf;datum;disziplin;strecke_m;schwimmart;lauf;platz;bahn;schwimmer;zeit_ms;zeit_formatiert;status;manuell
-Herbstpokal;2026-10-29;100 m Freistil;100;freistil;1;1;3;Anna Muster;58310;00:58,31;Ziel;0
-Herbstpokal;2026-10-29;100 m Freistil;100;freistil;1;2;4;Ben Beispiel;59020;00:59,02;Ziel;0
-Herbstpokal;2026-10-29;100 m Freistil;100;freistil;1;;5;Clara Muster;;;offen;0
-Herbstpokal;2026-10-29;100 m Freistil;100;freistil;1;;6;Dana Beispiel;;;DNS;0
-Herbstpokal;2026-10-29;100 m Freistil;100;freistil;1;;7;Emil Beispiel;;;DNF;0
+wettkampf;datum;disziplin;strecke_m;strecke;einheit;schwimmart;lauf;platz;bahn;schwimmer;zeit_ms;zeit_formatiert;status;manuell
+Herbstpokal;2026-10-29;100 m Freistil;100;100;m;freistil;1;1;3;Anna Muster;58310;00:58,31;Ziel;0
+Herbstpokal;2026-10-29;100 m Freistil;100;100;m;freistil;1;2;4;Ben Beispiel;59020;00:59,02;Ziel;0
+Herbstpokal;2026-10-29;100 m Freistil;100;100;m;freistil;1;;5;Clara Muster;;;offen;0
+Herbstpokal;2026-10-29;100 m Freistil;100;100;m;freistil;1;;6;Dana Beispiel;;;DNS;0
+Herbstpokal;2026-10-29;100 m Freistil;100;100;m;freistil;1;;7;Emil Beispiel;;;DNF;0
 ```
 
 - Gewertete Bahnen stehen nach Platz, markierte und offene am Ende.
+- In einem Yard-Wettkampf heißt die Disziplin z. B. `100 yd Freistil`; `strecke_m` bleibt mit
+  91,44 kanonisch, `strecke` zeigt 100 und `einheit` ist `yd`.
 - `status` ist `Ziel`, `DNS`, `DNF` oder `offen`.
 - `manuell` ist `1` bei von Hand eingetragenen oder korrigierten Zeiten.
 - Semikolon und UTF-8-BOM, damit deutsches Excel die Datei direkt öffnet.
@@ -304,8 +320,8 @@ Löschen ist sinnvoll.
 
 | Regel | Wert |
 | --- | --- |
-| Beckenlänge | 25 m oder 50 m, fest pro Wettkampf |
-| Strecke | Vielfaches der Beckenlänge |
+| Beckenlänge | 25 m, 50 m oder 25 yd (22,86 m), fest pro Wettkampf |
+| Strecke | Vielfaches der Beckenlänge, in der Einheit des Wettkampfs |
 | Heats pro Disziplin (manuell) | 1 bis 20 |
 | Heats pro Disziplin (Import) | 1 bis 99 |
 | Bahnen pro Heat | 1 bis 10 |

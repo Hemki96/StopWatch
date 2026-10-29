@@ -11,11 +11,25 @@ import { useEffect, useMemo, useState } from 'react'
 import { useApp } from '../app/AppProvider'
 import { lokalesDatum } from '../domain/format'
 import {
+  anzeigeZuMeter,
+  beckenlaengenFuer,
+  einheitVon,
+  formatBeckenlaenge,
+  standardBeckenlaenge,
+  streckeAnzeige,
+} from '../domain/einheit'
+import {
   meldelisteVorlage,
   meldelisteZusammenfassung,
   parseMeldeliste,
 } from '../domain/meldeliste'
-import { SCHWIMMARTEN, type Beckenlaenge, type Schwimmart, type Wettkampf } from '../domain/types'
+import {
+  SCHWIMMARTEN,
+  type Beckenlaenge,
+  type Einheit,
+  type Schwimmart,
+  type Wettkampf,
+} from '../domain/types'
 import type { WettkampfPlan } from '../domain/wettkampf'
 import { speichereDatei, waehleDatei } from '../export/datei'
 import { Sheet } from './Sheet'
@@ -45,6 +59,7 @@ export function WettkampfImportSheet({
   const app = useApp()
   const [name, setName] = useState('')
   const [datum, setDatum] = useState(() => lokalesDatum(Date.now()))
+  const [einheit, setEinheit] = useState<Einheit>('m')
   const [beckenlaengeM, setBeckenlaengeM] = useState<Beckenlaenge>(50)
   const [streckeM, setStreckeM] = useState(100)
   const [schwimmart, setSchwimmart] = useState<Schwimmart>('freistil')
@@ -57,15 +72,21 @@ export function WettkampfImportSheet({
     if (!open) return
     setName(wettkampf?.name ?? '')
     setDatum(wettkampf?.datum ?? lokalesDatum(Date.now()))
-    setBeckenlaengeM(wettkampf?.beckenlaengeM ?? 50)
-    setStreckeM(100)
+    const startEinheit: Einheit = wettkampf?.einheit === 'yd' ? 'yd' : 'm'
+    setEinheit(startEinheit)
+    setBeckenlaengeM(wettkampf?.beckenlaengeM ?? standardBeckenlaenge(startEinheit))
+    // Die Vorgabe-Strecke gilt in der Einheit des Wettkampfs; sonst stünde in
+    // einem Yard-Wettkampf stillschweigend 100 m.
+    setStreckeM(anzeigeZuMeter(100, startEinheit))
     setSchwimmart('freistil')
     setText('')
     setDateiFehler(null)
   }, [open, wettkampf])
 
-  // Die Beckenlänge des bestehenden Wettkampfs hat Vorrang vor der Auswahl.
+  // Die Beckenlänge des bestehenden Wettkampfs hat Vorrang vor der Auswahl;
+  // dasselbe gilt für die Einheit.
   const pool = wettkampf?.beckenlaengeM ?? beckenlaengeM
+  const aktiveEinheit = wettkampf ? einheitVon(wettkampf) : einheit
   // Vorschau wird bei jeder Textänderung neu geparst; die Vorgaben gelten nur
   // für Zeilen, die selbst keine Disziplin nennen.
   const ergebnis = useMemo(
@@ -73,12 +94,13 @@ export function WettkampfImportSheet({
       text.trim()
         ? parseMeldeliste(text, {
             beckenlaengeM: pool,
+            einheit: aktiveEinheit,
             streckeM,
             schwimmart,
             lauf: 1,
           })
         : null,
-    [text, pool, streckeM, schwimmart],
+    [text, pool, aktiveEinheit, streckeM, schwimmart],
   )
 
   const fehler = ergebnis && !ergebnis.ok ? ergebnis.fehler : null
@@ -110,6 +132,7 @@ export function WettkampfImportSheet({
         name: (wettkampf?.name ?? name).trim(),
         datum: wettkampf?.datum ?? datum,
         beckenlaengeM: pool,
+        einheit: aktiveEinheit,
         disziplinen: meldeliste.disziplinen,
       },
       wettkampf?.id ?? null,
@@ -145,7 +168,25 @@ export function WettkampfImportSheet({
                 aria-label="Datum des Wettkampfs"
                 className="h-11 min-w-0 flex-1 rounded-xl border border-line bg-surface2 px-3 text-sm"
               />
-              {([25, 50] as const).map((wert) => (
+              {(['m', 'yd'] as const).map((wert) => (
+                <button
+                  key={wert}
+                  type="button"
+                  onClick={() => {
+                    setEinheit(wert)
+                    setBeckenlaengeM(standardBeckenlaenge(wert))
+                    setStreckeM(anzeigeZuMeter(100, wert))
+                  }}
+                  className={`h-11 rounded-xl border px-3 text-sm font-semibold ${
+                    einheit === wert
+                      ? 'border-accent bg-accent text-accent-fg'
+                      : 'border-line bg-surface2'
+                  }`}
+                >
+                  {wert === 'm' ? 'Meter' : 'Yards'}
+                </button>
+              ))}
+              {beckenlaengenFuer(einheit).map((wert) => (
                 <button
                   key={wert}
                   type="button"
@@ -156,7 +197,7 @@ export function WettkampfImportSheet({
                       : 'border-line bg-surface2'
                   }`}
                 >
-                  {wert} m
+                  {formatBeckenlaenge(wert, einheit)}
                 </button>
               ))}
             </div>
@@ -165,7 +206,8 @@ export function WettkampfImportSheet({
       ) : (
         // Bestehender Wettkampf: Stammdaten nur anzeigen, nicht ändern.
         <p className="mb-5 rounded-xl border border-line bg-surface2 px-3 py-2 text-xs leading-relaxed text-muted">
-          {wettkampf.name} · {wettkampf.datum} · {wettkampf.beckenlaengeM} m-Becken
+          {wettkampf.name} · {wettkampf.datum} ·{' '}
+          {formatBeckenlaenge(wettkampf.beckenlaengeM, einheitVon(wettkampf))}-Becken
         </p>
       )}
 
@@ -180,14 +222,14 @@ export function WettkampfImportSheet({
             <button
               key={wert}
               type="button"
-              onClick={() => setStreckeM(wert)}
+              onClick={() => setStreckeM(anzeigeZuMeter(wert, aktiveEinheit))}
               className={`h-10 rounded-xl border px-3 text-sm font-semibold ${
-                streckeM === wert
+                streckeAnzeige(streckeM, aktiveEinheit) === wert
                   ? 'border-accent bg-accent text-accent-fg'
                   : 'border-line bg-surface2'
               }`}
             >
-              {wert} m
+              {wert} {aktiveEinheit}
             </button>
           ))}
         </div>
@@ -219,7 +261,7 @@ export function WettkampfImportSheet({
             onClick={() =>
               void speichereDatei(
                 'beckenrand-meldeliste-vorlage.csv',
-                meldelisteVorlage(),
+                meldelisteVorlage(aktiveEinheit),
                 'text/csv;charset=utf-8',
               ).catch(() => app.zeigeToast('Vorlage konnte nicht gespeichert werden.'))
             }

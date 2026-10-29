@@ -13,6 +13,7 @@ import { useApp } from '../app/AppProvider'
 import { useNow } from '../app/useNow'
 import { useWakeLock } from '../app/useWakeLock'
 import { formatTime } from '../domain/format'
+import { einheitVon, formatBeckenlaenge } from '../domain/einheit'
 import { finishMs, istBahnBeendet } from '../domain/lauf'
 import { wettkampfErgebnis, wettkampfFortschritt } from '../domain/wettkampf'
 import type { Lauf, Satz, WettkampfStatus } from '../domain/types'
@@ -265,7 +266,8 @@ export function WettkampfScreen() {
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-base font-semibold">{eintrag.name}</p>
                         <p className="text-xs text-muted">
-                          {datumText(eintrag.datum)} · {eintrag.beckenlaengeM} m-Becken
+                          {datumText(eintrag.datum)} ·{' '}
+                          {formatBeckenlaenge(eintrag.beckenlaengeM, einheitVon(eintrag))}-Becken
                         </p>
                         <p className="tabular mt-2 text-xs text-muted">
                           {anzahlDisziplinen}{' '}
@@ -335,7 +337,10 @@ export function WettkampfScreen() {
       <div className="flex h-full flex-col">
         <Kopf
           titel={wettkampf.name}
-          untertitel={`${datumText(wettkampf.datum)} · ${wettkampf.beckenlaengeM} m-Becken`}
+          untertitel={`${datumText(wettkampf.datum)} · ${formatBeckenlaenge(
+            wettkampf.beckenlaengeM,
+            einheitVon(wettkampf),
+          )}-Becken`}
           onZurueck={zurueck}
           aktionen={
             <>
@@ -425,6 +430,7 @@ export function WettkampfScreen() {
           open={disziplinOpen}
           onClose={() => setDisziplinOpen(false)}
           beckenlaengeM={wettkampf.beckenlaengeM}
+          einheit={einheitVon(wettkampf)}
           onCreate={(daten) => {
             const id = app.erstelleWettkampfDisziplin(wettkampf.id, daten)
             if (!id) return
