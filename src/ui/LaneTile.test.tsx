@@ -149,6 +149,61 @@ describe('LaneTile', () => {
 // Seit #60 liegt „Ziel“ nicht mehr in der Messfläche: Zwei Geschwisterknöpfe
 // statt eines Knopfs im Knopf. Sonst verschluckt ein Screenreader die
 // Zielaktion, und ein Fehltipp auf der Kachel beendet die Bahn vorzeitig.
+// Die große Zeit liegt in einem `role="button"` und wäre dort für Screenreader
+// abgeflacht. Sie steht deshalb zusätzlich in einem sr-only-Text, den
+// `aria-describedby` referenziert. Der Text zieht höchstens einmal pro Sekunde
+// nach, damit weder der Frame-Tick noch eine Vorlesehilfe im Dauerlauf landet.
+describe('LaneTile: Zeit für Screenreader', () => {
+  it('nennt Zeit, Länge und letzten Anschlag und drosselt auf eine Sekunde', () => {
+    vi.useFakeTimers()
+    const lauf = laufendeBahn()
+    const bahn = lauf.bahnen[0]!
+    const darstellen = (now: number) => (
+      <LaneTile
+        bahn={bahn}
+        konfiguration={lauf.konfiguration}
+        now={now}
+        schwimmerName={null}
+        onTap={() => undefined}
+        onUndo={() => undefined}
+        onFinish={() => undefined}
+      />
+    )
+    const tile = render(darstellen(1_000))
+    const flaeche = tile.container.querySelector<HTMLElement>('[role="button"]')!
+    const beschreibungId = flaeche.getAttribute('aria-describedby')!.split(' ')[0]!
+    const beschreibung = () =>
+      tile.container.querySelector(`#${beschreibungId}`)?.textContent ?? ''
+
+    expect(beschreibung()).toContain('Zeit 00:01,00')
+    expect(beschreibung()).toContain('Länge 2 von 2')
+    expect(beschreibung()).toContain('Letzter Anschlag 00:30,00')
+
+    // Viele Frame-Renders innerhalb derselben Sekunde ändern nichts.
+    tile.aktualisiere(darstellen(1_500))
+    tile.aktualisiere(darstellen(1_900))
+    expect(beschreibung()).toContain('Zeit 00:01,00')
+
+    act(() => vi.advanceTimersByTime(999))
+    expect(beschreibung()).toContain('Zeit 00:01,00')
+    act(() => vi.advanceTimersByTime(1))
+    expect(beschreibung()).toContain('Zeit 00:01,90')
+
+    tile.unmount()
+  })
+
+  it('hat keine Live-Region; der Frame-Tick löst keine Ansage aus', () => {
+    vi.useFakeTimers()
+    const tile = kachel(() => undefined)
+
+    expect(tile.container.querySelector('[aria-live]')).toBeNull()
+    act(() => vi.advanceTimersByTime(5_000))
+    expect(tile.container.querySelector('[aria-live]')).toBeNull()
+
+    tile.unmount()
+  })
+})
+
 describe('LaneTile: Ziel getrennt von der Messfläche', () => {
   it('verschachtelt den Zielknopf nicht in die Messfläche', () => {
     const tile = offeneKachel()

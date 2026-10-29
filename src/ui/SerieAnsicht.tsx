@@ -24,6 +24,7 @@ import {
 } from '../domain/format'
 import { bahnZeile, zeilenZeit, type BahnZeile, type ZeilenStatus } from '../domain/serie'
 import type { Bahn, Lauf, SatzPlan } from '../domain/types'
+import { useGedaempfteZeit } from './useGedaempfteZeit'
 
 /** Haltedauer in Millisekunden, ab der ein Druck als „zurücknehmen“ gilt. */
 const LANGDRUCK_MS = 450
@@ -112,6 +113,11 @@ function Zeile({
   // Große Zeit der Zeile: laufende Runde, Countdown bis zum nächsten Start
   // oder die Zielzeit der letzten Runde.
   const zeit = zeilenZeit(zeile, now)
+  // Vorlesetext der Zeit höchstens einmal pro Sekunde nachziehen; der
+  // sichtbare Frame-Tick bleibt unverändert.
+  const mitUhr =
+    zeile.status === 'laeuft' || zeile.status === 'ueberfaellig' || zeile.status === 'geplant'
+  const ansageZeit = useGedaempfteZeit(zeit, mitUhr)
   // Abgeschlossene Wiederholungen für die Fortschrittsleiste.
   const geschafft = zeile.letzte?.lauf.wiederholung ?? 0
   // Nur eine laufende oder überfällige Runde nimmt einen Tap an; „bereit“ und
@@ -218,6 +224,36 @@ function Zeile({
   const zeigtZwischenzeiten =
     zwischenzeit !== null && (zwischenzeit.gesamt === null || zwischenzeit.gesamt > 0)
   const zwischenzeitId = `zwischenzeiten-${basis.id}`
+  // Zeit, Runde und Länge als Vorlesetext. Die große Zahl liegt in einem
+  // `role="button"` und wäre dort für Screenreader nicht abrufbar.
+  const offeneLaengen = zeile.offen ? lengthCount(zeile.offen.lauf.konfiguration) : null
+  const offeneAnschlaege = zeile.offen?.bahn.anschlaege.length ?? 0
+  const beschreibungId = `zeitbeschreibung-${basis.id}`
+  const zeitbeschreibung =
+    zeile.status === 'bereit'
+      ? null
+      : zeile.status === 'fertig'
+        ? `Zielzeit ${formatTime(zeit)}.`
+        : zeile.status === 'geplant'
+          ? `Start in ${formatCountdown(ansageZeit)}.`
+          : [
+              `Zeit ${formatTime(ansageZeit)}.`,
+              `Runde ${angezeigteRunde} von ${gesamt}.`,
+              zeile.offen
+                ? offeneLaengen
+                  ? `Länge ${Math.min(offeneAnschlaege + 1, offeneLaengen)} von ${offeneLaengen}.`
+                  : `Länge ${offeneAnschlaege + 1}.`
+                : null,
+            ]
+              .filter((teil): teil is string => teil !== null)
+              .join(' ')
+  const beschriebenVon =
+    [
+      zeitbeschreibung ? beschreibungId : null,
+      zeigtZwischenzeiten ? zwischenzeitId : null,
+    ]
+      .filter((id): id is string => id !== null)
+      .join(' ') || undefined
   // Abweichung zur Vorrunde desselben Schwimmers, sobald die Serie fertig ist
   // und die vorige Runde im Ziel liegt. In Runde 1 bleibt sie aus.
   const abweichung =
@@ -248,9 +284,9 @@ function Zeile({
         data-status={zeile.status}
         aria-keyshortcuts={kannRueckgaengig ? 'Backspace Delete' : undefined}
         aria-label={`Reihe ${basis.reihe}, Bahn ${basis.nummer}${name ? `, ${name}` : ''}, Runde ${angezeigteRunde} von ${gesamt}, ${STATUS_LABEL[zeile.status]}`}
-        // Die Zahl der Zwischenzeiten ergänzt den Vorlesetext als Beschreibung,
-        // ohne den Namen der Zeile zu verändern.
-        aria-describedby={zeigtZwischenzeiten ? zwischenzeitId : undefined}
+        // Zeit, Runde, Länge und die Zahl der Zwischenzeiten ergänzen den
+        // Vorlesetext als Beschreibung, ohne den Namen der Zeile zu verändern.
+        aria-describedby={beschriebenVon}
         onPointerDown={startPress}
         onPointerUp={endPress}
         onPointerCancel={cancelPress}
@@ -374,6 +410,14 @@ function Zeile({
           </span>
         ) : null}
       </div>
+
+      {/* Außerhalb der Messfläche, damit der Text nicht im `role="button"`
+          abgeflacht wird; `aria-describedby` referenziert ihn trotzdem. */}
+      {zeitbeschreibung ? (
+        <span id={beschreibungId} className="sr-only">
+          {zeitbeschreibung}
+        </span>
+      ) : null}
 
       {/* Ziel als eigene Fläche rechts neben der Messung: nur bei offener
           Strecke nötig, weil bei fester Strecke der letzte Anschlag die Runde

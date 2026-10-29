@@ -9,7 +9,7 @@
  * der aktive Zustand kommen aus app/AppProvider. `useNow` liefert die monotone
  * Zeit, `useWakeLock` hält den Bildschirm an, solange etwas läuft.
  */
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useApp, type AktiverEintrag, type Einstellungen } from '../app/AppProvider'
 import { useNow } from '../app/useNow'
 import { useWakeLock } from '../app/useWakeLock'
@@ -26,13 +26,22 @@ import {
   reihenVon,
 } from '../domain/lauf'
 import {
+  bahnZeile,
   istSerie,
   aktuelleRunde,
   letzterAnschlag,
   runden as rundenVon,
   serieFortschritt,
 } from '../domain/serie'
-import { SCHWIMMARTEN, type Bahn, type Lauf, type Satz, type SatzPlan } from '../domain/types'
+import {
+  SCHWIMMARTEN,
+  type Bahn,
+  type Lauf,
+  type LaufKonfiguration,
+  type Satz,
+  type SatzPlan,
+} from '../domain/types'
+import { Ansage } from './Ansage'
 import { Bestaetigung } from './Bestaetigung'
 import { KonfigurationSheet } from './KonfigurationSheet'
 import { LaneTile } from './LaneTile'
@@ -195,6 +204,44 @@ function ruecknahmeZielFuer(
 }
 
 /**
+ * Kurze Ansage für einen Tap auf einer Messfläche.
+ *
+ * `null` heißt: Der Tap ändert nichts (geplant, unterbrochen, bereits im Ziel)
+ * und bleibt still. Sonst nennt die Ansage Bahn, bei Serien die Runde und den
+ * neuen Stand — Start, Länge oder Ziel.
+ */
+function tapAnsage(
+  bahn: Bahn,
+  konfiguration: LaufKonfiguration,
+  tapNow: number,
+  runde: number | null = null,
+): string | null {
+  const ort = `Bahn ${bahn.nummer}${runde !== null ? `, Runde ${runde}` : ''}`
+  if (bahn.status) return null
+  if (bahn.startMs === null) {
+    // Eine unterbrochene Bahn mit Anschlägen nimmt keinen neuen Tap an.
+    if (bahn.anschlaege.length > 0) return null
+    return `${ort} gestartet`
+  }
+  if (tapNow < bahn.startMs || isFinished(bahn)) return null
+  const gesamt = lengthCount(konfiguration)
+  const laengeNr = bahn.anschlaege.length + 1
+  const split = Math.max(0, tapNow - bahn.startMs)
+  return gesamt !== null && laengeNr >= gesamt
+    ? `${ort} im Ziel, ${formatTime(split)}`
+    : `${ort}, Länge ${laengeNr}, ${formatTime(split)}`
+}
+
+/** Ansage für den „Ziel“-Knopf beziehungsweise „Alle beenden“. */
+function zielAnsage(bahn: Bahn, tapNow: number, runde: number | null = null): string | null {
+  const ort = `Bahn ${bahn.nummer}${runde !== null ? `, Runde ${runde}` : ''}`
+  if (bahn.status || bahn.startMs === null || isFinished(bahn) || tapNow < bahn.startMs) {
+    return null
+  }
+  return `${ort} im Ziel, ${formatTime(Math.max(0, tapNow - bahn.startMs))}`
+}
+
+/**
  * Kurztext rechts an der Reihen-Überschrift. Vor dem Start zeigt er den
  * geplanten Abstand, danach den echten Zustand: Countdown bis zum Start,
  * „läuft“ oder „Ziel“. So bleibt die Reihe auch dann erkennbar, wenn die
@@ -329,6 +376,49 @@ export function TimerScreen() {
   // dass ein Wechsel des aktiven Laufs ein altes Ziel weiterführt.
   const [zuletztBahn, setZuletztBahn] = useState<{ laufId: string; bahnId: string } | null>(null)
   const [zuletztSerie, setZuletztSerie] = useState<{ laufId: string; index: number } | null>(null)
+  // Text der polite Live-Region. Leer heißt stumm; gesetzt wird nur bei
+  // seltenen Ereignissen (Start, Anschlag, Ziel), nie pro Frame.
+  const [ansage, setAnsage] = useState('')
+  /** Setzt eine Ansage; `null` (keine Änderung) bleibt still. */
+  const melde = (text: string | null) => {
+    if (text) setAnsage(text)
+  }
+
+  // Für „Lauf beendet“ zählt der Übergang, nicht der Dauerzustand: Ein bereits
+  // fertiger Lauf beim Öffnen des Tabs soll nicht erneut angesagt werden. Die
+  // Lauf-ID verhindert, dass ein Wechsel auf einen anderen fertigen Lauf die
+  // Ansage auslöst.
+  const laufId = lauf?.id ?? null
+  const beendetJetzt = lauf
+    ? serie
+      ? runden.every(isComplete)
+      : lauf.bahnen.every(isFinished)
+    : false
+  // Ein Wechsel des aktiven Laufs oder das Schließen darf keine alte Ansage
+  // stehen lassen; sonst würde ein späteres Ziel an den vorigen Text anhängen.
+  // Der Wechsel von „kein Lauf“ zu einem neuen Lauf behält dagegen die gerade
+  // gesetzte Startansage.
+  const vorherLaufId = useRef<string | null>(null)
+  useEffect(() => {
+    if (vorherLaufId.current !== null && vorherLaufId.current !== laufId) setAnsage('')
+    vorherLaufId.current = laufId
+  }, [laufId])
+  const vorherFertig = useRef({ fertig: beendetJetzt, laufId })
+  useEffect(() => {
+    const vorher = vorherFertig.current
+    if (beendetJetzt && !vorher.fertig && vorher.laufId === laufId) {
+      // An die Ansage des letzten Ziels anhängen: Beide Ereignisse gehören
+      // zusammen und sollen nicht zwei getrennte Unterbrechungen erzeugen.
+      setAnsage((alt) =>
+        alt
+          ? `${alt}. ${serie ? 'Serie beendet' : 'Lauf beendet'}.`
+          : serie
+            ? 'Serie beendet.'
+            : 'Lauf beendet.',
+      )
+    }
+    vorherFertig.current = { fertig: beendetJetzt, laufId }
+  }, [beendetJetzt, laufId, serie])
 
   // Die Zeit läuft nur, solange irgendwo etwas plant oder läuft; sonst bliebe
   // ein Render-Loop ohne sichtbaren Nutzen. Der Wake-Lock hält den Bildschirm
@@ -378,6 +468,7 @@ export function TimerScreen() {
     // Ohne Lauf (etwa bei ungültiger Konfiguration) bleibt der Start aus.
     if (!laufId) return
     app.startAlle(perf, wall)
+    melde(app.einstellungen.wiederholungen > 1 ? 'Serie gestartet' : 'Lauf gestartet')
   }
 
   /**
@@ -387,6 +478,7 @@ export function TimerScreen() {
    */
   const weiter = () => {
     app.startAlle(performance.now(), Date.now())
+    melde('Fehlende Starts nachgeholt')
   }
 
   // Daten der Startübersicht: Die Vorgaben gelten für einen neuen Lauf, der
@@ -459,6 +551,9 @@ export function TimerScreen() {
   if (!lauf) {
     return (
       <div className="flex h-full flex-col">
+        {/* Live-Region auch vor dem ersten Lauf, damit „Lauf gestartet“ aus
+            der Startübersicht nicht verloren geht. */}
+        <Ansage text={ansage} />
         <LaufLeiste
           eintraege={app.aktiveEintraege}
           aktivId={null}
@@ -527,7 +622,8 @@ export function TimerScreen() {
   // eine Bahn beziehungsweise Runde hat eine Startzeit; „beendet“ heißt, alle
   // sind im Ziel.
   const gestartet = serie ? runden.some(hasStarted) : hasStarted(lauf)
-  const alleBeendet = serie ? runden.every(isComplete) : lauf.bahnen.every(isFinished)
+  // Bereits oben für die Ansage „Lauf beendet“ berechnet; hier nur benannt.
+  const alleBeendet = beendetJetzt
   const imZiel = lauf.bahnen.filter(isFinished).length
   // Eine offene Strecke braucht den Zielknopf; bei fester Strecke ist der
   // letzte Anschlag automatisch das Ziel.
@@ -574,26 +670,42 @@ export function TimerScreen() {
    */
   const tippeBahn = (bahnId: string, tapNow: number, wallNow: number) => {
     setZuletztBahn({ laufId: lauf.id, bahnId })
+    // Die Ansage entsteht aus dem Stand vor dem Tap: Start, Zwischenzeit oder
+    // Ziel — genau eine kurze Meldung, keine Wiederholung pro Frame.
+    const getroffen = lauf.bahnen.find((bahn) => bahn.id === bahnId)
+    if (getroffen) melde(tapAnsage(getroffen, lauf.konfiguration, tapNow))
     app.tippe(bahnId, tapNow, wallNow)
   }
   const beendeBahn = (bahnId: string, tapNow: number, wallNow: number) => {
     setZuletztBahn({ laufId: lauf.id, bahnId })
+    const getroffen = lauf.bahnen.find((bahn) => bahn.id === bahnId)
+    if (getroffen) melde(zielAnsage(getroffen, tapNow))
     app.beende(bahnId, tapNow, wallNow)
   }
   const undoBahn = (bahnId: string) => {
     setZuletztBahn({ laufId: lauf.id, bahnId })
+    // Die alte Ziel-/Laufende-Ansage passt nach der Rücknahme nicht mehr.
+    setAnsage('')
     app.rueckgaengig(bahnId)
   }
   const tippeSerie = (index: number, tapNow: number, wallNow: number) => {
     setZuletztSerie({ laufId: lauf.id, index })
+    // Ein Tap schließt immer die älteste offene Runde; genau sie wird angesagt.
+    const offen = bahnZeile(runden, index, tapNow).offen
+    if (offen) {
+      melde(tapAnsage(offen.bahn, offen.lauf.konfiguration, tapNow, offen.lauf.wiederholung))
+    }
     app.tippeSerie(index, tapNow, wallNow)
   }
   const beendeSerie = (index: number, tapNow: number, wallNow: number) => {
     setZuletztSerie({ laufId: lauf.id, index })
+    const offen = bahnZeile(runden, index, tapNow).offen
+    if (offen) melde(zielAnsage(offen.bahn, tapNow, offen.lauf.wiederholung))
     app.beendeSerie(index, tapNow, wallNow)
   }
   const undoSerie = (index: number) => {
     setZuletztSerie({ laufId: lauf.id, index })
+    setAnsage('')
     app.rueckgaengigSerie(index)
   }
 
@@ -648,6 +760,9 @@ export function TimerScreen() {
   const alleBeenden = () => {
     const perf = performance.now()
     const wall = Date.now()
+    // Keine alte Einzelansage weiterreichen: Der Abschluss wird als
+    // „Lauf beendet“ beziehungsweise „Serie beendet“ angesagt.
+    setAnsage('')
     if (serie) {
       // Die Bahnzahl steckt in der ersten Runde; beendeSerie arbeitet mit dem
       // Bahn-Index und trifft damit dieselbe Bahn in allen Runden.
@@ -694,6 +809,10 @@ export function TimerScreen() {
   return (
     <div className="flex h-full flex-col">
       <h1 className="sr-only">Timer</h1>
+
+      {/* Eine einzige Live-Region für alle seltenen Ereignisse des Laufs:
+          Start, Anschlag, Ziel und Laufende. */}
+      <Ansage text={ansage} />
 
       <LaufLeiste
         eintraege={app.aktiveEintraege}
