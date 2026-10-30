@@ -18,7 +18,7 @@ import { act, useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { render } from '../test/render'
 import { Bestaetigung } from './Bestaetigung'
-import { Chip, Feld, TaktWahl } from './Felder'
+import { Chip, Feld, Schalter, TaktWahl, ZwischenzeitenWahl } from './Felder'
 import { Sheet } from './Sheet'
 import { SpeicherBanner } from './SpeicherBanner'
 import {
@@ -36,7 +36,7 @@ import {
   TimerIcon,
   TrainingIcon,
   TrashIcon,
-  TrophyIcon,
+
   UploadIcon,
   XIcon,
 } from './icons'
@@ -136,6 +136,28 @@ describe('Feld und Chip', () => {
   })
 })
 
+// Schalter: Der ganze Block schaltet, der Zustand ist über `aria-checked`
+// auch ohne Farbe erkennbar.
+describe('Schalter', () => {
+  it('meldet den Zustand und schaltet beim Tippen', () => {
+    const aendern = vi.fn()
+    const aus = render(
+      <Schalter an={false} onAendern={aendern} titel="Sätze automatisch starten" />,
+    )
+    const knopf = aus.container.querySelector<HTMLButtonElement>('[role="switch"]')!
+    expect(knopf.getAttribute('aria-checked')).toBe('false')
+    act(() => knopf.click())
+    expect(aendern).toHaveBeenCalledWith(true)
+    aus.unmount()
+
+    const an = render(<Schalter an onAendern={aendern} titel="Sätze automatisch starten" />)
+    expect(an.container.querySelector('[role="switch"]')?.getAttribute('aria-checked')).toBe(
+      'true',
+    )
+    an.unmount()
+  })
+})
+
 // Takt: Schnellauswahl plus freie Eingabe in Minuten und Sekunden. Die
 // Zahlenfelder umgehen die Zifferntastatur nicht, deshalb werden sie einzeln
 // geprüft. Freie Werte bleiben als eigener Chip sichtbar.
@@ -215,6 +237,88 @@ describe('TaktWahl', () => {
       expect(knopf.disabled).toBe(true)
     }
     ergebnis.unmount()
+  })
+})
+
+// Zwischenzeiten: direkte Zahleneingabe, Plus/Minus und der Rückweg
+// „Automatisch“. Der abgeleitete Wert dient nur als Anzeige, solange keine
+// eigene Zahl gesetzt ist.
+describe('ZwischenzeitenWahl', () => {
+  /** Setzt den Feldwert so, wie es ein Tippen im Browser täte. */
+  const tippe = (feld: HTMLInputElement, wert: string) => {
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      'value',
+    )?.set
+    act(() => {
+      setter?.call(feld, wert)
+      feld.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+  }
+
+  it('zeigt den automatischen Wert und übernimmt eine direkt eingetippte Zahl', () => {
+    const aendere = vi.fn()
+    const ergebnis = render(
+      <ZwischenzeitenWahl wert={null} automatisch={1} onWert={aendere} />,
+    )
+    const feld = ergebnis.container.querySelector<HTMLInputElement>(
+      'input[aria-label="Anzahl Zwischenzeiten"]',
+    )!
+    expect(feld.value).toBe('1')
+    expect(ergebnis.container.textContent).toContain('Vorgabe aus Strecke und Becken: 1')
+
+    tippe(feld, '3')
+    expect(aendere).toHaveBeenCalledWith(3)
+    ergebnis.unmount()
+  })
+
+  it('setzt über Plus und Minus eine feste Zahl und kehrt zu Automatisch zurück', () => {
+    const aendere = vi.fn()
+    const ergebnis = render(
+      <ZwischenzeitenWahl wert={2} automatisch={1} onWert={aendere} />,
+    )
+    act(() =>
+      [...ergebnis.container.querySelectorAll('button')]
+        .find((knopf) => knopf.textContent === '+')!
+        .click(),
+    )
+    expect(aendere).toHaveBeenCalledWith(3)
+    act(() =>
+      [...ergebnis.container.querySelectorAll('button')]
+        .find((knopf) => knopf.textContent === '−')!
+        .click(),
+    )
+    expect(aendere).toHaveBeenCalledWith(1)
+    act(() =>
+      [...ergebnis.container.querySelectorAll('button')]
+        .find((knopf) => knopf.textContent === 'Automatisch')!
+        .click(),
+    )
+    expect(aendere).toHaveBeenCalledWith(null)
+    ergebnis.unmount()
+  })
+
+  it('macht ein leeres Feld wieder automatisch und sperrt alle Bedienelemente', () => {
+    const aendere = vi.fn()
+    const ergebnis = render(
+      <ZwischenzeitenWahl wert={3} automatisch={1} onWert={aendere} disabled />,
+    )
+    const feld = ergebnis.container.querySelector<HTMLInputElement>(
+      'input[aria-label="Anzahl Zwischenzeiten"]',
+    )!
+    expect(feld.disabled).toBe(true)
+    for (const knopf of ergebnis.container.querySelectorAll('button')) {
+      expect(knopf.disabled).toBe(true)
+    }
+    ergebnis.unmount()
+
+    const offen = render(<ZwischenzeitenWahl wert={3} automatisch={1} onWert={aendere} />)
+    const offenesFeld = offen.container.querySelector<HTMLInputElement>(
+      'input[aria-label="Anzahl Zwischenzeiten"]',
+    )!
+    tippe(offenesFeld, '')
+    expect(aendere).toHaveBeenLastCalledWith(null)
+    offen.unmount()
   })
 })
 
@@ -351,7 +455,6 @@ describe('Icons', () => {
       <div>
         <TimerIcon />
         <TrainingIcon />
-        <TrophyIcon />
         <HistoryIcon />
         <PeopleIcon />
         <GearIcon />
@@ -370,12 +473,12 @@ describe('Icons', () => {
     )
 
     const svgs = ergebnis.container.querySelectorAll('svg')
-    expect(svgs).toHaveLength(17)
+    expect(svgs).toHaveLength(16)
     for (const svg of svgs) {
       expect(svg.getAttribute('aria-hidden')).toBe('true')
     }
     // Das letzte Icon prüft die Weitergabe der Größenklasse exemplarisch.
-    expect(svgs[16]?.getAttribute('class')).toBe('h-4 w-4')
+    expect(svgs[15]?.getAttribute('class')).toBe('h-4 w-4')
     ergebnis.unmount()
   })
 })

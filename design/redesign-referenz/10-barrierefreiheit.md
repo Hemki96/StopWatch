@@ -95,7 +95,7 @@ Deshalb:
 | Ziel-Knopf | `button` | „Bahn 3 beenden“ | — |
 | Kachel bei unterbrochen | `button` | „…, unterbrochen“ | Hinweis auf langes Drücken |
 | Tab | `button` | „Verlauf“ | `aria-current="page"` |
-| Chip | `button` | „Freistil“ | `aria-pressed` |
+| Chip | `button` | „Automatisch“ | `aria-pressed` |
 | Ergebniszeile | `listitem` | — | Zeit, PB, Delta als Text |
 | Korrektur-Stift | `button` | „Anschlag 2 korrigieren“ | — |
 | Schließen | `button` | „Schließen“ | — |

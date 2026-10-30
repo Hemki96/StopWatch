@@ -10,6 +10,7 @@ import { describe, expect, it } from 'vitest'
 import {
   BECKENLAENGE_25_YD_M,
   STRECKE_100_YD_M,
+  alsMeterKonfiguration,
   anzeigeZuMeter,
   beckenlaengenFuer,
   einheitVon,
@@ -54,6 +55,26 @@ describe('Einheit und Beckenlänge', () => {
     expect(standardBeckenlaenge('yd')).toBe(22.86)
     expect(istBeckenlaenge(22.86)).toBe(true)
     expect(istBeckenlaenge(33)).toBe(false)
+  })
+
+  it('überführt alte Yard-Konfigurationen in Meter', () => {
+    expect(
+      alsMeterKonfiguration({
+        beckenlaengeM: 22.86,
+        streckeM: 91.44,
+        schwimmart: 'freistil',
+        einheit: 'yd',
+      }),
+    ).toEqual({
+      beckenlaengeM: 25,
+      streckeM: 100,
+      schwimmart: 'freistil',
+    })
+    // Eine Meter-Konfiguration ohne Einheitenfeld bleibt unverändert; ein
+    // ausdrückliches `einheit: 'm'` wird entfernt.
+    const meter = { beckenlaengeM: 50, streckeM: 100, schwimmart: 'brust' } as const
+    expect(alsMeterKonfiguration(meter)).toBe(meter)
+    expect(alsMeterKonfiguration({ ...meter, einheit: 'm' })).toEqual(meter)
   })
 })
 

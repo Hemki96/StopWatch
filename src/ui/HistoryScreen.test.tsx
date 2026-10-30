@@ -12,7 +12,7 @@
 // @vitest-environment jsdom
 import { act } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Lauf, Satz, Wettkampf } from '../domain/types'
+import type { Lauf, Satz } from '../domain/types'
 import { render } from '../test/render'
 import { HistoryScreen } from './HistoryScreen'
 
@@ -22,8 +22,8 @@ const { appWert } = vi.hoisted(() => ({
   appWert: {
     laeufe: [] as Lauf[],
     satze: [] as Satz[],
-    wettkampfe: [] as Wettkampf[],
     benenneSatz: () => undefined,
+    benenneTag: () => undefined,
     loescheSatz: () => undefined,
   },
 }))
@@ -51,7 +51,6 @@ function lauf(index: number, satzId = `satz-${index}`): Lauf {
     startWallMs: Date.UTC(2025, 0, 1) + index * 86_400_000 + 12 * 3_600_000,
     startversatzMs: 0,
     wiederholung: null,
-    modus: 'training',
     bahnen: [
       {
         id: `bahn-${index}`,
@@ -88,10 +87,12 @@ function gruppen(container: HTMLElement): HTMLElement[] {
   return [...container.querySelectorAll<HTMLElement>('section')]
 }
 
-/** Die Bezeichnung einer Gruppe steht im ersten Knopf der Kopfzeile. */
+/** Die Bezeichnung eines Satzes steht im Knopf mit `data-satzbezeichnung`. */
 function titel(container: HTMLElement): string[] {
   return gruppen(container).map(
-    (gruppe) => gruppe.querySelector('button')?.textContent?.trim() ?? '',
+    (gruppe) =>
+      gruppe.querySelector<HTMLElement>('button[data-satzbezeichnung]')?.textContent?.trim() ??
+      '',
   )
 }
 
@@ -107,7 +108,6 @@ function knopf(container: HTMLElement, text: string): HTMLButtonElement {
 beforeEach(() => {
   appWert.laeufe = []
   appWert.satze = []
-  appWert.wettkampfe = []
 })
 
 describe('HistoryScreen', () => {
@@ -145,6 +145,43 @@ describe('HistoryScreen', () => {
         kandidat.textContent?.includes('Mehr laden'),
       ),
     ).toBe(false)
+
+    ergebnis.unmount()
+  })
+
+  it('zeigt den Tagesnamen an und speichert einen geänderten Namen am Datum', () => {
+    const daten = bestand(1)
+    appWert.laeufe = daten.laeufe
+    appWert.satze = [{ ...daten.satze[0]!, tagesbezeichnung: 'Kader A' }]
+    const benenneTag = vi.fn()
+    appWert.benenneTag = benenneTag
+
+    const ergebnis = render(<HistoryScreen />)
+    expect(ergebnis.container.textContent).toContain('Kader A')
+
+    // Der Tagesname ist ein Knopf; er öffnet ein Feld mit dem bisherigen Wert.
+    act(() => knopf(ergebnis.container, 'Kader A').click())
+    const feld = ergebnis.container.querySelector<HTMLInputElement>(
+      'input[aria-label="Tagesbezeichnung"]',
+    )
+    expect(feld?.value).toBe('Kader A')
+
+    // Controlled input: Der native Setter plus `input`-Event ist der Weg, den
+    // React auch im Browser sieht.
+    const setter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      'value',
+    )?.set
+    act(() => {
+      if (!feld || !setter) throw new Error('Eingabefeld fehlt')
+      setter.call(feld, 'Kader B')
+      feld.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    act(() => {
+      feld?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    })
+
+    expect(benenneTag).toHaveBeenCalledWith('2025-01-01', 'Kader B')
 
     ergebnis.unmount()
   })

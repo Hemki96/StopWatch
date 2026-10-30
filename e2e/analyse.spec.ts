@@ -112,11 +112,8 @@ async function seedeAnalyse(page: import('@playwright/test').Page): Promise<void
         schwimmer.createIndex('by-name', 'name')
         const satz = db.createObjectStore('satz', { keyPath: 'id' })
         satz.createIndex('by-datum', 'datum')
-        satz.createIndex('by-wettkampf', 'wettkampfId')
         const laufStore = db.createObjectStore('lauf', { keyPath: 'id' })
         laufStore.createIndex('by-satz', 'satzId')
-        const wettkampf = db.createObjectStore('wettkampf', { keyPath: 'id' })
-        wettkampf.createIndex('by-datum', 'datum')
         const training = db.createObjectStore('training', { keyPath: 'id' })
         training.createIndex('by-datum', 'datum')
       }
@@ -143,7 +140,7 @@ test('zeigt Satzliste, Matrix mit Referenz und Längenzeiten der Person', async 
   await page.getByRole('button', { name: 'Verlauf' }).tap()
 
   // Umschalter: Der Verlauf bleibt erreichbar, die Analyse listet nur
-  // auswertbare Sätze (kein Wettkampf).
+  // auswertbare Sätze.
   await page
     .getByRole('group', { name: 'Ansicht' })
     .getByRole('button', { name: 'Analyse' })

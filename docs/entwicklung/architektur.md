@@ -97,7 +97,7 @@ Lauf gespeichert, damit ein Neustart derselben Bahnen dieselbe Staffelung ergibt
 Eine Bahn mit `startMs > now` ist **geplant**. `tapLane` ignoriert Tipps, bis der Startzeitpunkt
 erreicht ist. Der Countdown wird aus derselben Differenz gerendert, nicht aus einem Timer.
 
-### Anschlag, Finish und Wettkampf
+### Anschlag und Finish
 
 `tapLane` ist der zentrale Bedienschritt:
 
@@ -106,11 +106,10 @@ erreicht ist. Der Countdown wird aus derselben Differenz gerendert, nicht aus ei
 | `startMs === null` | Bahn starten |
 | `now < startMs` | ignorieren |
 | bereits Finish | ignorieren |
-| `modus === 'wettkampf'` | `finishLane` — ein Tipp ist das Ziel |
 | sonst | Anschlag anhängen; bei fester Strecke ist der letzte Anschlag das Finish |
 
-`finishLane` beendet eine Bahn explizit. Das ist bei offener Strecke nötig und im Wettkampf immer
-erlaubt. Bei fester Trainingsstrecke ergibt sich das Finish aus der Längenanzahl.
+`finishLane` beendet eine Bahn explizit. Das ist bei offener Strecke nötig. Bei fester
+Trainingsstrecke ergibt sich das Finish aus der Längenanzahl.
 
 Ein `Anschlag` speichert:
 
@@ -166,7 +165,7 @@ stehen in [ADR-0010](../adr/0010-zeitbasis-bei-tab-uebergabe.md).
 `AppProvider` hält den gesamten fachlichen Zustand:
 
 ```ts
-schwimmer, satze, laeufe, wettkampfe, trainings
+schwimmer, satze, laeufe, trainings
 ```
 
 Zusätzlich:
@@ -190,10 +189,9 @@ in kleinen Modulen unter `src/app/`:
 | `aktiveLaeufe.ts` | Leiste, Migration der Einzel-ID, Bereinigung und abgeleitete Anzeige |
 | `schreibpfad.ts` | Tab-Tor, Warteschlange offener Schreibvorgänge, Wiederholung, Fehlerbanner (`useSchreibpfad`) |
 | `laufAktionen.ts` | Messen, Anlegen, Auswählen und Löschen von Läufen und Serien |
-| `wettkampfAktionen.ts` | Meldeliste, Disziplinen, Heats und Löschen von Wettkämpfen |
 | `trainingsAktionen.ts` | Trainingspläne speichern und Sätze starten |
 | `schwimmerAktionen.ts` | Schwimmer anlegen, ändern, löschen und Verweise räumen |
-| `schwimmer.ts` | Namensauflösung aus Meldelisten, stabile Sortierung |
+| `schwimmer.ts` | Namensauflösung, stabile Sortierung |
 
 Die Aktionsmodule sind Fabriken: Sie bekommen die Ref-Spiegel und die
 `set...Safe`-Funktionen des Providers und geben stabile Aktionen zurück. So bleibt
@@ -229,10 +227,8 @@ Banner.
 
 - Ein einzelner Lauf ist sein eigener Anker.
 - Eine Serie erscheint als ein Eintrag; Anker ist die erste Wiederholung.
-- Wettkampf-Läufe sind nie in der Liste.
 - `bereinigeAktiveIds` entfernt verwaiste und vollständig beendete Einträge.
-- Gibt es keinen gültigen Eintrag, wählt `ladeDaten` den jüngsten unvollständigen
-  Nicht-Wettkampf-Lauf.
+- Gibt es keinen gültigen Eintrag, wählt `ladeDaten` den jüngsten unvollständigen Lauf.
 
 ### Abgeleitete Werte
 
@@ -241,7 +237,7 @@ Banner.
 | `aktiverSatz` | Satz zum aktiven Lauf |
 | `aktiveRunden` | alle Läufe des aktiven Seriensatzes |
 | `aktiveEintraege` | ein Eintrag pro Lauf oder Serie |
-| `brauchtTakt` | irgendeine aktive Bahn läuft/plant, inkl. Wettkampf |
+| `brauchtTakt` | irgendeine aktive Bahn läuft/plant |
 | `tabGesperrt` | Tab-Koordinator meldet eine andere Rolle als `aktiv` |
 
 Es gibt keinen separaten „Lauf-Status“, der gespeichert wird. Alles ergibt sich aus Bahnen,
@@ -315,10 +311,10 @@ offline weiter, weil alle Daten lokal liegen.
 
 ## Oberfläche
 
-`App.tsx` hält den aktiven Tab als lokalen State. Die sechs Bereiche sind fest verdrahtet:
+`App.tsx` hält den aktiven Tab als lokalen State. Die fünf Bereiche sind fest verdrahtet:
 
 ```
-Timer | Training | Wettkampf | Verlauf | Schwimmer | Mehr
+Timer | Training | Verlauf | Schwimmer | Mehr
 ```
 
 Jeder Screen verwaltet seinen lokalen UI-Zustand (offene Sheets, Auswahl, Dialoge) selbst. Nur
@@ -329,7 +325,7 @@ Gemeinsame Bausteine:
 - `Dialog` — Fokusfalle, Scroll-Sperre, Escape, History-Eintrag für die Zurück-Geste, Fokus-Rückgabe.
 - `Sheet` — Bottom Sheet auf Basis von `Dialog`, mit Zieh-Geste.
 - `Bestaetigung` — `alertdialog` für destruktive Aktionen, initialer Fokus auf „Abbrechen“.
-- `LaneTile`, `SerieAnsicht`, `WettkampfLane` — die drei Messoberflächen.
+- `LaneTile`, `SerieAnsicht` — die beiden Messoberflächen.
 
 Details: [Oberfläche](oberflaeche.md).
 
@@ -409,7 +405,6 @@ Schlüssel als Rückfall und schreibt immer den neuen; Löschen entfernt beide.
 | Kein Hintergrundbetrieb mit Eingaben | Plattformgrenze der PWA; siehe [ADR-0001](../adr/0001-pwa-statt-native.md) |
 | Kein Sync | kein Konto, keine Cloud, keine Konfliktauflösung |
 | Ein schreibender Tab | verhindert doppelte Anschläge |
-| Keine Splits im Wettkampf | ein Tap pro Bahn ist am Beckenrand robuster |
 | Gestartete Trainingssätze sind fest | gemessene Zeiten dürfen nicht umgeschrieben werden |
 | Kein Fortsetzen nach Reload | `performance.now()` ist seitenspezifisch; eine Tab-Übergabe wird dagegen umgerechnet (ADR-0010) |
 | Maximal 10 Bahnen je Reihe, 5 Reihen, 20 Runden, 20 Sätze | lesbare Oberfläche und beherrschbare Datenmengen |

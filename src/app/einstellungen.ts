@@ -15,8 +15,8 @@ import {
   type Einheit,
   type LaufKonfiguration,
 } from '../domain/types'
-import { einheitVon } from '../domain/einheit'
-import { istVielfacheDerBeckenlaenge } from '../domain/lauf'
+import { alsMeterKonfiguration, einheitVon } from '../domain/einheit'
+import { MAX_ZWISCHENZEITEN, istVielfacheDerBeckenlaenge } from '../domain/lauf'
 import { MAX_BAHNEN, MAX_REIHEN, bahnenGesamt } from '../domain/training'
 import { leseText, schreibeText } from './lokalSpeicher'
 
@@ -124,8 +124,18 @@ export function begrenzeTakt(wert: unknown): number {
 }
 
 /**
- * Begrenzt eine bereits vollständige Einstellung. Die Konfiguration bleibt
- * unangetastet: Sie kommt aus einem geprüften Formular, nicht aus dem Speicher.
+ * Bringt die Zahl der Zwischenzeiten auf `0 … MAX_ZWISCHENZEITEN` oder `null`
+ * für „automatisch“. Ältere Einstellungen ohne Feld bleiben damit automatisch.
+ */
+export function begrenzeZwischenzeiten(wert: unknown): number | null {
+  if (typeof wert !== 'number' || !Number.isFinite(wert)) return null
+  return Math.min(MAX_ZWISCHENZEITEN, Math.max(0, Math.round(wert)))
+}
+
+/**
+ * Begrenzt eine bereits vollständige Einstellung. Die Konfiguration wird auf
+ * Meter gebracht: Die Einheit wird nicht mehr gewählt, alte Yard-Werte bleiben
+ * aber lesbar und werden mit ihrer Anzeigezahl übernommen.
  */
 export function begrenzeEinstellungen(naechste: Einstellungen): Einstellungen {
   const bahnen =
@@ -133,8 +143,15 @@ export function begrenzeEinstellungen(naechste: Einstellungen): Einstellungen {
       ? Math.min(MAX_BAHNEN, Math.max(1, Math.round(naechste.bahnen)))
       : STANDARD_EINSTELLUNGEN.bahnen
   const reihen = begrenzeReihen(naechste.reihen)
+  const konfiguration = alsMeterKonfiguration(naechste.konfiguration)
+  const zwischenzeiten = begrenzeZwischenzeiten(konfiguration.zwischenzeiten)
+  const { zwischenzeiten: _bisher, ...ohneZwischenzeiten } = konfiguration
   return {
     ...naechste,
+    konfiguration: {
+      ...ohneZwischenzeiten,
+      ...(zwischenzeiten === null ? {} : { zwischenzeiten }),
+    },
     bahnen,
     reihen,
     schwimmerProBahn: normalisiereSchwimmerProBahn(
@@ -192,6 +209,7 @@ export function leseEinstellungen(): Einstellungen {
     const schwimmart =
       SCHWIMMARTEN.find((eintrag) => eintrag.wert === roheKonfiguration.schwimmart)?.wert ??
       'freistil'
+    const zwischenzeiten = begrenzeZwischenzeiten(roheKonfiguration.zwischenzeiten)
     const bahnen =
       typeof parsed.bahnen === 'number' && Number.isFinite(parsed.bahnen)
         ? parsed.bahnen
@@ -199,12 +217,13 @@ export function leseEinstellungen(): Einstellungen {
     const begrenzt = Math.min(MAX_BAHNEN, Math.max(1, Math.round(bahnen)))
     const reihen = begrenzeReihen(parsed.reihen)
     return {
-      konfiguration: {
+      konfiguration: alsMeterKonfiguration({
         beckenlaengeM,
         streckeM,
         schwimmart,
+        ...(zwischenzeiten === null ? {} : { zwischenzeiten }),
         ...(einheit === 'yd' ? { einheit: 'yd' as const } : {}),
-      },
+      }),
       bahnen: begrenzt,
       reihen,
       schwimmerProBahn: normalisiereSchwimmerProBahn(

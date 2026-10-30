@@ -14,7 +14,7 @@ import { berechnePbs, pbKey } from '../domain/analyse'
 import { formatStrecke, formatTime } from '../domain/format'
 import { einheitVon, formatBeckenlaenge } from '../domain/einheit'
 import { finishMs } from '../domain/lauf'
-import { SCHWIMMARTEN, type Lauf, type Schwimmer } from '../domain/types'
+import { type Lauf, type Schwimmer } from '../domain/types'
 import { Bestaetigung } from './Bestaetigung'
 import { DialogLadezustand } from './Ladezustand'
 import { Sheet } from './Sheet'
@@ -52,11 +52,10 @@ interface BestzeitenGruppe {
   eintraege: ZeitEintrag[]
 }
 
-/** Gruppentitel aus Strecke, Schwimmart und Beckenlänge, z. B. „100 m · Freistil · 50 m“. */
+/** Gruppentitel aus Strecke und Beckenlänge, z. B. „100 m · 50 m“. */
 function beschreibeGruppe(lauf: Lauf): string {
-  const art = SCHWIMMARTEN.find((s) => s.wert === lauf.konfiguration.schwimmart)?.label ?? ''
   const einheit = einheitVon(lauf.konfiguration)
-  return `${formatStrecke(lauf.konfiguration.streckeM, einheit)} · ${art} · ${formatBeckenlaenge(lauf.konfiguration.beckenlaengeM, einheit)}`
+  return `${formatStrecke(lauf.konfiguration.streckeM, einheit)} · ${formatBeckenlaenge(lauf.konfiguration.beckenlaengeM, einheit)}`
 }
 
 /**
@@ -130,7 +129,7 @@ const datumLang = new Intl.DateTimeFormat('de-DE', {
  * Aufgeklappte Bestzeiten eines Schwimmers; ohne Gruppen steht ein Hinweis.
  *
  * Jede Zeit ist ein Knopf und öffnet das Lauf-Detail des Laufs, in dem sie
- * gemessen wurde — unabhängig davon, ob sie aus Training oder Wettkampf stammt.
+ * gemessen wurde.
  */
 function Bestzeiten({
   gruppen,

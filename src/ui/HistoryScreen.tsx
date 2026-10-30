@@ -1,10 +1,10 @@
 /**
  * Verlauf aller Messungen, gruppiert nach Satz.
  *
- * Jede Gruppe zeigt Datum, Bezeichnung, Takt und – bei Wettkampf-Disziplinen –
- * den Wettkampfnamen. Ein Tipp auf einen Lauf öffnet das Lauf-Detail, die
- * Bezeichnung eines Satzes lässt sich direkt umbenennen, ein Papierkorb löscht
- * den ganzen Satz samt Läufen. Die Daten kommen aus app/AppProvider, die
+ * Jede Gruppe zeigt Datum, optionalen Tagesnamen, Bezeichnung und Takt. Ein Tipp
+ * auf einen Lauf öffnet das Lauf-Detail, die Bezeichnung eines Satzes und der
+ * Name des Tages lassen sich direkt umbenennen, ein Papierkorb löscht den
+ * ganzen Satz samt Läufen. Die Daten kommen aus app/AppProvider, die
  * Zeit- und Vollständigkeitsprüfungen aus domain/lauf und domain/analyse.
  */
 import { lazy, Suspense, useMemo, useState } from 'react'
@@ -13,9 +13,10 @@ import { hatBegonnen, isComplete } from '../domain/lauf'
 import { istAnalyseSatzAusRunden, schnellsteZeit } from '../domain/analyse'
 import { formatStrecke, formatTakt, formatTime } from '../domain/format'
 import { einheitVon } from '../domain/einheit'
-import { SCHWIMMARTEN, type Lauf, type SatzPlan } from '../domain/types'
+import { tagesnamen } from '../domain/tag'
+import { type Lauf, type SatzPlan } from '../domain/types'
 import { Bestaetigung } from './Bestaetigung'
-import { ChevronRightIcon, TrashIcon } from './icons'
+import { ChevronRightIcon, PencilIcon, TrashIcon } from './icons'
 import { BereichLadezustand, DialogLadezustand } from './Ladezustand'
 import { MehrLaden, SAETZE_JE_SEITE } from './MehrLaden'
 import { laeufeNachSatz } from './analyseMemo'
@@ -61,8 +62,6 @@ interface Gruppe {
   datum: string
   titel: string
   plan: SatzPlan | null
-  /** Name des Wettkampfs, wenn der Satz eine Disziplin daraus ist. */
-  wettkampfName: string | null
   /** Alle Läufe des Satzes, für Anzahl und Löschdialog. */
   laeufe: Lauf[]
   /** Nur begonnene Runden; geplante Wiederholungen bleiben im Timer. */
@@ -83,6 +82,9 @@ export function HistoryScreen() {
   const [offenerLauf, setOffenerLauf] = useState<string | null>(null)
   // Inline-Umbenennen einer Satzbezeichnung, inklusive aktuellem Eingabewert.
   const [satzEdit, setSatzEdit] = useState<{ id: string; wert: string } | null>(null)
+  // Inline-Umbenennen der Tagesüberschrift; der Name gilt für alle Sätze des
+  // Datums und wird deshalb über `datum` statt über eine Satz-ID adressiert.
+  const [tagEdit, setTagEdit] = useState<{ datum: string; wert: string } | null>(null)
   // Zu löschender Satz samt Anzahl der mitgelöschten Läufe für den Dialog.
   const [satzLoeschen, setSatzLoeschen] = useState<{ id: string; anzahl: number } | null>(null)
   // Bereits angeforderte Seiten. „Mehr laden“ erhöht nur diese Zahl; die
@@ -94,6 +96,13 @@ export function HistoryScreen() {
     if (!satzEdit) return
     app.benenneSatz(satzEdit.id, satzEdit.wert)
     setSatzEdit(null)
+  }
+
+  // Dasselbe Muster für den Tag: Enter und Blur speichern, Escape bricht ab.
+  const speichereTag = () => {
+    if (!tagEdit) return
+    app.benenneTag(tagEdit.datum, tagEdit.wert)
+    setTagEdit(null)
   }
 
   // Gruppen werden aus den geladenen Läufen abgeleitet; die Sortierung nach
@@ -117,29 +126,21 @@ export function HistoryScreen() {
         // Die Läufe sind die Quelle der Wahrheit: Vor dem Start lässt sich die
         // Konfiguration eines Laufs noch ändern, ohne den Satz umzuschreiben.
         const konfiguration = alle[0]?.konfiguration ?? satz?.konfiguration
-        const art = konfiguration
-          ? (SCHWIMMARTEN.find((s) => s.wert === konfiguration.schwimmart)?.label ?? '')
-          : ''
-        // Eine eigene Bezeichnung hat Vorrang; sonst wird der Satz aus Plan,
-        // Strecke und Schwimmart beschrieben.
+        // Eine eigene Bezeichnung hat Vorrang; sonst wird der Satz aus Plan und
+        // Strecke beschrieben.
         const titel =
           satz?.bezeichnung ||
           (konfiguration
             ? `${satz?.plan ? `${satz.plan.wiederholungen}×` : ''}${formatStrecke(
                 konfiguration.streckeM,
                 einheitVon(konfiguration),
-              )} · ${art}`
+              )}`
             : 'Ohne Satz')
-        // Disziplinen eines Wettkampfs tragen dessen Namen als Zusatz.
-        const wettkampfName = satz?.wettkampfId
-          ? (app.wettkampfe.find((eintrag) => eintrag.id === satz.wettkampfId)?.name ?? null)
-          : null
         return {
           id,
           datum: satz?.datum ?? '',
           titel,
           plan: satz?.plan ?? null,
-          wettkampfName,
           laeufe: alle,
           // Nur begonnene Läufe erscheinen im Verlauf, damit rein geplante
           // Wiederholungen einer Serie nicht als leer auftauchen.
@@ -149,7 +150,12 @@ export function HistoryScreen() {
       // Sätze ohne begonnene Läufe sind für den Verlauf uninteressant.
       .filter((gruppe) => gruppe.angezeigt.length > 0)
       .sort((a, b) => b.datum.localeCompare(a.datum) || b.id.localeCompare(a.id))
-  }, [app.laeufe, app.satze, app.wettkampfe])
+  }, [app.laeufe, app.satze])
+
+  // Namen je Datum einmal aus dem Bestand ableiten; jede Satzgruppe desselben
+  // Tages zeigt denselben Namen. Die Auswahl eines Tages öffnet das Feld mit
+  // genau diesem Wert.
+  const tagesNamen = useMemo(() => tagesnamen(app.satze), [app.satze])
 
   // Kopfzeile zählt nur begonnene Läufe, nicht die geplanten Runden.
   const begonneneLaeufe = app.laeufe.filter((lauf) => hatBegonnen(lauf)).length
@@ -225,6 +231,48 @@ export function HistoryScreen() {
               <h2 className="shrink-0 text-[11px] font-bold uppercase tracking-wider text-muted">
                 {datumText(gruppe.datum)}
               </h2>
+              {/* Tagesname: gilt für alle Sätze desselben Datums. Läufe ohne
+                  Satz haben keinen Tag, an dem der Name hängen könnte. */}
+              {gruppe.id === 'ohne-satz' || !gruppe.datum ? null : tagEdit?.datum ===
+                gruppe.datum ? (
+                <input
+                  autoFocus
+                  value={tagEdit.wert}
+                  onChange={(e) => setTagEdit({ datum: gruppe.datum, wert: e.target.value })}
+                  onBlur={speichereTag}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') speichereTag()
+                    if (e.key === 'Escape') setTagEdit(null)
+                  }}
+                  aria-label="Tagesbezeichnung"
+                  placeholder="z. B. Kader A"
+                  className="min-w-0 flex-1 rounded-md border border-line bg-surface2 px-2 py-1 text-xs"
+                />
+              ) : (
+                <button
+                  type="button"
+                  data-tagesbezeichnung
+                  onClick={() =>
+                    setTagEdit({
+                      datum: gruppe.datum,
+                      wert: tagesNamen.get(gruppe.datum) ?? '',
+                    })
+                  }
+                  aria-label={
+                    tagesNamen.get(gruppe.datum)
+                      ? `Tagesbezeichnung „${tagesNamen.get(gruppe.datum)}“ bearbeiten`
+                      : 'Tag benennen'
+                  }
+                  className="flex min-w-0 items-center gap-1 text-xs text-muted underline decoration-dotted underline-offset-2"
+                >
+                  <span className="truncate">
+                    {tagesNamen.get(gruppe.datum)
+                      ? `· ${tagesNamen.get(gruppe.datum)}`
+                      : 'Tag benennen'}
+                  </span>
+                  <PencilIcon className="h-3 w-3 shrink-0" />
+                </button>
+              )}
               {/* Bezeichnung bearbeiten: Blur und Enter speichern, Escape bricht
                   ab. Der Fokus wird gesetzt, damit die Tastatur direkt greift. */}
               {satzEdit?.id === gruppe.id ? (
@@ -246,22 +294,13 @@ export function HistoryScreen() {
               ) : (
                 <button
                   type="button"
+                  data-satzbezeichnung
                   onClick={() => setSatzEdit({ id: gruppe.id, wert: gruppe.titel })}
                   className="min-w-0 truncate text-xs text-muted underline decoration-dotted underline-offset-2"
                 >
                   {gruppe.titel}
                 </button>
               )}
-              {/* Kennzeichen statt Langtext: Der Wettkampfname steckt im
-                  title-Attribut und in der Laufzeile. */}
-              {gruppe.wettkampfName ? (
-                <span
-                  title={gruppe.wettkampfName}
-                  className="shrink-0 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-bold text-accent"
-                >
-                  Wettkampf
-                </span>
-              ) : null}
               {/* Ein Takt weist den Satz als Serie aus. */}
               {gruppe.plan ? (
                 <span className="shrink-0 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-bold text-accent">
@@ -312,18 +351,11 @@ export function HistoryScreen() {
                           ) : null}
                         </p>
                         <p className="tabular text-xs text-muted">
-                          {/* Wettkampf-Heats heißen „Lauf“, Serienrunden „R“;
-                              beides nur, wenn der Lauf eine Nummer trägt. */}
-                          {lauf.wiederholung
-                            ? lauf.modus === 'wettkampf'
-                              ? `Lauf ${lauf.wiederholung} · `
-                              : `R${lauf.wiederholung} · `
-                            : ''}
+                          {lauf.wiederholung ? `R${lauf.wiederholung} · ` : ''}
                           {lauf.startWallMs
                             ? `${uhrzeitFormat.format(lauf.startWallMs)} Uhr`
                             : 'ohne Startzeit'}
                           {schnellste !== null ? ` · schnellste ${formatTime(schnellste)}` : ''}
-                          {gruppe.wettkampfName ? ` · ${gruppe.wettkampfName}` : ''}
                         </p>
                       </div>
                       <ChevronRightIcon className="h-5 w-5 shrink-0 text-muted" />

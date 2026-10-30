@@ -12,7 +12,7 @@
 // @vitest-environment jsdom
 import { act } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Lauf, Satz, Wettkampf } from '../domain/types'
+import type { Lauf, Satz } from '../domain/types'
 import { render } from '../test/render'
 import { kennzahlenFuerSatz } from './analyseMemo'
 import { AnalyseScreen } from './AnalyseScreen'
@@ -23,7 +23,6 @@ const { appWert } = vi.hoisted(() => ({
   appWert: {
     laeufe: [] as Lauf[],
     satze: [] as Satz[],
-    wettkampfe: [] as Wettkampf[],
     schwimmer: [] as [],
   },
 }))
@@ -58,7 +57,6 @@ function lauf(index: number): Lauf {
     startWallMs: Date.UTC(2025, 0, 1) + index * 86_400_000 + 12 * 3_600_000,
     startversatzMs: 0,
     wiederholung: null,
-    modus: 'training',
     bahnen: [
       {
         id: `bahn-${index}`,
@@ -112,7 +110,6 @@ function knopf(container: HTMLElement, text: string): HTMLButtonElement {
 beforeEach(() => {
   appWert.laeufe = []
   appWert.satze = []
-  appWert.wettkampfe = []
   vi.mocked(kennzahlenFuerSatz).mockClear()
 })
 

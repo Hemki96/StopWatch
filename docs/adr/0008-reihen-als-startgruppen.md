@@ -6,7 +6,7 @@ Ein **Lauf** kann mehrere **Reihen** enthalten. Alle Bahnen einer Reihe starten 
 
 - **Startversatz pro Bahn (bisher)**: Jede Bahn startet einzeln versetzt. Das bildet zwar eine Staffelung ab, aber keine Gruppe: Bei 6 Bahnen und 10 s starten die Personen bei 0, 10, 20, 30, 40 und 50 s – nicht drei gemeinsam und drei weitere nach 10 s.
 - **Wellen als eigene Läufe**: Jede Reihe wäre ein eigener Lauf mit eigener Leiste und eigenem Abschluss. Der Trainer müsste mehrere Einträge bedienen, obwohl es eine Übung ist; Bestzeiten und Serienrunden würden auseinanderfallen.
-- **Reihe als Feld an der Bahn (gewählt)**: `Bahn.reihe` ist eine 1-basierte Startgruppe. Der Lauf bleibt ein Objekt, die Bahnen bleiben unabhängige Timer, und die Startzeit ist `startMs = now + (reihe - 1) * versatz`. Wettkampf-Heats bleiben eigene Läufe und nutzen nur Reihe 1.
+- **Reihe als Feld an der Bahn (gewählt)**: `Bahn.reihe` ist eine 1-basierte Startgruppe. Der Lauf bleibt ein Objekt, die Bahnen bleiben unabhängige Timer, und die Startzeit ist `startMs = now + (reihe - 1) * versatz`.
 
 ## Consequences
 

@@ -10,7 +10,7 @@
  * zuordnen (übersteht einen Reload) sowie einen Satz samt Läufen löschen.
  *
  * Vorbedingung: frischer Browser-Kontext je Test, also leere IndexedDB und
- * Standardkonfiguration (50-m-Becken, 100 m, Freistil, 6 Bahnen). `oeffneApp`
+ * Standardkonfiguration (50-m-Becken, 100 m, 6 Bahnen). `oeffneApp`
  * überspringt das Onboarding und wartet auf die Tab-Abstimmung.
  */
 

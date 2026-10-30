@@ -3,13 +3,13 @@
  *
  * Verantwortlichkeiten:
  * - Bestand aus IndexedDB laden (beim Start und nach einer Tab-Übergabe).
- * - Einstellungen, Schwimmer, Sätze, Läufe, Trainings und Wettkämpfe halten
- *   sowie die Liste der aktiven Läufe und den sichtbaren Lauf.
- * - Die Fachmodule verdrahten: `laufAktionen`, `wettkampfAktionen` und
- *   `trainingsAktionen` bekommen die Ref-Spiegel und schreiben über
- *   `useSchreibpfad`; `aktiveLaeufe` und `einstellungen` liefern Lesen und
- *   Normalisierung, `theme` die Designauflösung samt DOM-Spiegelung. Der
- *   Provider selbst hält nur noch den Rahmen.
+ * - Einstellungen, Schwimmer, Sätze, Läufe und Trainings halten sowie die
+ *   Liste der aktiven Läufe und den sichtbaren Lauf.
+ * - Die Fachmodule verdrahten: `laufAktionen` und `trainingsAktionen` bekommen
+ *   die Ref-Spiegel und schreiben über `useSchreibpfad`; `aktiveLaeufe` und
+ *   `einstellungen` liefern Lesen und Normalisierung, `theme` die
+ *   Designauflösung samt DOM-Spiegelung. Der Provider selbst hält nur noch den
+ *   Rahmen.
  * - Mit anderen Tabs über `TabKoordinator` abstimmen. Nur der aktive Tab
  *   schreibt; alle anderen sind lesend.
  *
@@ -17,9 +17,9 @@
  * - Jede persistierte Gruppe existiert doppelt: als React-State fürs Rendern
  *   und als Ref für Aktionen, die zwischen zwei Renders laufen. Beide werden
  *   nur gemeinsam über die `set...Safe`-Funktionen geändert.
- * - `Lauf`-Datensätze sind die einzige Quelle für Zeiten. Sätze, Trainings und
- *   Wettkämpfe sind Rahmen; Serienrunden und Fortschritt werden daraus
- *   abgeleitet, nicht zusätzlich gespeichert.
+ * - `Lauf`-Datensätze sind die einzige Quelle für Zeiten. Sätze und Trainings
+ *   sind Rahmen; Serienrunden und Fortschritt werden daraus abgeleitet, nicht
+ *   zusätzlich gespeichert.
  * - Jede Aktion ist No-Op, solange dieser Tab nicht die Messung hält
  *   (`istAktiv`). Das verhindert doppelte Schreibvorgänge aus zwei Tabs.
  * - Geschrieben wird unmittelbar nach jeder Änderung, nicht gebündelt: Ein
@@ -36,20 +36,13 @@ import {
   type ReactNode,
 } from 'react'
 import {
-  type Beckenlaenge,
   type Lauf,
   type LaufKonfiguration,
   type Satz,
   type Schwimmer,
-  type Schwimmart,
   type Training,
-  type Wettkampf,
-  type WettkampfStatus,
 } from '../domain/types'
 import { rebaseLauf } from '../domain/lauf'
-import {
-  type WettkampfPlan,
-} from '../domain/wettkampf'
 import {
   istSerie,
   runden as rundenVon,
@@ -98,7 +91,6 @@ import {
 import { createLaufAktionen } from './laufAktionen'
 import { createSchwimmerAktionen } from './schwimmerAktionen'
 import { createTrainingsAktionen } from './trainingsAktionen'
-import { createWettkampfAktionen } from './wettkampfAktionen'
 import { useSchreibpfad } from './schreibpfad'
 
 export { leseEinstellungen } from './einstellungen'
@@ -113,7 +105,7 @@ export type { AktiverEintrag } from './aktiveLaeufe'
  * hierüber auf Daten und Aktionen zu.
  *
  * Die Felder zerfallen in vier Gruppen:
- * - Bestand (lesend): `schwimmer`, `satze`, `laeufe`, `wettkampfe`, `trainings`.
+ * - Bestand (lesend): `schwimmer`, `satze`, `laeufe`, `trainings`.
  * - Auswahl und Anzeige: `aktiverLauf`, `aktiverSatz`, `aktiveRunden`,
  *   `aktiveEintraege`, `brauchtTakt`, `theme`, `toast`.
  * - Tab-Rolle: `tabAktiv`, `tabGesperrt`, `uebernehmen`.
@@ -161,7 +153,6 @@ export interface AppContextValue {
   schwimmer: Schwimmer[]
   satze: Satz[]
   laeufe: Lauf[]
-  wettkampfe: Wettkampf[]
   trainings: Training[]
   aktiverLauf: Lauf | null
   aktiverSatz: Satz | null
@@ -222,35 +213,8 @@ export interface AppContextValue {
   }) => Schwimmer | null
   loescheSchwimmer: (id: string) => void
   benenneSatz: (id: string, bezeichnung: string) => void
-  erstelleWettkampf: (daten: {
-    name: string
-    datum: string
-    beckenlaengeM: Beckenlaenge
-  }) => string | null
-  benenneWettkampf: (id: string, name: string) => void
-  importiereWettkampf: (plan: WettkampfPlan, wettkampfId?: string | null) => string | null
-  erstelleWettkampfDisziplin: (
-    wettkampfId: string,
-    disziplin: {
-      bezeichnung: string
-      streckeM: number
-      schwimmart: Schwimmart
-      laeufe: number
-      bahnen: number
-    },
-  ) => string | null
-  loescheWettkampf: (id: string) => void
-  starteWettkampfLauf: (laufId: string, now: number, wallNow: number) => void
-  tippeWettkampf: (laufId: string, bahnId: string, now: number, wallNow: number) => void
-  rueckgaengigWettkampf: (laufId: string, bahnId: string) => void
-  setzeWettkampfZeit: (laufId: string, bahnId: string, splitMs: number) => void
-  /** Markiert eine offene Bahn als DNS/DNF oder hebt die Markierung auf. */
-  setzeWettkampfStatus: (
-    laufId: string,
-    bahnId: string,
-    status: WettkampfStatus | null,
-  ) => void
-  setzeWettkampfNamen: (laufId: string, namen: string[]) => void
+  /** Benennt einen Tag im Verlauf; der Name gilt für alle Sätze des Datums. */
+  benenneTag: (datum: string, bezeichnung: string) => void
   /** Legt ein Training aus den aktuellen Einstellungen an und liefert seine ID. */
   anlegeTraining: () => string | null
   speichereTraining: (training: Training) => void
@@ -293,11 +257,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // geladen: Abschluss des ersten Ladevorgangs, unabhängig von dessen Ausgang.
   // Bestand (IndexedDB), in dieser Reihenfolge deklariert:
   //   schwimmer  Stammdaten der Personen, namenssortiert gehalten.
-  //   satze      Rahmen/Gruppen; ein Satz mit `plan` ist eine Serie, ein Satz mit
-  //              `wettkampfId` eine Disziplin. Trägt keine Zeiten.
+  //   satze      Rahmen/Gruppen; ein Satz mit `plan` ist eine Serie. Trägt
+  //              keine Zeiten.
   //   laeufe     die Messungen: Bahnen mit Startzeit und Anschlägen. Einzige
   //              Quelle für Zeiten, Splits, Ziel und Bestzeiten.
-  //   wettkampfe Wettkampf-Rahmen (Name, Datum, Beckenlänge).
   //   trainings  Vorbereitung: Aktive und noch nicht gestartete Sätze.
   // Auswahl (localStorage): aktiverLaufId (sichtbarer Lauf) und aktiveIds
   //   (Leiste oben, ein Eintrag pro Lauf oder Serie).
@@ -309,7 +272,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [schwimmer, setSchwimmer] = useState<Schwimmer[]>([])
   const [satze, setSatze] = useState<Satz[]>([])
   const [laeufe, setLaeufe] = useState<Lauf[]>([])
-  const [wettkampfe, setWettkampfe] = useState<Wettkampf[]>([])
   const [trainings, setTrainings] = useState<Training[]>([])
   const [aktiverLaufId, setAktiverLaufId] = useState<string | null>(null)
   const [aktiveIds, setAktiveIdsState] = useState<string[]>(() => leseAktiveIds())
@@ -332,7 +294,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const schwimmerRef = useRef<Schwimmer[]>([])
   const laeufeRef = useRef<Lauf[]>([])
   const satzeRef = useRef<Satz[]>([])
-  const wettkampfeRef = useRef<Wettkampf[]>([])
   const trainingsRef = useRef<Training[]>([])
   const aktiverLaufIdRef = useRef<string | null>(null)
   const aktiveIdsRef = useRef<string[]>([])
@@ -368,11 +329,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setSatzeSafe = useCallback((next: Satz[]) => {
     satzeRef.current = next
     setSatze(next)
-  }, [])
-
-  const setWettkampfeSafe = useCallback((next: Wettkampf[]) => {
-    wettkampfeRef.current = next
-    setWettkampfe(next)
   }, [])
 
   const setTrainingsSafe = useCallback((next: Training[]) => {
@@ -468,55 +424,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     loescheLauf,
     loescheSatz,
     benenneSatz,
+    benenneTag,
     aktiviereSatz,
-    aendereLauf,
   } = laufAktionen
-
-  /** Wettkampfaktionen: Meldeliste, Heats und Disziplinen. */
-  const wettkampfAktionen = useMemo(
-    () =>
-      createWettkampfAktionen({
-        istAktiv,
-        verfolge,
-        laeufeRef,
-        satzeRef,
-        wettkampfeRef,
-        schwimmerRef,
-        aktiveIdsRef,
-        aktiverLaufIdRef,
-        setLaeufe: setLaeufeSafe,
-        setSatze: setSatzeSafe,
-        setWettkampfe: setWettkampfeSafe,
-        setSchwimmer: setSchwimmerSafe,
-        setAktiveIds,
-        setAktivenLaufId,
-        aendereLauf,
-      }),
-    [
-      istAktiv,
-      verfolge,
-      setLaeufeSafe,
-      setSatzeSafe,
-      setWettkampfeSafe,
-      setSchwimmerSafe,
-      setAktiveIds,
-      setAktivenLaufId,
-      aendereLauf,
-    ],
-  )
-  const {
-    erstelleWettkampf,
-    benenneWettkampf,
-    importiereWettkampf,
-    erstelleWettkampfDisziplin,
-    loescheWettkampf,
-    starteWettkampfLauf,
-    tippeWettkampf,
-    rueckgaengigWettkampf,
-    setzeWettkampfZeit,
-    setzeWettkampfStatus,
-    setzeWettkampfNamen,
-  } = wettkampfAktionen
 
   /** Trainingsaktionen: Pläne anlegen, speichern und starten. */
   const trainingsAktionen = useMemo(
@@ -582,7 +492,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSchwimmerSafe(daten.schwimmer)
     setSatzeSafe(daten.satze)
     setLaeufeSafe(laeufe)
-    setWettkampfeSafe(daten.wettkampfe)
     setTrainingsSafe(daten.trainings)
 
     // Verwaiste und vollständig beendete Einträge fallen weg. Bleibt nichts
@@ -617,7 +526,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSchwimmerSafe,
     setLaeufeSafe,
     setSatzeSafe,
-    setWettkampfeSafe,
     setTrainingsSafe,
     zeigeToast,
   ])
@@ -883,7 +791,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       schwimmer,
       satze,
       laeufe,
-      wettkampfe,
       trainings,
       aktiverLauf,
       aktiverSatz,
@@ -923,17 +830,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       speichereSchwimmer,
       loescheSchwimmer,
       benenneSatz,
-      erstelleWettkampf,
-      benenneWettkampf,
-      importiereWettkampf,
-      erstelleWettkampfDisziplin,
-      loescheWettkampf,
-      starteWettkampfLauf,
-      tippeWettkampf,
-      rueckgaengigWettkampf,
-      setzeWettkampfZeit,
-      setzeWettkampfStatus,
-      setzeWettkampfNamen,
+      benenneTag,
       anlegeTraining,
       speichereTraining,
       loescheTraining,
@@ -951,7 +848,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       schwimmer,
       satze,
       laeufe,
-      wettkampfe,
       trainings,
       aktiverLauf,
       aktiverSatz,
@@ -988,17 +884,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       speichereSchwimmer,
       loescheSchwimmer,
       benenneSatz,
-      erstelleWettkampf,
-      benenneWettkampf,
-      importiereWettkampf,
-      erstelleWettkampfDisziplin,
-      loescheWettkampf,
-      starteWettkampfLauf,
-      tippeWettkampf,
-      rueckgaengigWettkampf,
-      setzeWettkampfZeit,
-      setzeWettkampfStatus,
-      setzeWettkampfNamen,
+      benenneTag,
       anlegeTraining,
       speichereTraining,
       loescheTraining,

@@ -69,6 +69,7 @@ function offeneKachel({
       bahn={lauf.bahnen[0]!}
       konfiguration={lauf.konfiguration}
       now={1_000}
+      ersatzName="Lauf 1, Bahn 1"
       schwimmerName={null}
       onTap={onTap}
       onUndo={() => undefined}
@@ -94,6 +95,7 @@ function kachel(onUndo: () => void) {
       bahn={lauf.bahnen[0]!}
       konfiguration={lauf.konfiguration}
       now={1_000}
+      ersatzName="Lauf 1, Bahn 1"
       schwimmerName={null}
       onTap={() => undefined}
       onUndo={onUndo}
@@ -107,6 +109,13 @@ afterEach(() => {
 })
 
 describe('LaneTile', () => {
+  it('zeigt ohne Schwimmer Lauf und Bahn statt einer leeren Zeile', () => {
+    const tile = offeneKachel()
+
+    expect(tile.container.textContent).toContain('Lauf 1, Bahn 1')
+    tile.unmount()
+  })
+
   it('nimmt nach langem Drücken den letzten Anschlag zurück', () => {
     vi.useFakeTimers()
     const onUndo = vi.fn()
@@ -163,6 +172,7 @@ describe('LaneTile: Zeit für Screenreader', () => {
         bahn={bahn}
         konfiguration={lauf.konfiguration}
         now={now}
+        ersatzName="Lauf 1, Bahn 1"
         schwimmerName={null}
         onTap={() => undefined}
         onUndo={() => undefined}

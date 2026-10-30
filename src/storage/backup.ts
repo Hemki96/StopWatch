@@ -2,7 +2,7 @@
  * Prüfung und Format des JSON-Backups.
  *
  * Ein Backup ist ein einzelnes JSON-Objekt mit Formatkennung, Version,
- * Exportzeitpunkt und den fünf Beständen. `pruefeBackup` validiert es
+ * Exportzeitpunkt und den vier Beständen. `pruefeBackup` validiert es
  * vollständig, bevor `repository.importBackup` irgendetwas schreibt; die
  * Rückgabe enthält entweder das typisierte Backup samt Zählung oder eine
  * Fehlermeldung mit Pfad zum ersten konkreten Problem.
@@ -14,8 +14,8 @@
  *
  * Zentrale Invarianten:
  * - Jede Version von 1 bis `BACKUP_VERSION` bleibt einlesbar. Neuere
- *   Sammlungen (`wettkampfe`, `trainings`) sind optional und werden für ältere
- *   Stände als leere Liste ergänzt.
+ *   Sammlungen (`trainings`) sind optional und werden für ältere Stände als
+ *   leere Liste ergänzt. Das frühere Feld `wettkampfe` wird ignoriert.
  * - Geprüft werden Struktur, Typen und Wertebereiche, nicht die referenzielle
  *   Integrität zwischen den Beständen (etwa ob eine `satzId` existiert).
  * - Die Prüfung verändert die Eingabe nicht.
@@ -27,14 +27,13 @@ import {
   MAX_WIEDERHOLUNGEN,
   bahnenGesamt,
 } from '../domain/training'
-import { istVielfacheDerBeckenlaenge } from '../domain/lauf'
+import { MAX_ZWISCHENZEITEN, istVielfacheDerBeckenlaenge } from '../domain/lauf'
 import {
   SCHWIMMARTEN,
   type Lauf,
   type Satz,
   type Schwimmer,
   type Training,
-  type Wettkampf,
 } from '../domain/types'
 
 /**
@@ -47,7 +46,6 @@ import {
 const MAX_SCHWIMMER = 10_000
 const MAX_SATZE = 10_000
 const MAX_LAEUFE = 100_000
-const MAX_WETTKAMPFE = 2_000
 const MAX_TRAININGS = 2_000
 const MAX_ANSCHLAEGE_PRO_BAHN = 1_000
 const MAX_TEXTLAENGE = 10_000
@@ -56,7 +54,7 @@ const MAX_TEXTLAENGE = 10_000
 export const BACKUP_FORMAT = 'beckenrand-backup'
 /** Aktuelle Version, die `exportBackup` schreibt. */
 export const BACKUP_VERSION = 3
-/** Version 1 kannte keine Wettkämpfe, Version 2 keine Trainings. Beide bleiben einlesbar. */
+/** Version 1 kannte keine Wettkämpfe, Version 2 keine Trainings. Alle bleiben einlesbar. */
 const BACKUP_VERSIONEN = [1, 2, 3] as const
 
 /** Versionen, die `pruefeBackup` akzeptiert. */
@@ -76,7 +74,6 @@ export interface Backup {
   schwimmer: Schwimmer[]
   satze: Satz[]
   laeufe: Lauf[]
-  wettkampfe: Wettkampf[]
   trainings: Training[]
 }
 
@@ -85,7 +82,6 @@ export interface BackupZusammenfassung {
   schwimmer: number
   satze: number
   laeufe: number
-  wettkampfe: number
   trainings: number
 }
 
@@ -98,7 +94,6 @@ export interface BackupBestand {
   schwimmer: Schwimmer[]
   satze: Satz[]
   laeufe: Lauf[]
-  wettkampfe: Wettkampf[]
   trainings: Training[]
 }
 
@@ -194,6 +189,13 @@ function pruefeKonfiguration(wert: unknown, pfad: string): string | null {
   if (!SCHWIMMARTEN.some((art) => art.wert === wert.schwimmart)) {
     return `${pfad}: Feld "schwimmart" enthält einen unbekannten Wert.`
   }
+  // Fehlt das Feld in älteren Backups, gilt „automatisch“. Ein gesetzter Wert
+  // muss eine ganze Zahl im erlaubten Bereich sein.
+  if (wert.zwischenzeiten !== undefined && wert.zwischenzeiten !== null) {
+    if (!istIndex(wert.zwischenzeiten) || wert.zwischenzeiten > MAX_ZWISCHENZEITEN) {
+      return `${pfad}: Feld "zwischenzeiten" muss zwischen 0 und ${MAX_ZWISCHENZEITEN} liegen oder leer sein.`
+    }
+  }
   return null
 }
 
@@ -218,31 +220,6 @@ function pruefeSchwimmer(wert: unknown, index: number): string | null {
   if (!istText(wert.notiz)) return `${pfad}: Feld "notiz" fehlt.`
   if (wert.notiz.length > MAX_TEXTLAENGE) {
     return `${pfad}: Feld "notiz" ist länger als ${MAX_TEXTLAENGE} Zeichen.`
-  }
-  if (!istZahl(wert.erstelltAm)) return `${pfad}: Feld "erstelltAm" fehlt oder ist keine Zahl.`
-  return null
-}
-
-/**
- * Prüft einen Wettkampf-Eintrag: Name, Datum im Muster `JJJJ-MM-TT`, gültige
- * Beckenlänge und Erstellungszeit. Ob Disziplinen auf ihn verweisen, wird hier
- * nicht geprüft.
- */
-function pruefeWettkampf(wert: unknown, index: number): string | null {
-  const pfad = `Wettkampf ${index + 1}`
-  if (!istObjekt(wert)) return `${pfad}: Eintrag ist kein Objekt.`
-  if (!istText(wert.id) || wert.id.length === 0) return `${pfad}: Feld "id" fehlt.`
-  if (!istText(wert.name) || wert.name.trim().length === 0) {
-    return `${pfad}: Feld "name" fehlt oder ist leer.`
-  }
-  if (!istText(wert.datum) || !/^\d{4}-\d{2}-\d{2}$/.test(wert.datum)) {
-    return `${pfad}: Feld "datum" muss ein Datum im Format JJJJ-MM-TT sein.`
-  }
-  if (wert.beckenlaengeM !== 25 && wert.beckenlaengeM !== 50 && wert.beckenlaengeM !== 22.86) {
-    return `${pfad}: Feld "beckenlaengeM" muss 25, 50 oder 22.86 sein.`
-  }
-  if (wert.einheit !== undefined && wert.einheit !== 'm' && wert.einheit !== 'yd') {
-    return `${pfad}: Feld "einheit" muss "m", "yd" oder leer sein.`
   }
   if (!istZahl(wert.erstelltAm)) return `${pfad}: Feld "erstelltAm" fehlt oder ist keine Zahl.`
   return null
@@ -281,8 +258,8 @@ function pruefeTrainingsSatz(wert: unknown, pfad: string): string | null {
  *
  * `bahnen` (je Reihe) muss zwischen 1 und 10 liegen (die Obergrenze entspricht
  * `MAX_BAHNEN`), `reihen` optional zwischen 1 und `MAX_REIHEN` (ältere Backups
- * kennen das Feld nicht und gelten als eine Reihe), `aktive` genau einen Text-
- * oder null-Eintrag je Person haben, `saetze` zwischen 1 und
+ * kennen das Feld nicht und gelten als eine Reihe), `autostart` optional wahr
+ * oder falsch, `aktive` genau einen Text- oder null-Eintrag je Person haben, `saetze` zwischen 1 und
  * `MAX_TRAININGS_SAETZE` Pläne enthalten. `gestartet` ist die Zuordnung
  * TrainingsSatz.id → Satz.id und darf nur Textwerte tragen. Die Reihenfolge der
  * Sätze bleibt erhalten, weil sie den Ablauf bestimmt.
@@ -310,6 +287,9 @@ function pruefeTraining(wert: unknown, index: number): string | null {
   }
   if (wert.aktive.some((eintrag) => eintrag !== null && !istText(eintrag))) {
     return `${pfad}: Feld "aktive" darf nur Text oder null enthalten.`
+  }
+  if (wert.autostart !== undefined && typeof wert.autostart !== 'boolean') {
+    return `${pfad}: Feld "autostart" muss wahr oder falsch sein.`
   }
   if (!Array.isArray(wert.saetze) || wert.saetze.length === 0) {
     return `${pfad}: Feld "saetze" muss mindestens einen Satz enthalten.`
@@ -355,11 +335,11 @@ function pruefeSatzPlan(wert: unknown, pfad: string): string | null {
 }
 
 /**
- * Prüft einen Satz (Trainingssatz oder Wettkampf-Disziplin).
- *
- * `wettkampfId` und `plan` sind optional, weil ältere Backups sie nicht
+ * Prüft einen Satz. `plan` ist optional, weil ältere Backups ihn nicht
  * enthalten; fehlende Werte werden später von `normalizeSatzOnLoad` ergänzt.
- * `datum` muss dem Muster `JJJJ-MM-TT` entsprechen, die Konfiguration gültig.
+ * `tagesbezeichnung` ist ebenfalls optional, muss aber, wenn vorhanden, ein
+ * Text sein. `datum` muss dem Muster `JJJJ-MM-TT` entsprechen, die Konfiguration
+ * gültig. Ein altes `wettkampfId` wird ignoriert.
  */
 function pruefeSatz(wert: unknown, index: number): string | null {
   const pfad = `Satz ${index + 1}`
@@ -370,11 +350,10 @@ function pruefeSatz(wert: unknown, index: number): string | null {
   }
   if (!istText(wert.bezeichnung)) return `${pfad}: Feld "bezeichnung" fehlt.`
   if (
-    wert.wettkampfId !== undefined &&
-    wert.wettkampfId !== null &&
-    !istText(wert.wettkampfId)
+    wert.tagesbezeichnung !== undefined &&
+    (!istText(wert.tagesbezeichnung) || wert.tagesbezeichnung.length > MAX_TEXTLAENGE)
   ) {
-    return `${pfad}: Feld "wettkampfId" muss Text oder null sein.`
+    return `${pfad}: Feld "tagesbezeichnung" muss Text mit höchstens ${MAX_TEXTLAENGE} Zeichen sein.`
   }
   const konfiguration = pruefeKonfiguration(wert.konfiguration, `${pfad}, Konfiguration`)
   if (konfiguration) return konfiguration
@@ -433,13 +412,6 @@ function pruefeBahn(wert: unknown, pfad: string): string | null {
   if (wert.startMs !== null && !istZahl(wert.startMs)) {
     return `${pfad}: Feld "startMs" muss eine Zahl oder null sein.`
   }
-  if (
-    wert.status !== undefined &&
-    wert.status !== 'dns' &&
-    wert.status !== 'dnf'
-  ) {
-    return `${pfad}: Feld "status" muss "dns", "dnf" oder leer sein.`
-  }
   if (!Array.isArray(wert.anschlaege)) return `${pfad}: Feld "anschlaege" fehlt oder ist keine Liste.`
   if (wert.anschlaege.length > MAX_ANSCHLAEGE_PRO_BAHN) {
     return `${pfad}: Feld "anschlaege" darf höchstens ${MAX_ANSCHLAEGE_PRO_BAHN} Einträge enthalten.`
@@ -476,9 +448,9 @@ function pruefeBahn(wert: unknown, pfad: string): string | null {
  * Prüft einen Lauf samt Bahnen.
  *
  * `satzId` darf null sein (freier Lauf), `startWallMs` null (nie gestartet).
- * Startversatz, Wiederholung und Modus sind optional, weil ältere Backups sie
- * nicht kennen; wenn sie vorhanden sind, müssen sie in ihren Wertebereichen
- * liegen. Ein Lauf braucht mindestens eine und höchstens `MAX_BAHNEN` Bahnen.
+ * Startversatz und Wiederholung sind optional, weil ältere Backups sie nicht
+ * kennen; wenn sie vorhanden sind, müssen sie in ihren Wertebereichen liegen.
+ * Ein Lauf braucht mindestens eine und höchstens `MAX_BAHNEN` Bahnen.
  */
 function pruefeLauf(wert: unknown, index: number): string | null {
   const pfad = `Lauf ${index + 1}`
@@ -506,9 +478,6 @@ function pruefeLauf(wert: unknown, index: number): string | null {
       wert.wiederholung > MAX_WIEDERHOLUNGEN)
   ) {
     return `${pfad}: Feld "wiederholung" muss eine ganze Zahl von 1 bis ${MAX_WIEDERHOLUNGEN} oder null sein.`
-  }
-  if (wert.modus !== undefined && wert.modus !== 'training' && wert.modus !== 'wettkampf') {
-    return `${pfad}: Feld "modus" muss "training" oder "wettkampf" sein.`
   }
   if (!Array.isArray(wert.bahnen)) return `${pfad}: Feld "bahnen" fehlt oder ist keine Liste.`
   if (wert.bahnen.length === 0) return `${pfad}: Ein Lauf braucht mindestens eine Bahn.`
@@ -544,9 +513,9 @@ function pruefeEindeutigeIds(liste: unknown[], pfad: string): string | null {
  * nennt immer das erste konkrete Problem mit Pfad, nicht nur „ungültige Datei“.
  *
  * Reihenfolge der Prüfung: Hülle (Objekt, Formatkennung, Version, Exportdatum),
- * Pflichtlisten, dann alle Datensätze. `wettkampfe` und `trainings` fehlen in
- * älteren Versionen und werden durch leere Listen ersetzt; alle anderen
- * Sammlungen sind Pflicht.
+ * Pflichtlisten, dann alle Datensätze. `trainings` fehlt in älteren Versionen
+ * und wird durch eine leere Liste ersetzt; alle anderen Sammlungen sind Pflicht.
+ * Ein früheres `wettkampfe` wird still ignoriert.
  *
  * Rückgabe: bei Erfolg `{ ok: true, backup, zusammenfassung }`, sonst
  * `{ ok: false, fehler }`. Es wird immer nur der erste Fehler gemeldet, weil
@@ -583,11 +552,8 @@ export function pruefeBackup(roh: unknown): BackupPruefung {
   if (!Array.isArray(roh.laeufe)) {
     return { ok: false, fehler: 'Feld "laeufe" fehlt oder ist keine Liste.' }
   }
-  // Diese beiden Sammlungen kamen erst mit späteren Versionen hinzu. Fehlen sie,
-  // gelten sie als leer; ein vorhandener, aber falscher Typ ist ein Fehler.
-  if (roh.wettkampfe !== undefined && !Array.isArray(roh.wettkampfe)) {
-    return { ok: false, fehler: 'Feld "wettkampfe" ist keine Liste.' }
-  }
+  // Trainings kamen erst mit einer späteren Version hinzu. Fehlen sie, gelten
+  // sie als leer; ein vorhandener, aber falscher Typ ist ein Fehler.
   if (roh.trainings !== undefined && !Array.isArray(roh.trainings)) {
     return { ok: false, fehler: 'Feld "trainings" ist keine Liste.' }
   }
@@ -598,7 +564,6 @@ export function pruefeBackup(roh: unknown): BackupPruefung {
     ['schwimmer', roh.schwimmer, MAX_SCHWIMMER],
     ['satze', roh.satze, MAX_SATZE],
     ['laeufe', roh.laeufe, MAX_LAEUFE],
-    ['wettkampfe', Array.isArray(roh.wettkampfe) ? roh.wettkampfe : [], MAX_WETTKAMPFE],
     ['trainings', Array.isArray(roh.trainings) ? roh.trainings : [], MAX_TRAININGS],
   ]
   for (const [name, liste, max] of grenzen) {
@@ -615,7 +580,6 @@ export function pruefeBackup(roh: unknown): BackupPruefung {
   const doppelte = pruefeEindeutigeIds(roh.schwimmer, 'Schwimmer')
     ?? pruefeEindeutigeIds(roh.satze, 'Satz')
     ?? pruefeEindeutigeIds(roh.laeufe, 'Lauf')
-    ?? pruefeEindeutigeIds(Array.isArray(roh.wettkampfe) ? roh.wettkampfe : [], 'Wettkampf')
     ?? pruefeEindeutigeIds(Array.isArray(roh.trainings) ? roh.trainings : [], 'Training')
   if (doppelte) return { ok: false, fehler: doppelte }
 
@@ -634,12 +598,6 @@ export function pruefeBackup(roh: unknown): BackupPruefung {
     if (fehler) return { ok: false, fehler }
   }
 
-  const wettkampfe = Array.isArray(roh.wettkampfe) ? roh.wettkampfe : []
-  for (const [i, wettkampf] of wettkampfe.entries()) {
-    const fehler = pruefeWettkampf(wettkampf, i)
-    if (fehler) return { ok: false, fehler }
-  }
-
   const trainings = Array.isArray(roh.trainings) ? roh.trainings : []
   for (const [i, training] of trainings.entries()) {
     const fehler = pruefeTraining(training, i)
@@ -648,7 +606,9 @@ export function pruefeBackup(roh: unknown): BackupPruefung {
 
   // Nach den Prüfungen sind alle gelesenen Felder typkorrekt; die fehlenden
   // Sammlungen sind ergänzt. Der Cast dokumentiert nur, was bereits geprüft ist.
-  const backup = { ...roh, wettkampfe, trainings } as unknown as Backup
+  // Das frühere Feld `wettkampfe` wird beim Einlesen verworfen.
+  const { wettkampfe: _wettkampfe, ...ohneAltfelder } = roh
+  const backup = { ...ohneAltfelder, trainings } as unknown as Backup
   return {
     ok: true,
     backup,
@@ -656,7 +616,6 @@ export function pruefeBackup(roh: unknown): BackupPruefung {
       schwimmer: backup.schwimmer.length,
       satze: backup.satze.length,
       laeufe: backup.laeufe.length,
-      wettkampfe: backup.wettkampfe.length,
       trainings: backup.trainings.length,
     },
   }
@@ -664,7 +623,7 @@ export function pruefeBackup(roh: unknown): BackupPruefung {
 
 /**
  * Formatiert die Zählung für die Import-Vorschau, z. B.
- * „2 Schwimmer, 1 Wettkampf, 0 Trainings, 3 Sätze, 5 Läufe“.
+ * „2 Schwimmer, 0 Trainings, 3 Sätze, 5 Läufe“.
  *
  * Reihenfolge und deutsche Singular-/Pluralformen sind fest, damit die
  * Vorschau unabhängig vom Bestand gleich aussieht. „Schwimmer“ bleibt im
@@ -675,7 +634,6 @@ export function zusammenfassungText(zahlen: BackupZusammenfassung): string {
     `${anzahl} ${anzahl === 1 ? singular : plural}`
   return [
     teil(zahlen.schwimmer, 'Schwimmer', 'Schwimmer'),
-    teil(zahlen.wettkampfe, 'Wettkampf', 'Wettkämpfe'),
     teil(zahlen.trainings, 'Training', 'Trainings'),
     teil(zahlen.satze, 'Satz', 'Sätze'),
     teil(zahlen.laeufe, 'Lauf', 'Läufe'),
@@ -776,7 +734,6 @@ export function ermittleBackupKonflikte(
   // Läufe zuerst, weil sie die Messdaten tragen und in der Anzeige zählen.
   vergleiche('laeufe', backup.laeufe, bestand.laeufe, laufKonfliktArt)
   vergleiche('schwimmer', backup.schwimmer, bestand.schwimmer, erstelltAmKonfliktArt)
-  vergleiche('wettkampfe', backup.wettkampfe, bestand.wettkampfe, erstelltAmKonfliktArt)
   vergleiche('trainings', backup.trainings, bestand.trainings, erstelltAmKonfliktArt)
   vergleiche('satze', backup.satze, bestand.satze, erstelltAmKonfliktArt)
 
@@ -805,7 +762,6 @@ export function loeseBackupKonflikte(
     schwimmer: new Set(),
     satze: new Set(),
     laeufe: new Set(),
-    wettkampfe: new Set(),
     trainings: new Set(),
   }
   for (const konflikt of konflikte) betroffen[konflikt.bestand].add(konflikt.id)
@@ -814,7 +770,6 @@ export function loeseBackupKonflikte(
     schwimmer: backup.schwimmer.filter((eintrag) => !betroffen.schwimmer.has(eintrag.id)),
     satze: backup.satze.filter((eintrag) => !betroffen.satze.has(eintrag.id)),
     laeufe: backup.laeufe.filter((eintrag) => !betroffen.laeufe.has(eintrag.id)),
-    wettkampfe: backup.wettkampfe.filter((eintrag) => !betroffen.wettkampfe.has(eintrag.id)),
     trainings: backup.trainings.filter((eintrag) => !betroffen.trainings.has(eintrag.id)),
   }
 }
@@ -822,7 +777,6 @@ export function loeseBackupKonflikte(
 /** Anzeigenamen je Bestand, Reihenfolge wie in `zusammenfassungText`. */
 const KONFLIKT_LABELS: Record<keyof BackupBestand, [string, string]> = {
   schwimmer: ['Schwimmer', 'Schwimmer'],
-  wettkampfe: ['Wettkampf', 'Wettkämpfe'],
   trainings: ['Training', 'Trainings'],
   satze: ['Satz', 'Sätze'],
   laeufe: ['Lauf', 'Läufe'],
@@ -830,7 +784,6 @@ const KONFLIKT_LABELS: Record<keyof BackupBestand, [string, string]> = {
 
 const KONFLIKT_REIHENFOLGE: Array<keyof BackupBestand> = [
   'schwimmer',
-  'wettkampfe',
   'trainings',
   'satze',
   'laeufe',

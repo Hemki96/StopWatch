@@ -14,15 +14,14 @@
  *   zurückgesetzt, weil `performance.now()` einen Reload nicht überlebt.
  * - Kaskadierende Löschungen erfassen abhängige Datensätze in derselben
  *   Transaktion, damit keine verwaisten Läufe oder Sätze zurückbleiben.
- * - `loadAll` liest alle fünf Stores in einer gemeinsamen Read-Transaktion,
+ * - `loadAll` liest alle vier Stores in einer gemeinsamen Read-Transaktion,
  *   damit Start, Tab-Übergabe und Import-Vorschau denselben Snapshot sehen.
  * - Schreiben ist ein Upsert über die jeweilige `id`.
  */
 import { getDb } from './db'
-import type { Lauf, Satz, Schwimmer, Training, Wettkampf } from '../domain/types'
+import type { Bahn, Lauf, Satz, Schwimmer, Training } from '../domain/types'
 import { MAX_BAHNEN, MAX_REIHEN, bahnenGesamt } from '../domain/training'
 import { bahnReihe, isFinished } from '../domain/lauf'
-import { istBeckenlaenge } from '../domain/einheit'
 import {
   BACKUP_FORMAT,
   BACKUP_VERSION,
@@ -47,7 +46,6 @@ import {
  * - `startversatzMs` wird auf eine nicht negative ganze Zahl begrenzt; ältere
  *   Datensätze kennen das Feld nicht und erhalten 0.
  * - `wiederholung` bleibt nur als positive ganze Zahl erhalten, sonst null.
- * - `modus` fällt auf `training` zurück, wenn er fehlt oder unbekannt ist.
  * - Bahnen, die gestartet, aber nicht beendet sind, verlieren `startMs`.
  *   Bereits beendete Bahnen behalten Start und Anschläge, damit der Verlauf
  *   vollständig bleibt. `startWallMs` des Laufs wird nicht verändert, weil er
@@ -81,58 +79,40 @@ export function normalizeOnLoad(
   // Dokument übertragen; dann gilt weiterhin die Reload-Regel.
   const behalteLaufende = optionen.behalteLaufende === true && lauf.startWallMs !== null
   const bahnen = lauf.bahnen.map((bahn) => {
-    // Der Wettkampf-Status ist endgültig und braucht keine Startzeit. Eine
-    // Bahn mit unbekanntem Status bleibt offen; ältere Backups kennen das Feld
-    // nicht. `status` wird deshalb bewusst neu gesetzt statt gespreadet.
-    const { status: roherStatus, ...rest } = bahn
-    const status = roherStatus === 'dns' || roherStatus === 'dnf' ? roherStatus : undefined
-    // Gestartete, aber offene Bahnen verlieren ihre Startzeit; bei DNS/DNF ist
-    // sie ebenfalls wertlos, weil die Bahn endgültig ohne Zeit beendet ist.
-    // Bei einer Tab-Übergabe bleibt der Start erhalten und wird später auf die
-    // neue Zeitbasis verschoben.
+    // Alte Wettkampf-Felder werden beim Laden verworfen. Gestartete, aber
+    // offene Bahnen verlieren ihre Startzeit; bei einer Tab-Übergabe bleibt der
+    // Start erhalten und wird später auf die neue Zeitbasis verschoben.
+    const rest = { ...bahn } as Bahn & { status?: unknown }
+    delete rest.status
     const startMs =
-      status || (bahn.startMs !== null && !isFinished(bahn) && !behalteLaufende)
-        ? null
-        : bahn.startMs
-    return { ...rest, reihe: bahnReihe(bahn), startMs, ...(status ? { status } : {}) }
+      bahn.startMs !== null && !isFinished(bahn) && !behalteLaufende ? null : bahn.startMs
+    return { ...rest, reihe: bahnReihe(bahn), startMs }
   })
+  const ohneModus = { ...lauf } as Lauf & { modus?: unknown }
+  delete ohneModus.modus
   return {
-    ...lauf,
+    ...ohneModus,
     startversatzMs,
     wiederholung,
-    modus: lauf.modus === 'wettkampf' ? 'wettkampf' : 'training',
     bahnen,
   }
 }
 
 /**
- * Ergänzt Felder, die Sätze erst mit Serien und Wettkämpfen bekommen haben.
- * Ältere Sätze haben keinen Plan; sie bleiben frei gewachsene Sätze.
- * `wettkampfId` wird auf null gesetzt, wenn es fehlt, damit die Zuordnung
- * eindeutig „kein Wettkampf“ lautet.
+ * Ergänzt Felder, die Sätze erst mit Serien bekommen haben. Ältere Sätze haben
+ * keinen Plan; sie bleiben frei gewachsene Sätze. Ein altes `wettkampfId` wird
+ * verworfen. Der Tagesname ist optional; ein fehlender oder unbrauchbarer Wert
+ * wird zu einem leeren Text, damit alle Sätze desselben Tages vergleichbar
+ * bleiben.
  */
 export function normalizeSatzOnLoad(satz: Satz): Satz {
+  const rest = { ...satz } as Satz & { wettkampfId?: unknown }
+  delete rest.wettkampfId
   return {
-    ...satz,
+    ...rest,
     plan: satz.plan ?? null,
-    wettkampfId: satz.wettkampfId ?? null,
-  }
-}
-
-/** Ältere Wettkämpfe gibt es nicht; fehlende Felder werden defensiv ergänzt. */
-export function normalizeWettkampfOnLoad(wettkampf: Wettkampf): Wettkampf {
-  const einheit = wettkampf.einheit === 'yd' ? 'yd' : undefined
-  // 25, 50 und 22.86 (25 yd) sind gültig; alles andere fällt auf die
-  // Vorgabe der Einheit zurück.
-  const beckenlaengeM = istBeckenlaenge(wettkampf.beckenlaengeM)
-    ? wettkampf.beckenlaengeM
-    : einheit === 'yd'
-      ? 22.86
-      : 50
-  return {
-    ...wettkampf,
-    beckenlaengeM,
-    ...(einheit ? { einheit } : {}),
+    tagesbezeichnung:
+      typeof satz.tagesbezeichnung === 'string' ? satz.tagesbezeichnung : '',
   }
 }
 
@@ -142,7 +122,9 @@ export function normalizeWettkampfOnLoad(wettkampf: Wettkampf): Wettkampf {
  *
  * Die Bahnenzahl wird auf 1 bis `MAX_BAHNEN` je Reihe und die Reihenzahl auf
  * 1 bis `MAX_REIHEN` begrenzt. Ältere Trainings kennen keine Reihen und gelten
- * als eine Reihe. Die Aktivenliste wird auf genau `bahnen × reihen` gebracht:
+ * als eine Reihe. `autostart` fehlt in älteren Trainings und gilt dann als
+ * `false`; nur ein ausdrückliches `true` startet Sätze automatisch. Die
+ * Aktivenliste wird auf genau `bahnen × reihen` gebracht:
  * vorhandene Einträge bleiben, fehlende werden mit null („ohne Zuordnung“)
  * aufgefüllt, überzählige abgeschnitten. `saetze` und `gestartet` werden zu
  * leeren Containern, wenn sie fehlen oder falsch typisiert sind.
@@ -163,6 +145,9 @@ export function normalizeTrainingOnLoad(training: Training): Training {
     bezeichnung: training.bezeichnung ?? '',
     bahnen,
     reihen,
+    // Ältere Trainings kennen keinen automatischen Satzwechsel und bleiben
+    // beim bewussten Start des nächsten Satzes.
+    autostart: training.autostart === true,
     // Genau ein Eintrag je Person; fehlende Zuordnungen werden null.
     aktive: Array.from(
       { length: bahnenGesamt(bahnen, reihen) },
@@ -177,7 +162,7 @@ export function normalizeTrainingOnLoad(training: Training): Training {
 }
 
 /**
- * Liest alle fünf Bestände und liefert sie normalisiert und sortiert.
+ * Liest alle vier Bestände und liefert sie normalisiert und sortiert.
  *
  * Alle Stores werden in genau einer `readonly`-Transaktion gelesen. IndexedDB
  * legt deren Snapshot beim Öffnen fest; ein Commit während des Lesens ist damit
@@ -186,8 +171,8 @@ export function normalizeTrainingOnLoad(training: Training): Training {
  * anschließend im Speicher, nicht über die Indizes. Sortierreihenfolge:
  * - Schwimmer nach Name (deutsche Kollation),
  * - Sätze nach Datum absteigend (neueste zuerst),
- * - Wettkämpfe und Trainings nach Datum absteigend, bei gleichem Tag nach
- *   `erstelltAm` absteigend,
+ * - Trainings nach Datum absteigend, bei gleichem Tag nach `erstelltAm`
+ *   absteigend,
  * - Läufe in der Reihenfolge, in der IndexedDB sie liefert; ihre Sortierung
  *   übernimmt die jeweilige Ansicht.
  *
@@ -197,11 +182,10 @@ export async function loadAll(optionen: { behalteLaufende?: boolean } = {}): Pro
   schwimmer: Schwimmer[]
   satze: Satz[]
   laeufe: Lauf[]
-  wettkampfe: Wettkampf[]
   trainings: Training[]
 }> {
   const db = await getDb()
-  const tx = db.transaction(['schwimmer', 'satz', 'lauf', 'wettkampf', 'training'], 'readonly')
+  const tx = db.transaction(['schwimmer', 'satz', 'lauf', 'training'], 'readonly')
   // Sammelt die bereits gestarteten Reads, damit ein späterer Fehler ihre
   // Ablehnungen einsammeln kann, statt sie unbehandelt zu lassen.
   const anfragen: Promise<unknown>[] = []
@@ -213,11 +197,10 @@ export async function loadAll(optionen: { behalteLaufende?: boolean } = {}): Pro
   try {
     // Die Reads laufen parallel innerhalb derselben Transaktion. Ein Store
     // kann nicht aus einem neueren Stand stammen als die übrigen.
-    const [schwimmer, satze, laeufe, wettkampfe, trainings] = await Promise.all([
+    const [schwimmer, satze, laeufe, trainings] = await Promise.all([
       lese(() => tx.objectStore('schwimmer').getAll()),
       lese(() => tx.objectStore('satz').getAll()),
       lese(() => tx.objectStore('lauf').getAll()),
-      lese(() => tx.objectStore('wettkampf').getAll()),
       lese(() => tx.objectStore('training').getAll()),
     ])
     // Erst nach dem Abschluss ist der Snapshot vollständig gelesen. Vorher
@@ -228,9 +211,6 @@ export async function loadAll(optionen: { behalteLaufende?: boolean } = {}): Pro
       schwimmer: schwimmer.sort((a, b) => a.name.localeCompare(b.name, 'de')),
       satze: satze.map(normalizeSatzOnLoad).sort((a, b) => b.datum.localeCompare(a.datum)),
       laeufe: laeufe.map((lauf) => normalizeOnLoad(lauf, optionen)),
-      wettkampfe: wettkampfe
-        .map(normalizeWettkampfOnLoad)
-        .sort((a, b) => b.datum.localeCompare(a.datum) || b.erstelltAm - a.erstelltAm),
       trainings: trainings
         .map(normalizeTrainingOnLoad)
         .sort((a, b) => b.datum.localeCompare(a.datum) || b.erstelltAm - a.erstelltAm),
@@ -297,36 +277,6 @@ export async function deleteSatzUndLaeufe(id: string): Promise<void> {
   await tx.done
 }
 
-/** Schreibt einen Wettkampf als Upsert (Schlüssel ist `wettkampf.id`). */
-export async function saveWettkampf(wettkampf: Wettkampf): Promise<void> {
-  const db = await getDb()
-  await db.put('wettkampf', wettkampf)
-}
-
-/**
- * Löscht einen Wettkampf samt aller Disziplinen und Läufe.
- *
- * Die Disziplinen sind Sätze mit passender `wettkampfId`; sie werden über den
- * Index `by-wettkampf` gefunden. Pro Disziplin werden zuerst die Läufe (Index
- * `by-satz`) und dann der Satz gelöscht, zum Schluss der Wettkampf selbst.
- * Alles läuft in einer Transaktion, damit kein halb gelöschter Wettkampf
- * zurückbleibt. Sätze älterer Stände ohne `wettkampfId` sind nicht betroffen.
- */
-export async function deleteWettkampfUndDaten(id: string): Promise<void> {
-  const db = await getDb()
-  const tx = db.transaction(['wettkampf', 'satz', 'lauf'], 'readwrite')
-  const satzIds = await tx.objectStore('satz').index('by-wettkampf').getAllKeys(id)
-  for (const satzId of satzIds) {
-    const laufIds = await tx.objectStore('lauf').index('by-satz').getAllKeys(satzId)
-    for (const laufId of laufIds) {
-      await tx.objectStore('lauf').delete(laufId)
-    }
-    await tx.objectStore('satz').delete(satzId)
-  }
-  await tx.objectStore('wettkampf').delete(id)
-  await tx.done
-}
-
 /** Schreibt ein Training als Upsert (Schlüssel ist `training.id`). */
 export async function saveTraining(training: Training): Promise<void> {
   const db = await getDb()
@@ -344,28 +294,24 @@ export interface SpeicherBatch {
   schwimmer?: Schwimmer[]
   satze?: Satz[]
   laeufe?: Lauf[]
-  wettkampfe?: Wettkampf[]
   trainings?: Training[]
 }
 
 /**
  * Schreibt mehrere Datensätze in genau einer Transaktion.
  *
- * Gedacht für Aktionen, die fachlich zusammengehören: ein Wettkampf mit
- * Disziplinen und Heats oder ein gestarteter Trainingssatz mit seinen Läufen.
- * Entweder ist danach alles sichtbar oder nichts; ein Abbruch mitten im
+ * Gedacht für Aktionen, die fachlich zusammengehören: etwa ein gestarteter
+ * Trainingssatz mit seinen Läufen. Entweder ist danach alles sichtbar oder
+ * nichts; ein Abbruch mitten im
  * Schreibvorgang hinterlässt keinen halben Import. Die Reihenfolge entspricht
  * `importBackup`: Bezugsobjekte vor abhängigen Datensätzen.
  */
 export async function saveMehrere(batch: SpeicherBatch): Promise<void> {
   const db = await getDb()
-  const tx = db.transaction(['schwimmer', 'satz', 'lauf', 'wettkampf', 'training'], 'readwrite')
+  const tx = db.transaction(['schwimmer', 'satz', 'lauf', 'training'], 'readwrite')
   try {
     for (const schwimmer of batch.schwimmer ?? []) {
       await tx.objectStore('schwimmer').put(schwimmer)
-    }
-    for (const wettkampf of batch.wettkampfe ?? []) {
-      await tx.objectStore('wettkampf').put(wettkampf)
     }
     for (const training of batch.trainings ?? []) {
       await tx.objectStore('training').put(training)
@@ -436,7 +382,6 @@ export async function exportBackup(): Promise<Backup> {
 export function normalisiereBackup(bestand: BackupBestand): BackupBestand {
   return {
     schwimmer: bestand.schwimmer,
-    wettkampfe: bestand.wettkampfe.map(normalizeWettkampfOnLoad),
     trainings: bestand.trainings.map(normalizeTrainingOnLoad),
     satze: bestand.satze.map(normalizeSatzOnLoad),
     laeufe: bestand.laeufe.map((lauf) => normalizeOnLoad(lauf)),
@@ -467,9 +412,8 @@ export interface ImportOptionen {
  *   Daten zu verlieren.
  * - Nicht kollidierende Datensätze werden ergänzt; das Backup ersetzt den
  *   Bestand nicht.
- * - Reihenfolge: erst Schwimmer, Wettkämpfe und Trainings, dann Sätze, zuletzt
- *   Läufe. So existieren die Bezugsobjekte, bevor abhängige Daten geschrieben
- *   werden.
+ * - Reihenfolge: erst Schwimmer und Trainings, dann Sätze, zuletzt Läufe. So
+ *   existieren die Bezugsobjekte, bevor abhängige Daten geschrieben werden.
  * - Jeder Datensatz wird beim Schreiben normalisiert, damit auch ein älteres
  *   Backup die aktuellen Felder erhält.
  * - Alle Stores liegen in einer Transaktion. Ein Fehler beim Schreiben bricht
@@ -488,22 +432,20 @@ export async function importBackup(
   const aufloesung = optionen.konflikte ?? 'lokalBehalten'
 
   const db = await getDb()
-  const tx = db.transaction(['schwimmer', 'satz', 'lauf', 'wettkampf', 'training'], 'readwrite')
+  const tx = db.transaction(['schwimmer', 'satz', 'lauf', 'training'], 'readwrite')
   try {
     // Lesen und Schreiben liegen in derselben Transaktion. Der Konfliktvergleich
     // sieht damit genau den Stand, auf den geschrieben wird, und bleibt atomar.
-    const [schwimmer, satze, laeufe, wettkampfe, trainings] = await Promise.all([
+    const [schwimmer, satze, laeufe, trainings] = await Promise.all([
       tx.objectStore('schwimmer').getAll(),
       tx.objectStore('satz').getAll(),
       tx.objectStore('lauf').getAll(),
-      tx.objectStore('wettkampf').getAll(),
       tx.objectStore('training').getAll(),
     ])
     const bestand = normalisiereBackup({
       schwimmer,
       satze,
       laeufe,
-      wettkampfe,
       trainings,
     })
     const normalisiert = normalisiereBackup(backup)
@@ -512,9 +454,6 @@ export async function importBackup(
 
     for (const eintrag of zuSchreiben.schwimmer) {
       await tx.objectStore('schwimmer').put(eintrag)
-    }
-    for (const eintrag of zuSchreiben.wettkampfe) {
-      await tx.objectStore('wettkampf').put(eintrag)
     }
     for (const eintrag of zuSchreiben.trainings) {
       await tx.objectStore('training').put(eintrag)
@@ -542,18 +481,17 @@ export async function importBackup(
 }
 
 /**
- * Leert alle fünf Stores in einer Transaktion („Alles löschen“ in den
+ * Leert alle vier Stores in einer Transaktion („Alles löschen“ in den
  * Einstellungen). Die Aufrufe laufen parallel, der Commit wird über `tx.done`
  * abgewartet; bei einem Fehler bleibt der bisherige Bestand erhalten.
  */
 export async function clearAll(): Promise<void> {
   const db = await getDb()
-  const tx = db.transaction(['schwimmer', 'satz', 'lauf', 'wettkampf', 'training'], 'readwrite')
+  const tx = db.transaction(['schwimmer', 'satz', 'lauf', 'training'], 'readwrite')
   await Promise.all([
     tx.objectStore('schwimmer').clear(),
     tx.objectStore('satz').clear(),
     tx.objectStore('lauf').clear(),
-    tx.objectStore('wettkampf').clear(),
     tx.objectStore('training').clear(),
     tx.done,
   ])

@@ -118,8 +118,8 @@ Die Formatierung kommt ausschließlich aus `src/domain/format.ts`. Kein `toFixed
 Ausschließlich die Begriffe aus [`GLOSSARY.md`](../../GLOSSARY.md):
 
 `Lauf` · `Satz` · `Serie` · `Training` · `Aktive` · `Bahn` · `Reihe` · `Schwimmer` · `Länge` ·
-`Split` · `Anschlag` · `Tap` · `Strecke` · `offene Strecke` · `Bestzeit (PB)` · `Wettkampf` ·
-`Disziplin` · `Meldeliste` · `Heat` (nur als erklärte Übersetzung)
+`Split` · `Anschlag` · `Tap` · `Strecke` · `offene Strecke` · `Bestzeit (PB)` · `Training` ·
+`Trainingssatz`
 
 Keine Synonyme wie „Session“, „Event“, „Workout“, „Timer-Session“ oder „Runde“ für einen Lauf.
 „Runde“ ist ausschließlich eine Wiederholung einer Serie.

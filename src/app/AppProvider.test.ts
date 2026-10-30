@@ -66,9 +66,10 @@ describe('leseEinstellungen', () => {
     expect(werte.taktSek).toBe(10)
   })
 
-  // Ein Yard-Lauf bleibt Yard: 25-Yard-Becken sind 22,86 m, 100 yd sind
-  // 91,44 m. Fällt die Strecke aus der Reihe, gilt der Yard-Standard.
-  it('liest Yard-Konfigurationen und hält sie konsistent', () => {
+  // Alte Yard-Einstellungen bleiben lesbar, werden aber beim Laden auf Meter
+  // gebracht. Die angezeigten Zahlen bleiben erhalten: 25 yd werden 25 m,
+  // 100 yd werden 100 m.
+  it('übernimmt alte Yard-Einstellungen als Meter', () => {
     localStorage.setItem(
       KEY,
       JSON.stringify({
@@ -82,14 +83,13 @@ describe('leseEinstellungen', () => {
     )
     const werte = leseEinstellungen()
     expect(werte.konfiguration).toEqual({
-      beckenlaengeM: 22.86,
-      streckeM: 91.44,
+      beckenlaengeM: 25,
+      streckeM: 100,
       schwimmart: 'freistil',
-      einheit: 'yd',
     })
   })
 
-  it('führt eine Yard-Einstellung ohne Yard-Becken auf 25 yd zurück', () => {
+  it('führt eine widersprüchliche Yard-Einstellung auf Meter zurück', () => {
     localStorage.setItem(
       KEY,
       JSON.stringify({
@@ -97,9 +97,8 @@ describe('leseEinstellungen', () => {
       }),
     )
     expect(leseEinstellungen().konfiguration).toMatchObject({
-      beckenlaengeM: 22.86,
-      streckeM: 91.44,
-      einheit: 'yd',
+      beckenlaengeM: 25,
+      streckeM: 100,
     })
   })
 

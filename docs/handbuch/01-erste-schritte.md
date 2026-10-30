@@ -65,18 +65,16 @@ Eine kurze Erklärung von **Lauf**, **Bahn** und **Anschlag**:
 
 | Feld | Bedeutung |
 | --- | --- |
-| **Einheit** | **Meter** oder **Yards**. Steuert Anzeige und Eingabe; intern wird immer in Metern gespeichert. |
-| **Beckenlänge** | 25 m oder 50 m; bei Yards nur **25 yd** (22,86 m). Bestimmt, wie viele Längen eine Strecke hat. |
-| **Strecke** | 50, 100, 200, 400, 800 oder 1.500 in der Einheit — oder **Offene Strecke**. |
-| **Schwimmart** | Freistil, Brust, Rücken, Schmetterling, Lagen oder Beliebig. |
+| **Beckenlänge** | 25 m oder 50 m. Bestimmt, wie viele Längen eine Strecke hat. |
+| **Strecke** | 50, 100, 200, 400, 800 oder 1.500 m — oder **Offene Strecke**. |
 
-Die Strecke muss ein Vielfaches der Beckenlänge sein. Bei einem Wechsel der Beckenlänge oder Einheit
-korrigiert die App eine unpassende Strecke automatisch auf zwei Bahnlängen. Ein Wechsel von Meter
-auf Yards behält die angezeigte Zahl: Aus 100 m wird 100 yd (91,44 m).
+Die App rechnet und beschriftet immer in Metern. Die Strecke muss ein Vielfaches der Beckenlänge
+sein. Bei einem Wechsel der Beckenlänge korrigiert die App eine unpassende Strecke automatisch auf
+zwei Bahnlängen. Die Zahl der **Zwischenzeiten** stellst du später im Konfigurations-Sheet ein.
 
 **Offene Strecke** bedeutet: Es gibt keine feste Längenanzahl. Jeder Anschlag ist ein Split; das
-Ziel wird mit einem eigenen **Ziel**-Knopf gesetzt. Das passt für Technik- und Ausdauereinheiten
-ohne feste Distanz.
+Ziel wird mit einem eigenen **Ziel**-Knopf gesetzt. Hast du eine eigene Zahl Zwischenzeiten
+eingestellt, endet die Bahn nach dem letzten Anschlag automatisch.
 
 ### Schritt 3 — Bahnen und Namen
 
@@ -84,28 +82,29 @@ ohne feste Distanz.
 - **Schwimmer:** optional. Namen können leer bleiben und später im Tab **Schwimmer** ergänzt oder
   im Konfigurations-Sheet zugeordnet werden.
 
-Mit **„Überspringen und Standardwerte verwenden“** startet die App mit 50 m-Becken, 100 m
-Freistil, 6 Bahnen und ohne Namen. Diese Werte lassen sich jederzeit unter **Mehr** ändern.
+Mit **„Überspringen und Standardwerte verwenden“** startet die App mit 50 m-Becken, 100 m,
+automatischen Zwischenzeiten, 6 Bahnen und ohne Namen. Diese Werte lassen sich jederzeit unter
+**Mehr** ändern.
 
 ## Die App nach dem Onboarding
 
 ```
 ┌─────────────────────────────────────┐
-│  Timer · Training · Wettkampf       │  Bereiche wechseln
+│  Timer · Training                   │  Bereiche wechseln
 │  Verlauf · Schwimmer · Mehr         │
 ├─────────────────────────────────────┤
 │                                     │
 │  Inhalt des gewählten Bereichs      │
 │                                     │
 ├─────────────────────────────────────┤
-│  Timer  Training  Wettkampf  ...    │  untere Leiste
+│  Timer  Training  Verlauf  ...      │  untere Leiste
 └─────────────────────────────────────┘
 ```
 
 Beim Start steht der **Timer** im Vordergrund. Dort liegt die Karte **„Nächster Lauf“** mit der
 aktuellen Konfiguration, z. B.:
 
-> `50 m · 100 m · Freistil · 6 Bahnen`
+> `50 m · 100 m · 6 Bahnen`
 
 Ein Tipp auf die Karte öffnet das Konfigurations-Sheet. Der große **Start**-Knopf öffnet zuerst die
 **Startübersicht** mit allen Werten; erst **Jetzt starten** beginnt die Messung.
@@ -114,7 +113,8 @@ Ein Tipp auf die Karte öffnet das Konfigurations-Sheet. Der große **Start**-Kn
 
 1. **App öffnen** und das Onboarding abschließen oder überspringen.
 2. Im Tab **Timer** auf die Karte **„Nächster Lauf“** tippen.
-3. Beckenlänge, Strecke und Schwimmart prüfen. Für den ersten Test passen 50 m, 100 m und Freistil.
+3. Beckenlänge, Strecke und Zwischenzeiten prüfen. Für den ersten Test passen 50 m und 100 m
+   mit automatischen Zwischenzeiten.
 4. Unter **Bahnen** die Anzahl einstellen, z. B. 4.
 5. Optional unter **Schwimmer für den nächsten Lauf** Namen zuordnen.
 6. Das Sheet schließen, **Start** tippen und in der Startübersicht **Jetzt starten** bestätigen. Alle
@@ -146,18 +146,18 @@ grün, geplante und überfällige gelb/amber.
 Unter **Mehr** lassen sich die Werte für den nächsten Lauf dauerhaft ändern:
 
 - **Design:** System, Hell oder Dunkel.
-- **Nächster Lauf:** Beckenlänge, Strecke, Schwimmart, Startversatz, Wiederholungen, Takt, Bahnen
+- **Nächster Lauf:** Beckenlänge, Strecke, Zwischenzeiten, Startversatz, Wiederholungen, Takt, Bahnen
   und Schwimmerzuordnung.
 - **Daten:** CSV-Export, Backup, Speicherschutz, alles löschen.
 - **Installation:** Installationsstatus und Anleitung.
 
 Die Einstellungen gelten für neu angelegte Läufe. Ein bereits angelegter Lauf behält seine Werte;
 nur die Schwimmerzuordnung und — solange noch kein Anschlag erfasst wurde — Beckenlänge, Strecke
-und Schwimmart lassen sich dort noch ändern. Bei einer Serie ist die Konfiguration sofort gesperrt.
+und Zwischenzeiten lassen sich dort noch ändern. Bei einer Serie ist die Konfiguration sofort
+gesperrt.
 
 ## Nächste Schritte
 
 - Mehrere Bahnen und Startversatz: [Timer und Bahnen](02-timer.md)
 - Wiederholungen im Takt: [Serien](03-serien.md)
 - Eine ganze Einheit planen: [Training](04-training.md)
-- Einen Wettkampftag begleiten: [Wettkampf](05-wettkampf.md)

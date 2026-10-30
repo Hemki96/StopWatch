@@ -27,6 +27,7 @@ import {
 import type { Training, TrainingsSatz } from '../domain/types'
 import { AktiveSheet } from './AktiveSheet'
 import { Bestaetigung } from './Bestaetigung'
+import { Schalter } from './Felder'
 import { Sheet } from './Sheet'
 import { Startuebersicht, StartuebersichtTraining } from './Startuebersicht'
 import { TrainingsSatzSheet } from './TrainingsSatzSheet'
@@ -370,6 +371,17 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
           <span className="tabular shrink-0 text-[11px] text-muted">
             {fortschrittText(fortschritt)}
           </span>
+        </div>
+
+        {/* Der automatische Wechsel gilt für die ganze Einheit. Er lässt sich
+            jederzeit abschalten; bereits gestartete Sätze bleiben unberührt. */}
+        <div className="mt-3">
+          <Schalter
+            an={training.autostart === true}
+            onAendern={(an) => speichere({ ...training, autostart: an })}
+            titel="Sätze automatisch starten"
+            beschreibung="Nach dem letzten Ziel beginnt der nächste Satz direkt. Der vorige bleibt in der Leiste und im Verlauf."
+          />
         </div>
 
         <h2 className="mb-2 mt-6 px-1 text-[11px] font-bold uppercase tracking-wider text-muted">

@@ -2,8 +2,8 @@
  * Grenzfälle und Fehlerpfade über die ganze Domäne.
  *
  * Die Datei bündelt die Randfälle, die in den fokussierten Testdateien fehlen:
- * unbekannte IDs, negative oder fehlende Werte, leere Serien, ungültige
- * Meldelisten und unvollständige CSV-Bestände. Im Mittelpunkt steht die
+ * unbekannte IDs, negative oder fehlende Werte, leere Serien und unvollständige
+ * CSV-Bestände. Im Mittelpunkt steht die
  * Invariante, dass eine ungültige Eingabe den bestehenden Zustand unverändert
  * lässt (dasselbe Objekt zurückkommt) und Fehlermeldungen den konkreten Grund
  * nennen. Es gibt keine Fixtures von außen: Alle Läufe, Sätze und Trainings
@@ -21,7 +21,6 @@ import {
   pruefeAnschlagKorrektur,
   setSchwimmart,
   setSchwimmer,
-  setzeZielzeit,
   startAll,
   startLane,
   tapLane,
@@ -58,18 +57,8 @@ import {
   trainingsSatzMeta,
   verschiebeTrainingsSatz,
 } from './training'
-import {
-  createWettkampf,
-  createWettkampfLauf,
-  createWettkampfSatz,
-  disziplinBezeichnung,
-  istWettkampfSatz,
-  wettkampfErgebnis,
-  wettkampfFortschritt,
-} from './wettkampf'
-import { istSchwimmart, meldelisteVorlage, parseMeldeliste } from './meldeliste'
 import { csvDateiname, laeufeAlsCsv } from '../export/csv'
-import type { Lauf, LaufKonfiguration, Satz, Schwimmart, Training } from './types'
+import type { Lauf, LaufKonfiguration, Satz, Training } from './types'
 
 // Wie in `lauf.test.ts`: 100 m im 50-m-Becken ergeben zwei Längen, die offene
 // Strecke keine.
@@ -146,41 +135,6 @@ describe('Lauf: Grenzen und Fehlerpfade', () => {
     expect(isFinished(beendet.bahnen[0]!)).toBe(true)
     expect(finishLane(beendet, bahnId, 70_000, 70_000)).toBe(beendet)
     expect(laneStatusAt(beendet.bahnen[0]!, 80_000)).toBe('beendet')
-  })
-
-  // Nur Wettkampfläufe nehmen Zielzeiten an; 59_999,9 ms werden auf ganze
-  // Millisekunden abgeschnitten (59_999) und als `manuell` markiert.
-  it('trägt Zielzeiten nur im Wettkampf und nur gültig ein', () => {
-    const training = laufMit(K100, 1)
-    const bahnId = training.bahnen[0]!.id
-    expect(setzeZielzeit(training, bahnId, 60_000)).toBe(training)
-
-    const wettkampf = createLauf(K100, [{ nummer: 1 }], null, { modus: 'wettkampf' })
-    expect(setzeZielzeit(wettkampf, bahnId, -1)).toBe(wettkampf)
-    expect(setzeZielzeit(wettkampf, 'fehlt', 60_000)).toBe(wettkampf)
-
-    const mitZeit = setzeZielzeit(wettkampf, wettkampf.bahnen[0]!.id, 59_999.9)
-    expect(mitZeit.bahnen[0]?.anschlaege[0]).toMatchObject({
-      splitMs: 59_999,
-      laengeNr: 1,
-      istFinish: true,
-      manuell: true,
-    })
-
-    // Ein vorhandener Zwischenanschlag bestimmt die nächste Längennummer.
-    const mitSplit = {
-      ...wettkampf,
-      bahnen: [
-        {
-          ...wettkampf.bahnen[0]!,
-          anschlaege: [
-            { laengeNr: 1, splitMs: 30_000, erfasstAt: 1, istFinish: false },
-          ],
-        },
-      ],
-    }
-    const danach = setzeZielzeit(mitSplit, mitSplit.bahnen[0]!.id, 60_000)
-    expect(danach.bahnen[0]?.anschlaege[1]?.laengeNr).toBe(2)
   })
 
   // Die Prüfung meldet Vorzeichen und unbekannte Längen, bevor irgendetwas
@@ -393,7 +347,7 @@ describe('Training: Validierung und Beschreibung', () => {
       konfiguration: { ...K100, streckeM: null },
       wiederholungen: 1,
     })
-    expect(beschreibeTrainingsSatz(offen)).toBe('offene Strecke · Freistil')
+    expect(beschreibeTrainingsSatz(offen)).toBe('offene Strecke')
     expect(trainingsSatzMeta(offen)).toBe('50 m-Becken')
   })
 
@@ -455,209 +409,6 @@ describe('Training: Validierung und Beschreibung', () => {
     })
     expect(training.bezeichnung).toBe('Montag')
     expect(training.saetze).toHaveLength(1)
-  })
-})
-
-// Wettkampf-Aufbau: getrimmte Namen, abgeleitete Disziplinbezeichnungen,
-// sortierte Bahnen und leere Ergebnislisten.
-describe('Wettkampf: Aufbau und Randfälle', () => {
-  // Der Name kommt aus einem Formular und wird getrimmt; eine unbekannte
-  // Schwimmart fällt in der Anzeige auf Freistil zurück.
-  const wettkampf = createWettkampf({ name: '  Herbstpokal  ', datum: '2026-10-29', beckenlaengeM: 50 })
-
-  it('schneidet den Namen und leitet Disziplinbezeichnungen ab', () => {
-    expect(wettkampf.name).toBe('Herbstpokal')
-    expect(disziplinBezeichnung(100, 'brust')).toBe('100 m Brust')
-    expect(disziplinBezeichnung(100, 'unbekannt' as Schwimmart)).toBe('100 m Freistil')
-  })
-
-  // Eine leere Bezeichnung wird aus Strecke und Schwimmart gebaut; die
-  // Disziplin ist ein Satz mit `wettkampfId` und ohne Serienplan. Die Bahnen
-  // des Heats kommen sortiert, obwohl die Meldeliste 7 vor 2 nennt.
-  it('erzeugt Sätze und sortiert die Bahnen eines Laufs', () => {
-    const satz = createWettkampfSatz(wettkampf, {
-      bezeichnung: '',
-      streckeM: 100,
-      schwimmart: 'freistil',
-      laeufe: [],
-    })
-    expect(satz.bezeichnung).toBe('100 m Freistil')
-    expect(satz.plan).toBeNull()
-    expect(satz.wettkampfId).toBe(wettkampf.id)
-    expect(istWettkampfSatz(satz)).toBe(true)
-
-    const lauf = createWettkampfLauf(
-      satz,
-      {
-        nummer: 3,
-        starts: [
-          { name: 'Spät', bahn: 7 },
-          { name: 'Früh', bahn: 2 },
-        ],
-      },
-      (start) => start.name,
-    )
-    expect(lauf.bahnen.map((bahn) => bahn.nummer)).toEqual([2, 7])
-    expect(lauf.wiederholung).toBe(3)
-    expect(lauf.modus).toBe('wettkampf')
-    expect(lauf.startversatzMs).toBe(0)
-  })
-
-  // Ohne Zielzeit bleibt jeder Platz null; ein leerer Fortschritt ist 0 von 0.
-  // `istWettkampfSatz` verlangt eine nicht leere `wettkampfId`.
-  it('meldet leere Ergebnisse und unbekannte Sätze', () => {
-    expect(wettkampfErgebnis(laufMit(K100, 1)).every((zeile) => zeile.platz === null)).toBe(true)
-    expect(wettkampfFortschritt([])).toEqual({ fertig: 0, gesamt: 0 })
-    expect(istWettkampfSatz(null)).toBe(false)
-    expect(istWettkampfSatz({ wettkampfId: '' } as Satz)).toBe(false)
-  })
-})
-
-// Toleranter Import: Wo die Datei eindeutig ist, wird sie gelesen; echte
-// Widersprüche werden mit Zeilennummer und Grund abgelehnt.
-describe('Meldeliste: toleranter Import und klare Fehler', () => {
-  // Vorgabe wie im Dialog: 50-m-Becken, 100 m Freistil. Sie greift nur, wenn
-  // die Datei die Angabe nicht selbst enthält.
-  const vorgabe = { beckenlaengeM: 50, streckeM: 100, schwimmart: 'freistil' } as const
-
-  // Leere Dateien und reine Kommentarzeilen ergeben keinen Plan.
-  it('lehnt leere Listen ab', () => {
-    expect(parseMeldeliste('', vorgabe).ok).toBe(false)
-    expect(parseMeldeliste('# nur Kommentar\n\n', vorgabe).ok).toBe(false)
-  })
-
-  // 2001 Datenzeilen überschreiten die Grenze von 2000; die Meldung nennt sie.
-  it('lehnt zu lange Listen ab', () => {
-    const zuLang = ['name', ...Array.from({ length: 2001 }, (_, i) => `Kind ${i}`)].join('\n')
-    const ergebnis = parseMeldeliste(zuLang, vorgabe)
-    expect(ergebnis.ok).toBe(false)
-    if (!ergebnis.ok) expect(ergebnis.fehler).toContain('2000')
-  })
-
-  // Ohne Kopfzeile sind nur „Name“ oder „Bahn;Name“ eindeutig; drei Spalten
-  // wären Raten und werden deshalb abgelehnt.
-  it('verlangt ohne Kopfzeile höchstens zwei Spalten', () => {
-    const ergebnis = parseMeldeliste('1;Anna;2010', vorgabe)
-    expect(ergebnis.ok).toBe(false)
-    if (!ergebnis.ok) expect(ergebnis.fehler).toContain('Kopfzeile')
-  })
-
-  it('verlangt eine Namensspalte', () => {
-    const ergebnis = parseMeldeliste('bahn;lauf\n1;1', vorgabe)
-    expect(ergebnis.ok).toBe(false)
-    if (!ergebnis.ok) expect(ergebnis.fehler).toContain('Name')
-  })
-
-  // 80 Zeichen ist die Obergrenze für Namen; 81 werden mit Hinweis auf die
-  // Grenze abgelehnt.
-  it('lehnt überlange Namen ab', () => {
-    const ergebnis = parseMeldeliste(`name\n${'a'.repeat(81)}`, vorgabe)
-    expect(ergebnis.ok).toBe(false)
-    if (!ergebnis.ok) expect(ergebnis.fehler).toContain('80')
-  })
-
-  // Lauf 0 und 100 liegen außerhalb von 1..99, Bahn 11 außerhalb von 1..10.
-  it('prüft Lauf- und Bahnnummern', () => {
-    for (const zeile of ['name;lauf\nAnna;0', 'name;lauf\nAnna;100']) {
-      const ergebnis = parseMeldeliste(zeile, vorgabe)
-      expect(ergebnis.ok).toBe(false)
-      if (!ergebnis.ok) expect(ergebnis.fehler).toContain('Laufnummer')
-    }
-
-    const bahn = parseMeldeliste('name;bahn\nAnna;11', vorgabe)
-    expect(bahn.ok).toBe(false)
-    if (!bahn.ok) expect(bahn.fehler).toContain('Bahn')
-  })
-
-  // Elf Starts ohne Bahnangabe füllen die zehn Bahnen; statt den elften Start
-  // still zu verwerfen, nennt der Fehler die belegten Bahnen.
-  it('meldet volle Läufe statt still zu verwerfen', () => {
-    const zeilen = ['name', ...Array.from({ length: 11 }, (_, i) => `Kind ${i}`)].join('\n')
-    const ergebnis = parseMeldeliste(zeilen, vorgabe)
-    expect(ergebnis.ok).toBe(false)
-    if (!ergebnis.ok) expect(ergebnis.fehler).toContain('alle 10 Bahnen')
-  })
-
-  // Eine unbekannte Schwimmart und eine unlesbare Bahn sind nur Warnungen: Der
-  // Import läuft mit der Vorgabe (Freistil) und der ersten freien Bahn weiter.
-  it('warnt bei unbekannter Schwimmart und Bahn', () => {
-    const ergebnis = parseMeldeliste('name;schwimmart;bahn\nAnna;Unbekannt;x', vorgabe)
-    expect(ergebnis.ok).toBe(true)
-    if (!ergebnis.ok) return
-    expect(ergebnis.meldeliste.disziplinen[0]?.schwimmart).toBe('freistil')
-    expect(ergebnis.meldeliste.disziplinen[0]?.laeufe[0]?.starts[0]?.bahn).toBe(1)
-    expect(ergebnis.meldeliste.warnungen).toHaveLength(2)
-  })
-
-  // 1800 liegt vor 1900, 2999 nach dem nächsten Jahr; beides wird still zu
-  // `null`, weil ein falscher Jahrgang den Import nicht blockieren soll.
-  it('verwirft ungültige Jahrgänge still', () => {
-    const ergebnis = parseMeldeliste('name;jahrgang\nAnna;1800\nBen;2999\n', vorgabe)
-    expect(ergebnis.ok).toBe(true)
-    if (!ergebnis.ok) return
-    expect(ergebnis.meldeliste.disziplinen[0]?.laeufe[0]?.starts.map((start) => start.jahrgang)).toEqual([
-      null,
-      null,
-    ])
-  })
-
-  // BOM, Kommentarzeile, englisches `lane,name,heat` und Komma als Trenner;
-  // im zweiten Fall Tabulator, `distance` und `backstroke`. Die Strecke 200 m
-  // passt zum 25-m-Becken, deshalb wird sie übernommen.
-  it('versteht englische Spalten, Kommas, Tabs und Kommentare', () => {
-    const komma = parseMeldeliste('\uFEFF# Startliste\nlane,name,heat\n3,Anna,2\n4,Ben,2\n', vorgabe)
-    expect(komma.ok).toBe(true)
-    if (!komma.ok) return
-    expect(komma.meldeliste.disziplinen[0]?.laeufe[0]?.nummer).toBe(2)
-    expect(komma.meldeliste.disziplinen[0]?.laeufe[0]?.starts.map((start) => start.name)).toEqual([
-      'Anna',
-      'Ben',
-    ])
-
-    const tab = parseMeldeliste('name\tdistance\tstroke\nAnna\t200\tbackstroke\n', {
-      ...vorgabe,
-      beckenlaengeM: 25,
-    })
-    expect(tab.ok).toBe(true)
-    if (!tab.ok) return
-    expect(tab.meldeliste.disziplinen[0]?.streckeM).toBe(200)
-    expect(tab.meldeliste.disziplinen[0]?.schwimmart).toBe('ruecken')
-  })
-
-  // „Staffel Mixed“ enthält weder Strecke noch Schwimmart und bleibt deshalb
-  // als Freitext-Bezeichnung stehen; ohne Lauf-Spalte gilt die Vorgabe 4.
-  it('nutzt eine freie Disziplinbezeichnung und die Vorgabelaufnummer', () => {
-    const ergebnis = parseMeldeliste('disziplin;name\nStaffel Mixed;Anna\n', {
-      ...vorgabe,
-      lauf: 4,
-    })
-    expect(ergebnis.ok).toBe(true)
-    if (!ergebnis.ok) return
-    expect(ergebnis.meldeliste.disziplinen[0]?.bezeichnung).toBe('Staffel Mixed')
-    expect(ergebnis.meldeliste.disziplinen[0]?.laeufe[0]?.nummer).toBe(4)
-  })
-
-  // Die Vorlage aus der App muss durch den eigenen Parser wieder lesbar sein;
-  // die vier Beispielzeilen ergeben vier Starts.
-  it('stellt eine importierbare Vorlage bereit', () => {
-    const ergebnis = parseMeldeliste(meldelisteVorlage(), vorgabe)
-    expect(ergebnis.ok).toBe(true)
-    if (!ergebnis.ok) return
-    expect(ergebnis.meldeliste.anzahlStarts).toBe(4)
-  })
-
-  // `istSchwimmart` prüft exakt gegen `SCHWIMMARTEN`; „kraul“ ist nur ein
-  // Import-Alias für Freistil und kein gültiger Wert im Datenmodell.
-  it('erkennt gültige Schwimmarten', () => {
-    expect(istSchwimmart('brust')).toBe(true)
-    expect(istSchwimmart('kraul')).toBe(false)
-  })
-
-  // Beide Spalten enthalten nur Leerraum; nach dem Zusammenbau bleibt kein
-  // Name übrig und der Import bricht ab.
-  it('lehnt Namen mit nur Leerzeichen in Vor- und Nachname ab', () => {
-    const ergebnis = parseMeldeliste('vorname;nachname\n ; \n', vorgabe)
-    expect(ergebnis.ok).toBe(false)
   })
 })
 

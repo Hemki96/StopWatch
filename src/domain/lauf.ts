@@ -15,8 +15,7 @@
  * von der Persistenz zurückgesetzt.
  *
  * Zusammenhang: `serie.ts` fasst mehrere Läufe zu Runden zusammen,
- * `training.ts` erzeugt sie aus einem Plan, `wettkampf.ts` nutzt denselben
- * Lauf-Typ mit `modus: 'wettkampf'`.
+ * `training.ts` erzeugt sie aus einem Plan.
  */
 
 import { formatTime } from './format'
@@ -28,9 +27,7 @@ import type {
   BahnStatus,
   Lauf,
   LaufKonfiguration,
-  LaufModus,
   Schwimmart,
-  WettkampfStatus,
 } from './types'
 
 /** Eingabe für `createLauf`: Bahnnummer, Reihe und optionale Schwimmerzuordnung. */
@@ -45,7 +42,6 @@ export interface BahnInit {
 export interface LaufOptionen {
   startversatzMs?: number
   wiederholung?: number | null
-  modus?: LaufModus
 }
 
 /** Vorgabe für neue Läufe, wenn der Trainer nichts anderes gewählt hat. */
@@ -56,12 +52,55 @@ export const STANDARD_KONFIGURATION: LaufKonfiguration = {
 }
 
 /**
+ * Obergrenze der selbst eingestellten Zwischenzeiten. Sie ist eine
+ * Bedienentscheidung: Mehr Anschläge nimmt am Beckenrand niemand sinnvoll.
+ * Der Wert muss zu `pruefeKonfiguration` in der Sicherung passen.
+ */
+export const MAX_ZWISCHENZEITEN = 99
+
+/**
  * Strecke in Längen umgerechnet. Bei offener Strecke gibt es keine feste
  * Ziel-Länge, deshalb `null`.
  */
 export function lengthCount(konfiguration: LaufKonfiguration): number | null {
   if (konfiguration.streckeM === null) return null
   return Math.round(konfiguration.streckeM / konfiguration.beckenlaengeM)
+}
+
+/**
+ * Zahl der Zwischenzeiten, die sich aus Strecke und Beckenlänge ergibt. Die
+ * letzte Länge ist das Ziel und zählt nicht mit; bei offener Strecke ist die
+ * Zahl offen (`null`).
+ */
+export function automatischeZwischenzeiten(
+  konfiguration: LaufKonfiguration,
+): number | null {
+  const laengen = lengthCount(konfiguration)
+  return laengen === null ? null : Math.max(0, laengen - 1)
+}
+
+/**
+ * Vom Trainer eingestellte Zwischenzeiten oder `null` für „automatisch“.
+ * Unbrauchbare Werte (kein endlicher Wert, negativ) gelten als automatisch;
+ * zu große Werte werden auf `MAX_ZWISCHENZEITEN` gekappt.
+ */
+export function eingestellteZwischenzeiten(
+  konfiguration: LaufKonfiguration,
+): number | null {
+  const wert = konfiguration.zwischenzeiten
+  if (typeof wert !== 'number' || !Number.isFinite(wert)) return null
+  return Math.min(MAX_ZWISCHENZEITEN, Math.max(0, Math.round(wert)))
+}
+
+/**
+ * Zahl der Zwischenzeiten bis zum Ziel. `null` heißt offen: Bei einer offenen
+ * Strecke ohne eigene Vorgabe bestimmt der Trainer das Ziel mit einem Knopf.
+ * Die folgende Zahl ist immer der Ziel-Anschlag (`gesamt + 1`).
+ */
+export function zwischenzeitenGesamt(
+  konfiguration: LaufKonfiguration,
+): number | null {
+  return eingestellteZwischenzeiten(konfiguration) ?? automatischeZwischenzeiten(konfiguration)
 }
 
 /**
@@ -88,6 +127,8 @@ export function istVielfacheDerBeckenlaenge(
  * bereits der Typ `Beckenlaenge` ab.
  */
 export function validateKonfiguration(konfiguration: LaufKonfiguration): string | null {
+  const zwischenzeitenFehler = pruefeZwischenzeiten(konfiguration)
+  if (zwischenzeitenFehler !== null) return zwischenzeitenFehler
   if (konfiguration.streckeM === null) return null
   if (!Number.isFinite(konfiguration.streckeM) || konfiguration.streckeM <= 0) {
     return 'Die Strecke muss größer als 0 m sein.'
@@ -102,13 +143,25 @@ export function validateKonfiguration(konfiguration: LaufKonfiguration): string 
 }
 
 /**
+ * Prüft die Zahl der eingestellten Zwischenzeiten. `null`/fehlend bedeutet
+ * automatisch und ist immer gültig.
+ */
+function pruefeZwischenzeiten(konfiguration: LaufKonfiguration): string | null {
+  const wert = konfiguration.zwischenzeiten
+  if (wert === undefined || wert === null) return null
+  if (!Number.isInteger(wert) || wert < 0 || wert > MAX_ZWISCHENZEITEN) {
+    return `Die Zwischenzeiten müssen zwischen 0 und ${MAX_ZWISCHENZEITEN} liegen.`
+  }
+  return null
+}
+
+/**
  * Legt einen neuen, noch nicht gestarteten Lauf an. Alle Bahnen sind „bereit“
  * (`startMs: null`) und haben keine Anschläge.
  *
  * `startversatzMs` wird auf eine ganze, nicht negative Zahl gerundet;
- * unbrauchbare Werte (fehlend, `NaN`) werden zu 0. `modus` ist `training`,
- * solange nichts anderes angegeben ist, `wiederholung` bleibt sonst `null`.
- * Eine fehlende oder unbrauchbare Reihe wird zu 1.
+ * unbrauchbare Werte (fehlend, `NaN`) werden zu 0. `wiederholung` bleibt sonst
+ * `null`. Eine fehlende oder unbrauchbare Reihe wird zu 1.
  */
 export function createLauf(
   konfiguration: LaufKonfiguration,
@@ -125,7 +178,6 @@ export function createLauf(
       ? Math.max(0, Math.round(optionen.startversatzMs ?? 0))
       : 0,
     wiederholung: optionen.wiederholung ?? null,
-    modus: optionen.modus ?? 'training',
     bahnen: bahnen.map((b) => ({
       id: newId(),
       nummer: b.nummer,
@@ -180,18 +232,12 @@ export function isFinished(bahn: Bahn): boolean {
   return bahn.anschlaege.some((a) => a.istFinish)
 }
 
-/** True, wenn der Lauf im Wettkampfmodus gemessen wird (ein Tap = Ziel). */
-export function istWettkampfLauf(lauf: Lauf): boolean {
-  return lauf.modus === 'wettkampf'
-}
-
 /**
- * True, wenn die Bahn abgeschlossen ist — durch ein Ziel oder durch den
- * Wettkampf-Status DNS/DNF. Markierte Bahnen sind endgültig: Weitere Anschläge
- * und Starts ändern nichts mehr. Im Training gibt es keinen Status.
+ * True, wenn die Bahn abgeschlossen ist — durch ein Ziel. Ein Finish ist
+ * endgültig: Weitere Anschläge und Starts ändern nichts mehr.
  */
 export function istBahnBeendet(bahn: Bahn): boolean {
-  return isFinished(bahn) || bahn.status === 'dns' || bahn.status === 'dnf'
+  return isFinished(bahn)
 }
 
 /**
@@ -270,19 +316,19 @@ export interface ZwischenzeitStand {
 }
 
 /**
- * Zählt die Zwischenzeiten einer Bahn. Die letzte Länge einer festen Strecke
- * ist das Ziel und damit keine Zwischenzeit; bei offener Strecke bleibt die
- * Gesamtzahl offen. Ein Lauf über genau eine Beckenlänge hat deshalb
- * `gesamt: 0` — dort gibt es keine Zwischenzeit.
+ * Zählt die Zwischenzeiten einer Bahn. Die Zahl bis zum Ziel stammt aus der
+ * Konfiguration: entweder vom Trainer eingestellt oder aus den Längen
+ * abgeleitet. Ist sie offen (`null`), bleibt die Gesamtzahl offen. Automatisch
+ * hat ein Lauf über genau eine Beckenlänge deshalb `gesamt: 0` — dort gibt es
+ * keine Zwischenzeit.
  */
 export function zwischenzeiten(
   bahn: Bahn,
   konfiguration: LaufKonfiguration,
 ): ZwischenzeitStand {
-  const laengen = lengthCount(konfiguration)
   return {
     erfasst: bahn.anschlaege.filter((anschlag) => !anschlag.istFinish).length,
-    gesamt: laengen === null ? null : Math.max(0, laengen - 1),
+    gesamt: zwischenzeitenGesamt(konfiguration),
   }
 }
 
@@ -320,9 +366,7 @@ function updateBahn(lauf: Lauf, bahnId: string, update: (bahn: Bahn) => Bahn): L
  */
 export function startLane(lauf: Lauf, bahnId: string, now: number, wallNow: number): Lauf {
   const next = updateBahn(lauf, bahnId, (bahn) =>
-    bahn.startMs === null && !bahn.status && bahn.anschlaege.length === 0
-      ? { ...bahn, startMs: now }
-      : bahn,
+    bahn.startMs === null && bahn.anschlaege.length === 0 ? { ...bahn, startMs: now } : bahn,
   )
   // Keine Änderung (unbekannte oder bereits gestartete Bahn): Anker nicht anfassen.
   if (next === lauf) return lauf
@@ -412,7 +456,6 @@ export function startAll(lauf: Lauf, now: number, wallNow: number): Lauf {
     : 0
   let changed = false
   const bahnen = lauf.bahnen.map((bahn) => {
-    // Markierte Bahnen (DNS/DNF) bleiben endgültig; sie bekommen keinen Start.
     // Eine Bahn mit Anschlägen, aber ohne Startzeit ist nach einem Reload
     // unterbrochen: Ihr fehlt der monotone Bezugspunkt. Ein Neustart würde die
     // alten Splits mit einer neuen Startzeit vermischen und ein falsches Finish
@@ -437,8 +480,6 @@ export function startAll(lauf: Lauf, now: number, wallNow: number): Lauf {
 export function tapLane(lauf: Lauf, bahnId: string, now: number, wallNow: number): Lauf {
   const bahn = findBahn(lauf, bahnId)
   if (!bahn) return lauf
-  // DNS/DNF ist endgültig: kein Start, kein Anschlag, kein Ziel.
-  if (bahn.status) return lauf
   // Unterbrochene Bahn (Splits ohne Startzeit): Ein Neustart würde die alten
   // Splits mit einer neuen Startzeit vermischen. Sie muss erst zurückgesetzt
   // werden; ein einfacher Tap ändert nichts.
@@ -450,15 +491,12 @@ export function tapLane(lauf: Lauf, bahnId: string, now: number, wallNow: number
   if (now < bahn.startMs) return lauf
   if (isFinished(bahn)) return lauf
 
-  // Im Wettkampf ist der erste Tap nach dem Start bereits das Ziel. Splits
-  // pro Länge wären am Beckenrand eine zusätzliche Fehlerquelle.
-  if (istWettkampfLauf(lauf)) return finishLane(lauf, bahnId, now, wallNow)
-
-  const gesamt = lengthCount(lauf.konfiguration)
+  const gesamt = zwischenzeitenGesamt(lauf.konfiguration)
   const laengeNr = bahn.anschlaege.length + 1
-  // Bei fester Strecke ist der letzte Anschlag das Ziel; bei offener Strecke
-  // bleibt jeder Anschlag ein Split und das Ziel wird explizit gesetzt.
-  const istFinish = gesamt !== null && laengeNr >= gesamt
+  // Der Anschlag nach allen Zwischenzeiten ist das Ziel. Das gilt auch für eine
+  // offene Strecke, sobald der Trainer dort eine feste Zahl eingestellt hat;
+  // ohne Vorgabe bleibt jeder Anschlag ein Split.
+  const istFinish = gesamt !== null && laengeNr > gesamt
   const anschlag: Anschlag = {
     laengeNr,
     splitMs: Math.max(0, now - bahn.startMs),
@@ -469,17 +507,17 @@ export function tapLane(lauf: Lauf, bahnId: string, now: number, wallNow: number
 }
 
 /**
- * Beendet eine Bahn explizit. Nur bei offener Strecke und im Wettkampf nötig —
- * bei konfigurierter Trainingsstrecke ergibt sich das Finish aus dem letzten
- * Anschlag, dort ist der Aufruf wirkungslos.
+ * Beendet eine Bahn explizit. Nur bei offener Strecke ohne eigene
+ * Zwischenzeiten nötig — bei fester Strecke oder eingestellter Anzahl ergibt
+ * sich das Finish aus dem letzten Anschlag, dort ist der Aufruf wirkungslos.
  *
  * Verlangt eine gestartete, noch offene Bahn mit `now >= startMs`; sonst kommt
  * der Lauf unverändert zurück. Der neue Anschlag trägt `istFinish: true`.
  */
 export function finishLane(lauf: Lauf, bahnId: string, now: number, wallNow: number): Lauf {
-  if (lengthCount(lauf.konfiguration) !== null && !istWettkampfLauf(lauf)) return lauf
+  if (zwischenzeitenGesamt(lauf.konfiguration) !== null) return lauf
   const bahn = findBahn(lauf, bahnId)
-  if (!bahn || bahn.status || bahn.startMs === null || now < bahn.startMs || isFinished(bahn)) {
+  if (!bahn || bahn.startMs === null || now < bahn.startMs || isFinished(bahn)) {
     return lauf
   }
 
@@ -495,92 +533,6 @@ export function finishLane(lauf: Lauf, bahnId: string, now: number, wallNow: num
 }
 
 /**
- * Trägt im Wettkampf eine Zielzeit von Hand ein oder korrigiert sie. Das ist
- * der Ausweg, wenn ein Tap danebenging oder eine Zeit aus dem Protokoll
- * nachgetragen wird. Die Zeit wird immer als `manuell` markiert.
- *
- * Gibt es bereits ein Finish, werden nur `splitMs`, `erfasstAt` und `manuell`
- * ersetzt; `laengeNr` und `istFinish` bleiben, es entsteht kein zweiter
- * Anschlag. Sonst wird ein neuer Finish-Anschlag mit der nächsten LängenNummer
- * angehängt. Eine Startzeit ist nicht nötig, damit sich eine nie gestartete Bahn
- * nachtragen lässt. Ungültige Zeiten (`NaN`, negativ) und Trainingsläufe geben
- * den Lauf unverändert zurück; die Zeit wird auf ganze Millisekunden
- * abgeschnitten.
- */
-export function setzeZielzeit(
-  lauf: Lauf,
-  bahnId: string,
-  splitMs: number,
-  erfasstAt: number = Date.now(),
-): Lauf {
-  if (!istWettkampfLauf(lauf)) return lauf
-  if (!Number.isFinite(splitMs) || splitMs < 0) return lauf
-  const bahn = findBahn(lauf, bahnId)
-  // Ein Status ist endgültig; erst entfernen, dann eine Zeit eintragen.
-  if (!bahn || bahn.status) return lauf
-
-  const zeit = Math.trunc(splitMs)
-  const vorhanden = bahn.anschlaege.find((anschlag) => anschlag.istFinish)
-  if (vorhanden) {
-    return updateBahn(lauf, bahnId, (b) => ({
-      ...b,
-      anschlaege: b.anschlaege.map((anschlag) =>
-        // Nur den Finish-Anschlag ersetzen; Zwischenzeiten bleiben unberührt.
-        anschlag === vorhanden
-          ? { ...anschlag, splitMs: zeit, erfasstAt, manuell: true }
-          : anschlag,
-      ),
-    }))
-  }
-
-  const naechsteLaenge = (bahn.anschlaege.at(-1)?.laengeNr ?? 0) + 1
-  const anschlag: Anschlag = {
-    laengeNr: naechsteLaenge,
-    splitMs: zeit,
-    erfasstAt,
-    istFinish: true,
-    manuell: true,
-  }
-  return updateBahn(lauf, bahnId, (b) => ({ ...b, anschlaege: [...b.anschlaege, anschlag] }))
-}
-
-/**
- * Markiert eine offene Wettkampf-Bahn als DNS oder DNF beziehungsweise hebt
- * die Markierung wieder auf (`null`).
- *
- * Nur im Wettkampf und nur für Bahnen ohne Zielzeit: Eine bereits gewertete
- * Bahn bleibt endgültig. DNS entfernt einen vorhandenen Start, DNF lässt ihn
- * stehen (die Bahn war im Wasser, kam aber nicht an). Anschläge gibt es auf
- * einer solchen Bahn nicht; ein bereits erfasster Zwischenanschlag wird
- * vorsorglich entfernt. Ohne echte Änderung kommt derselbe Lauf zurück.
- */
-export function setzeWettkampfStatus(
-  lauf: Lauf,
-  bahnId: string,
-  status: WettkampfStatus | null,
-): Lauf {
-  if (!istWettkampfLauf(lauf)) return lauf
-  const bahn = findBahn(lauf, bahnId)
-  if (!bahn || isFinished(bahn)) return lauf
-  const naechster: WettkampfStatus | undefined = status ?? undefined
-  if ((bahn.status ?? undefined) === naechster) return lauf
-  return updateBahn(lauf, bahnId, (b) => {
-    // `status` muss beim Aufheben ganz verschwinden, nicht als `undefined`
-    // stehen bleiben; sonst unterscheiden sich „kein Status“ und „Status
-    // gelöscht“ im gespeicherten Objekt.
-    const { status: _alterStatus, ...rest } = b
-    return {
-      ...rest,
-      ...(naechster ? { status: naechster } : {}),
-      // DNS heißt: nie gestartet. DNF behält den Start, damit „nicht beendet“
-      // nachvollziehbar bleibt; die Anzeige zeigt ohnehin den Status.
-      startMs: naechster === 'dns' ? null : b.startMs,
-      anschlaege: naechster ? [] : b.anschlaege,
-    }
-  })
-}
-
-/**
  * Macht die letzte Aktion einer Bahn rückgängig: Anschlag löschen, sonst Start
  * zurücknehmen. Eine unberührte Bahn bleibt unverändert.
  *
@@ -590,14 +542,8 @@ export function setzeWettkampfStatus(
  */
 export function undoLane(lauf: Lauf, bahnId: string): Lauf {
   return updateBahn(lauf, bahnId, (bahn) => {
-    // Ein Wettkampf-Status ist die letzte Aktion dieser Bahn; Zurücknehmen
-    // entfernt ihn und macht die Bahn wieder offen.
-    if (bahn.status) {
-      const { status: _status, ...rest } = bahn
-      return { ...rest, startMs: null }
-    }
     if (bahn.anschlaege.length > 0) {
-      // Ein Finish verliert damit auch seinen Status: Die Bahn läuft wieder.
+      // Ein Finish verliert damit seine Wirkung: Die Bahn läuft wieder.
       return { ...bahn, anschlaege: bahn.anschlaege.slice(0, -1) }
     }
     if (bahn.startMs !== null) {
@@ -711,11 +657,7 @@ export function updateStrecke(
   return { ...lauf, konfiguration: { ...konfiguration } }
 }
 
-/**
- * True, sobald alle Bahnen abgeschlossen sind: im Training jedes Finish, im
- * Wettkampf zusätzlich DNS/DNF. Ein Heat mit einer Zeit, DNS oder DNF auf jeder
- * Bahn gilt damit als beendet.
- */
+/** True, sobald alle Bahnen ein Finish haben. */
 export function isComplete(lauf: Lauf): boolean {
   return lauf.bahnen.every(istBahnBeendet)
 }
@@ -752,8 +694,5 @@ export function hasStarted(lauf: Lauf): boolean {
 export function hatBegonnen(lauf: Lauf, wallNow: number = Date.now()): boolean {
   if (lauf.bahnen.some((bahn) => bahn.anschlaege.length > 0)) return true
   if (lauf.startWallMs === null || lauf.startWallMs > wallNow) return false
-  // Im Wettkampf ist `wiederholung` die Laufnummer, nicht die Runde einer
-  // Serie. Ein gestarteter Heat gehört deshalb sofort in den Verlauf.
-  if (lauf.modus === 'wettkampf') return true
   return lauf.wiederholung === null || lauf.wiederholung === 1
 }

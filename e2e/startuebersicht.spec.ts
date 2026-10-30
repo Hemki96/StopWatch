@@ -8,7 +8,7 @@
  * ohne dass eine Uhr läuft.
  *
  * Vorbedingung: frischer Browser-Kontext je Test, also leere IndexedDB und
- * Standardkonfiguration (50-m-Becken, 100 m, Freistil, 6 Bahnen).
+ * Standardkonfiguration (50-m-Becken, 100 m, 6 Bahnen).
  */
 import { expect, test } from '@playwright/test'
 import { oeffneApp } from './helfer'
@@ -23,7 +23,10 @@ test('zeigt die Einstellungen des nächsten Laufs und startet erst auf Bestätig
   await expect(uebersicht.getByText('Start prüfen')).toBeVisible()
   await expect(uebersicht.getByText('50 m', { exact: true })).toBeVisible()
   await expect(uebersicht.getByText('100 m', { exact: true })).toBeVisible()
-  await expect(uebersicht.getByText('Freistil', { exact: true })).toBeVisible()
+  await expect(uebersicht.getByText('Zwischenzeiten', { exact: true })).toBeVisible()
+  await expect(
+    uebersicht.getByText('1 Zwischenzeit, dann das Ziel', { exact: true }),
+  ).toBeVisible()
   await expect(uebersicht.getByText('6 Bahnen', { exact: true })).toBeVisible()
   // Jede Bahn ohne Zuordnung steht ausdrücklich als „frei“ da.
   await expect(uebersicht.getByText('frei', { exact: true })).toHaveCount(6)
@@ -46,7 +49,7 @@ test('führt über „Einstellungen ändern“ zurück in die Konfiguration, ohn
   await uebersicht.getByRole('button', { name: 'Einstellungen ändern' }).tap()
 
   // Das Konfigurations-Sheet steht an derselben Stelle; die Uhr bleibt aus.
-  await expect(page.getByRole('dialog').getByText('Beckenlänge')).toBeVisible()
+  await expect(page.getByRole('dialog').getByRole('heading', { name: 'Beckenlänge' })).toBeVisible()
   await expect(page.getByRole('button', { name: /Bahn 1, läuft$/ })).toHaveCount(0)
   await expect(page.getByRole('button', { name: /Bahn 1, bereit$/ })).toHaveCount(0)
 })

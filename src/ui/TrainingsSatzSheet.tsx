@@ -9,23 +9,26 @@
  */
 import { useState } from 'react'
 import {
+  alsMeterKonfiguration,
   anzeigeZuMeter,
   beckenlaengenFuer,
   einheitVon,
   formatBeckenlaenge,
-  standardBeckenlaenge,
   streckeAnzeige,
 } from '../domain/einheit'
-import { istVielfacheDerBeckenlaenge, validateKonfiguration } from '../domain/lauf'
+import {
+  automatischeZwischenzeiten,
+  eingestellteZwischenzeiten,
+  istVielfacheDerBeckenlaenge,
+  validateKonfiguration,
+} from '../domain/lauf'
 import { pruefeTrainingsSatz } from '../domain/training'
 import {
-  SCHWIMMARTEN,
   type Beckenlaenge,
-  type Einheit,
   type LaufKonfiguration,
   type TrainingsSatz,
 } from '../domain/types'
-import { Chip, Feld, TaktWahl } from './Felder'
+import { Chip, Feld, TaktWahl, ZwischenzeitenWahl } from './Felder'
 import { Sheet } from './Sheet'
 
 // Feste Chip-Werte wie im Konfigurationssheet; der jeweilige Ist-Wert wird
@@ -77,7 +80,9 @@ export function TrainingsSatzSheet({
   // Satz erst beim Speichern berühren.
   const [entwurf, setEntwurf] = useState<TrainingsSatz>(() => ({
     ...satz,
-    konfiguration: { ...satz.konfiguration },
+    // Alte Yard-Pläne werden beim Bearbeiten auf Meter gebracht; die Einheit
+    // wird nicht mehr angeboten.
+    konfiguration: { ...alsMeterKonfiguration(satz.konfiguration) },
   }))
 
   // Fehler blockieren den Speichern-Knopf; die Meldung steht über den Aktionen.
@@ -86,6 +91,8 @@ export function TrainingsSatzSheet({
   const versatzOptionen = Array.from(
     new Set<number>([...VERSATZE, entwurf.startversatzMs]),
   ).sort((a, b) => a - b)
+  const zwischenzeitenWert = eingestellteZwischenzeiten(entwurf.konfiguration)
+  const zwischenzeitenAutomatisch = automatischeZwischenzeiten(entwurf.konfiguration)
 
   const aendere = (teil: Partial<TrainingsSatz>) => {
     setEntwurf((aktuell) => ({ ...aktuell, ...teil }))
@@ -111,21 +118,6 @@ export function TrainingsSatzSheet({
     aendereKonfiguration(naechste)
   }
 
-  /** Wechselt Meter/Yards; die angezeigte Streckenzahl bleibt erhalten. */
-  const setzeEinheit = (einheit: Einheit) => {
-    const aktuell = entwurf.konfiguration
-    if (einheit === einheitVon(aktuell)) return
-    const anzeige = streckeAnzeige(aktuell.streckeM, einheitVon(aktuell))
-    const beckenlaengeM = standardBeckenlaenge(einheit)
-    const streckeM =
-      anzeige === null
-        ? null
-        : istVielfacheDerBeckenlaenge(anzeigeZuMeter(anzeige, einheit), beckenlaengeM)
-          ? anzeigeZuMeter(anzeige, einheit)
-          : beckenlaengeM * 2
-    aendereKonfiguration({ einheit, beckenlaengeM, streckeM })
-  }
-
   return (
     <Sheet
       open
@@ -143,20 +135,6 @@ export function TrainingsSatzSheet({
           aria-label="Bezeichnung des Satzes"
           className="h-11 w-full rounded-xl border border-line bg-surface2 px-3 text-sm"
         />
-      </Feld>
-
-      <Feld label="Einheit" hint="Gilt für Strecke, Becken und Pace dieses Satzes.">
-        <div className="flex gap-2">
-          {(['m', 'yd'] as const).map((wert) => (
-            <Chip
-              key={wert}
-              aktiv={einheitVon(entwurf.konfiguration) === wert}
-              onClick={() => setzeEinheit(wert)}
-            >
-              {wert === 'm' ? 'Meter' : 'Yards'}
-            </Chip>
-          ))}
-        </div>
       </Feld>
 
       <Feld label="Beckenlänge">
@@ -202,18 +180,15 @@ export function TrainingsSatzSheet({
         </div>
       </Feld>
 
-      <Feld label="Schwimmart">
-        <div className="flex flex-wrap gap-2">
-          {SCHWIMMARTEN.map(({ wert, label }) => (
-            <Chip
-              key={wert}
-              aktiv={entwurf.konfiguration.schwimmart === wert}
-              onClick={() => aendereKonfiguration({ schwimmart: wert })}
-            >
-              {label}
-            </Chip>
-          ))}
-        </div>
+      <Feld
+        label="Zwischenzeiten"
+        hint="So viele Zwischenzeiten nimmst du, der nächste Anschlag ist das Ziel. Tippe die Zahl direkt ein oder nutze „Automatisch“."
+      >
+        <ZwischenzeitenWahl
+          wert={zwischenzeitenWert}
+          automatisch={zwischenzeitenAutomatisch}
+          onWert={(wert) => aendereKonfiguration({ zwischenzeiten: wert })}
+        />
       </Feld>
 
       <Feld

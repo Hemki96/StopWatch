@@ -89,7 +89,7 @@ A  [        Satz starten / Weiter        ]     56 px
 - Kopf: Zurück, Datum, Name (18 px), Löschen.
 - Aktive-Karte: Anzahl, Namen als Chips oder Liste, `Bearbeiten` öffnet `AktiveSheet`.
 - Satzzeile: Nummer in Quadrat, Titel, Status-Badge (`offen`, `bereit`, `läuft`, `fertig`),
-  Metazeile mit Strecke/Schwimmart/Takt. Nur offene Sätze öffnen die Bearbeitung; bereite und
+  Metazeile mit Strecke/Zwischenzeiten/Takt. Nur offene Sätze öffnen die Bearbeitung; bereite und
   laufende führen in den Timer; fertige sind deaktiviert.
 - Fortschrittsbalken 4 px, `--accent`, mit Text `x von y Sätzen`.
 - Aktionsleiste zeigt den nächsten sinnvollen Schritt; ohne offenen Satz `Satz hinzufügen`.
@@ -103,57 +103,6 @@ A  [        Satz starten / Weiter        ]     56 px
 | Satz läuft | Status `läuft`, Aktionsleiste `Zum Timer` |
 | Alle fertig | Fortschritt voll, `Training abschließen` |
 | Gesperrter Tab | Schreibende Aktionen deaktiviert |
-
----
-
-## Wettkampf
-
-**Datei:** `src/ui/WettkampfScreen.tsx` · **Ebenen:** Wettkämpfe → Disziplinen → Heat
-
-### Wettkampfliste
-
-```
-K  Wettkampf                        18 px
-I  ┌──────────────────────────────────────────────┐
-   │ Stadtmeisterschaft 2026                  ›   │
-   │ Sa., 15.11. · 50-m-Becken · 4 Disziplinen    │
-   │ 3 von 12 Heats · Zeiten                     │
-   └──────────────────────────────────────────────┘
-A  [Meldeliste importieren] [Neuer Wettkampf]    je 48 px
-```
-
-- Leerzustand: „Noch kein Wettkampf“ plus beide Aktionen.
-- Die Primäraktion ist der Import, weil er den häufigsten Weg abbildet; „Neuer Wettkampf“ ist
-  sekundär.
-
-### Disziplinen
-
-```
-K  [‹ Wettkämpfe]  Stadtmeisterschaft 2026   [CSV] [Papierkorb]
-I  ┌ 100 m Freistil · 3 Heats · 2/3        › ┐
-   │ 50 m Brust · 1 Heat · 0/1              › │
-A  [Meldeliste hinzufügen] [Disziplin anlegen]
-```
-
-- Karte: Titel, Heats, Fortschritt. Leerzustand „Noch keine Disziplin“.
-- Kopf trägt Export und Löschen.
-
-### Heat
-
-```
-K  [‹ Disziplinen]  100 m Freistil · Heat 2/3
-   [Heat 1] [Heat 2] [Heat 3]             Heat-Leiste, 40 px
-I  ┌ 3  Anna     01:12,45   Platz 1   −0,80 ┐
-   │ 4  Ben      01:13,65   Platz 2   +0,40 │
-   │ 5  Clara    läuft      Bahn 3          │
-A  2 von 4 im Ziel · Laufzeit …
-   [Start alle] / [Alle beenden]          56 px
-```
-
-- `WettkampfLane`: Bahnnummer, Name, große Zeit, Platz und Rückstand statt Länge, Stift für
-  manuelle Zielzeit, Status `bereit`/`läuft`/`im Ziel`/`DNS`/`DNF`.
-- Keine Längenfortschrittslinie. Ein Tap ist die Zielzeit.
-- Start und Fortschritt wie im Timer; die Heat-Leiste bleibt sichtbar.
 
 ---
 
@@ -186,7 +135,7 @@ I  ┌────────────────────────�
 ```
 K  [‹ Verlauf]  Analyse              18 px
 I  SÄTZE MIT ZWISCHENZEITEN
-   [ 5×100 m · Freistil · 27.10.    › ]
+   [ 5×100 m · 27.10.    › ]
    ── Matrix ─────────────────────────────
    Person        R1      R2      R3
    Anna       01:12,45  +0,80   −0,40
@@ -215,7 +164,7 @@ A  keine; Zurück im Kopf
 │ ┌──────────────────────────────────────────┐ │
 │ │ Beckenlänge            25 m              │ │
 │ │ Strecke                4×100 m           │ │
-│ │ Schwimmart             Freistil          │ │
+│ │ Zwischenzeiten        Automatisch      │ │
 │ │ Bahnen                 4 Personen        │ │
 │ │ Startversatz           aus               │ │
 │ │ Takt                   2:00              │ │
@@ -242,11 +191,8 @@ A  keine; Zurück im Kopf
 | Sheet | Datei | Inhalt | Primäraktion |
 | --- | --- | --- | --- |
 | Aktive | `AktiveSheet.tsx` | Bahnen/Reihen, Namen je Platz, `−`/`+` | `Übernehmen` (56 px) |
-| Trainingssatz | `TrainingsSatzSheet.tsx` | Titel, Strecke, Becken, Schwimmart, Bahnen, Takt, Versatz | `Satz speichern` |
+| Trainingssatz | `TrainingsSatzSheet.tsx` | Titel, Strecke, Becken, Zwischenzeiten, Bahnen, Takt, Versatz | `Satz speichern` |
 | Schwimmer | `SchwimmerScreen.tsx` | Name, Jahrgang, Notiz, Löschen | `Speichern` |
-| Wettkampf | `WettkampfSheets.tsx` | Name, Datum, Becken, Ort | `Anlegen` |
-| Disziplin | `WettkampfSheets.tsx` | Strecke, Schwimmart, Heats, Bahnen | `Anlegen` |
-| Import | `WettkampfImport.tsx` | Einfügen/Datei, Vorschau, Fehler mit Zeilennummer | `Importieren` |
 
 - Alle Sheets nutzen `Sheet`, alle Bestätigungen `Bestaetigung`.
 - Formularfelder sind 48 px hoch, Labels 11 px Versalien, Fehler 12 px `--danger` mit
@@ -267,7 +213,6 @@ A  keine; Zurück im Kopf
 | Timer | unvollständig nach Reload | „Unterbrochene Bahn: lange drücken …“ | Long-Press |
 | Verlauf | leer | „Noch keine Messungen.“ | Verweis Timer |
 | Training | leer | „Noch kein Training vorbereitet“ | `Neues Training` |
-| Wettkampf | leer | „Noch kein Wettkampf“ | Import / Neu |
 | Schwimmer | leer | „Noch keine Schwimmer.“ | `Schwimmer anlegen` |
 | Analyse | keine Splits | „Noch keine Zwischenzeiten.“ | Verweis |
 | Detail | Lauf gelöscht | „Zurück“ | schließt |

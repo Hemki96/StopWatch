@@ -104,10 +104,12 @@ export function LaufErgebnis({
               </span>
               <div className="min-w-0 flex-1">
                 {/* Ohne Schwimmer bleibt die Bahn sichtbar, aber ohne
-                    Bestzeit-Vergleich: Ein PB braucht eine Person. */}
+                    Bestzeit-Vergleich: Ein PB braucht eine Person. Statt
+                    „Ohne Namen“ steht dort Lauf und Bahn. */}
                 <p className="truncate text-sm font-semibold">
-                  {schwimmerName(lauf.bahnen.find((bahn) => bahn.id === zeile.bahnId)?.schwimmerId ?? null) ??
-                    'Ohne Namen'}
+                  {schwimmerName(
+                    lauf.bahnen.find((bahn) => bahn.id === zeile.bahnId)?.schwimmerId ?? null,
+                  ) || `Lauf ${lauf.wiederholung ?? 1}, Bahn ${zeile.nummer}`}
                 </p>
                 <p className="text-[11px] text-muted">
                   {zeile.istPb ? (

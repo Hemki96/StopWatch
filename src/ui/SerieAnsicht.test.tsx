@@ -77,6 +77,14 @@ afterEach(() => {
 })
 
 describe('SerieAnsicht: Ziel getrennt von der Messfläche', () => {
+  it('zeigt ohne Schwimmer die Bahnnummer statt „Ohne Namen“', () => {
+    const ergebnis = ansicht()
+
+    expect(ergebnis.container.textContent).toContain('Bahn 1')
+    expect(ergebnis.container.textContent).not.toContain('Ohne Namen')
+    ergebnis.unmount()
+  })
+
   it('verschachtelt den Zielknopf nicht in die Messfläche', () => {
     const ergebnis = ansicht()
     const flaeche = ergebnis.container.querySelector<HTMLElement>('[role="button"]')!

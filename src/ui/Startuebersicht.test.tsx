@@ -94,7 +94,7 @@ describe('StartuebersichtLauf', () => {
     const text = ergebnis.container.textContent ?? ''
     expect(text).toContain('50 m')
     expect(text).toContain('3×100 m')
-    expect(text).toContain('Freistil')
+    expect(text).toContain('Zwischenzeiten')
     expect(text).toContain('4 Personen in 2 Reihen')
     expect(text).toContain('R1 0 s · R2 10 s')
     expect(text).toContain('02:00')

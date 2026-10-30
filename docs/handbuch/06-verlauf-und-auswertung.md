@@ -6,8 +6,7 @@ Splits, Korrekturen, Bestzeiten und CSV-Exporten.
 ## Was im Verlauf erscheint
 
 Die Läufe werden nach **Satz** gruppiert. Ein Satz ist die gemeinsame Klammer für Läufe mit gleicher
-Konfiguration am selben Tag; eine Serie hat einen eigenen Satz, ein Wettkampf hat einen Satz pro
-Disziplin.
+Konfiguration am selben Tag; eine Serie hat einen eigenen Satz.
 
 Eine Gruppe erscheint, sobald mindestens ein Lauf darin begonnen hat:
 
@@ -19,19 +18,18 @@ Eine Gruppe erscheint, sobald mindestens ein Lauf darin begonnen hat:
 Die Kopfzeile einer Gruppe zeigt:
 
 - das Datum,
+- den optionalen Tagesnamen (antippbar zum Vergeben oder Ändern),
 - den Satztitel (antippbar zum Umbenennen),
 - ggf. das Badge **Takt** mit der Taktzeit,
-- ggf. das Badge **Wettkampf**,
 - den Papierkorb zum Löschen des Satzes.
 
 Ein Lauf erscheint mit:
 
 - Anzahl Bahnen und Strecke,
 - Badge **unvollständig**, wenn nicht alle Bahnen im Ziel sind,
-- Runde (`R2`) bzw. Lauf (`Lauf 2`) bei Serien und Wettkämpfen,
+- Runde (`R2`) bei Serien,
 - Startuhrzeit,
-- schnellster Zeit,
-- Wettkampfname, falls zutreffend.
+- schnellster Zeit.
 
 ## Satz umbenennen
 
@@ -44,6 +42,18 @@ Ein Tipp auf den Satztitel macht ihn editierbar:
   Bezeichnung.
 
 Der Satz **„Ohne Satz“** steht für Läufe ohne zugehörigen Satz. Er lässt sich nicht umbenennen.
+
+## Tag benennen
+
+Neben dem Datum steht **Tag benennen**. Ein Tipp öffnet ein Feld für einen Namen wie „Kader A“ oder
+„Technikabend“:
+
+- **Enter** oder außerhalb tippen speichert, **Escape** bricht ab.
+- Der Name gilt für **alle Sätze desselben Datums**. Er erscheint an jeder Gruppe dieses Tages im
+  Verlauf und an der Tagesüberschrift in der Analyse.
+- Ein leerer Name entfernt die Tagesbezeichnung wieder; das Datum bleibt sichtbar.
+- Der Name gehört zum Tag, nicht zum Satz: Sätze desselben Tages können weiterhin eigene Titel
+  tragen.
 
 ## Satz löschen
 
@@ -59,8 +69,8 @@ angezeigt werden, etwa unberührte Wiederholungen einer Serie. Vorher ein Backup
 Ein Tipp auf einen Lauf öffnet das Detail. Es zeigt:
 
 - Datum und Startuhrzeit,
-- Anzahl Bahnen und Strecke **in der Einheit des Laufs**,
-- Beckenlänge in derselben Einheit, Schwimmart und ggf. Startversatz,
+- Anzahl Bahnen und Strecke in Metern (alte Yard-Läufe in ihrer damaligen Einheit),
+- Beckenlänge in derselben Einheit und ggf. Startversatz,
 - bei Serien und Wettkämpfen die Runde bzw. den Lauf und den Takt,
 - einen Hinweis, wenn der Lauf unvollständig ist.
 
@@ -87,7 +97,6 @@ Unter jeder Bahn stehen die Anschläge:
 - Bei fester Strecke mit der Distanz in der Einheit des Laufs, z. B. `50 m`, `100 m` oder
   `25 yd`, `50 yd`, `75 yd`, `100 yd`.
 - Bei offener Strecke ebenfalls mit der kumulierten Distanz.
-- Im Wettkampf mit **Ziel** statt einer Längenbezeichnung.
 - Das letzte Finish trägt das Badge **Ziel**.
 - Von Hand korrigierte Anschläge tragen das Badge **manuell**.
 
@@ -125,12 +134,11 @@ Eine **Bestzeit (PB)** gilt je Kombination aus:
 
 - Schwimmer:in,
 - Strecke,
-- Schwimmart,
 - Beckenlänge.
 
-Kurzbahn und Langbahn sind bewusst getrennt, weil sie nicht vergleichbar sind. Meter- und
-Yard-Becken sind ebenfalls getrennt: 100 yd sind 91,44 m und ergeben eine eigene Bestzeit. Offene
-Strecken erzeugen keine Bestzeit.
+Kurzbahn und Langbahn sind bewusst getrennt, weil sie nicht vergleichbar sind. Neue Läufe sind
+immer Meter. Alte Yard-Becken bleiben getrennt: 100 yd sind 91,44 m und ergeben eine eigene
+Bestzeit. Offene Strecken erzeugen keine Bestzeit.
 
 Eine Zielzeit zählt, sobald sie als Finish erfasst ist. Ein Lauf, in dem nicht alle Bahnen im Ziel
 sind, wird im Verlauf und im Detail als **unvollständig** markiert; die vorhandenen Zielzeiten
@@ -141,7 +149,6 @@ Messung belastbar ist.
 
 - **Lauf-Detail:** Delta zur Bestzeit bzw. Badge **Bestzeit** neben der Zielzeit.
 - **Schwimmer-Tab:** pro Schwimmer:in Gruppen mit Bestzeit und Zeitverlauf.
-- **Wettkampf:** Platzierung und Rückstand, unabhängig von der Bestzeit.
 
 ### Schwimmer-Tab
 
@@ -153,16 +160,16 @@ Regressionstest in `e2e/schwimmer.spec.ts` hält sie fest.
 
 Ein Tipp klappt die Bestzeiten auf:
 
-- Gruppen nach Strecke, Schwimmart, Beckenlänge **und Einheit**, z. B. `100 m · Freistil · 50 m`
-  oder `100 yd · Freistil · 25 yd`. Meter- und Yard-Becken erzeugen getrennte Bestzeiten.
+- Gruppen nach Strecke, Beckenlänge **und Einheit**, z. B. `100 m · 50 m` oder `100 yd · 25 yd`.
+  Meter- und Yard-Becken erzeugen getrennte Bestzeiten.
 - Die schnellste Zeit ist grün markiert.
 - Darunter stehen die Zeiten chronologisch mit Datum (Tag/Monat).
 - Manuell korrigierte Zeiten tragen den Hinweis **korrigiert**.
 - Ein Eintrag ohne Zielzeit zeigt „noch keine Zielzeit“; ohne Bahnzuordnung „noch keiner Bahn
   zugeordnet“.
 
-Jede Zeit ist antippbar und öffnet das **Lauf-Detail** des Laufs, in dem sie gemessen wurde — aus
-Training und Wettkampf gleichermaßen. Der Rückweg führt zum selben aufgeklappten Schwimmer; der
+Jede Zeit ist antippbar und öffnet das **Lauf-Detail** des Laufs, in dem sie gemessen wurde. Der
+Rückweg führt zum selben aufgeklappten Schwimmer; der
 Screenreader-Text nennt Schwimmer, Datum und Zeit.
 
 Ein Klick auf **Bearbeiten** öffnet Name, Jahrgang und Notiz. Beim Löschen einer Person bleiben die
@@ -172,8 +179,7 @@ Standardwerten und aus vorbereiteten Trainings entfernt.
 ## Analyse
 
 Der Verlauf hat zwei Ansichten: **Verlauf** und **Analyse**. Der Umschalter sitzt in der
-Kopfzeile; die Wahl wird nicht gespeichert. Die Analyse zeigt nur Sätze mit **Zwischenzeiten** —
-Wettkampf-Läufe haben keine Splits und erscheinen dort nicht.
+Kopfzeile; die Wahl wird nicht gespeichert. Die Analyse zeigt nur Sätze mit **Zwischenzeiten**.
 
 ### Satzliste
 
@@ -196,7 +202,7 @@ Ein Tipp auf einen Satz öffnet die Matrix:
 - Die Spalte **zuletzt** zeigt die Zielzeiten derselben Personen aus dem letzten vergleichbaren
   Satz. Darüber steht die Referenz mit Datum und Takt, z. B. `zuletzt: 22.10. · Takt 02:00`.
 
-Verglichen wird nur bei gleicher **Strecke, Schwimmart, Beckenlänge und Rundenzahl**. Der Takt
+Verglichen wird nur bei gleicher **Strecke, Beckenlänge und Rundenzahl**. Der Takt
 zählt nicht zum Ausschluss, wird aber genannt. Offene Strecken erscheinen in der Matrix, aber nie
 als Referenz für einen anderen Satz. Fehlt eine Person in der Referenz, bleibt ihre Zelle leer.
 
@@ -220,7 +226,6 @@ Es gibt drei Wege:
 | --- | --- |
 | **Mehr → Ergebnisse als CSV** | alle Läufe |
 | **Lauf-Detail → Download** | genau dieser Lauf |
-| **Wettkampf → Download** | Wettkampfergebnisse (eigenes Format, siehe [Wettkampf](05-wettkampf.md#ergebnisse-exportieren)) |
 
 ### Trainings-CSV: eine Zeile pro Anschlag
 
@@ -284,15 +289,14 @@ Alle drei Aktionen sind endgültig. Ein Backup ist die einzige Wiederherstellung
 
 - Bestzeiten brauchen eine feste Strecke und eine zugeordnete Schwimmerin.
 - Ein Lauf ohne Finish erzeugt keine Zielzeit.
-- Die App führt keine Saison-, Alters- oder Wettkampfwertung. Dafür ist der CSV-Export gedacht.
+- Die App führt keine Saison- oder Alterswertung. Dafür ist der CSV-Export gedacht.
 - Die Anzeige schneidet auf Hundertstel ab; die CSV enthält zusätzlich den Rohwert in
   Millisekunden.
 - Ein Lauf, der nach einem Reload unterbrochen wurde, ist keine saubere Messung. Bereits erfasste
-  Splits bleiben sichtbar, sollten aber nicht als Wettkampfzeit verwendet werden.
+  Splits bleiben sichtbar, sollten aber nicht als verlässliche Bestzeit gelten.
 
 ## Verwandte Seiten
 
 - [Timer und Bahnen](02-timer.md) — wie die Zeiten entstehen
 - [Serien](03-serien.md) — Runden und Takt
-- [Wettkampf](05-wettkampf.md) — Wettkampf-CSV und Platzierung
 - [Daten und Backup](07-daten-und-backup.md) — Sicherung und Wiederherstellung

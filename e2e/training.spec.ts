@@ -8,9 +8,9 @@
  * ergänzen und ändern, die Aktiven gelten für alle noch offenen Sätze.
  *
  * Vorbedingung: frischer Browser-Kontext je Test, also leere IndexedDB und
- * Standardkonfiguration (50-m-Becken, 100 m, Freistil, 6 Bahnen). Aus diesen
- * Werten entstehen die Vorgaben für einen neuen Trainingssatz („100 m ·
- * Freistil“) und die sechs Aktiven. `oeffneApp` überspringt das Onboarding.
+ * Standardkonfiguration (50-m-Becken, 100 m, 6 Bahnen). Aus diesen
+ * Werten entstehen die Vorgaben für einen neuen Trainingssatz („100 m“) und
+ * die sechs Aktiven. `oeffneApp` überspringt das Onboarding.
  */
 
 import { expect, test } from '@playwright/test'
@@ -31,7 +31,7 @@ test('bereitet Sätze und Aktive vor, startet den ersten Satz und passt den Plan
   // Einstellungen; beides steht als Knopf mit Kurzfassung in der Liste.
   await expect(page.getByRole('button', { name: /^Aktive/ })).toContainText('6 Bahnen')
   await expect(
-    page.getByRole('button', { name: 'Satz 1: 100 m · Freistil, offen' }),
+    page.getByRole('button', { name: 'Satz 1: 100 m, offen' }),
   ).toBeVisible()
 
   // Der erste Satz zeigt zuerst die Startübersicht: Aktive, Sätze und die
@@ -41,7 +41,7 @@ test('bereitet Sätze und Aktive vor, startet den ersten Satz und passt den Plan
   const uebersicht = page.getByRole('dialog')
   await expect(uebersicht.getByText('Training starten?')).toBeVisible()
   await expect(uebersicht.getByText('6 in 1 Reihe')).toBeVisible()
-  await expect(uebersicht.getByText('100 m · Freistil')).toBeVisible()
+  await expect(uebersicht.getByText('100 m')).toBeVisible()
   await expect(uebersicht.getByText('startet jetzt')).toBeVisible()
   await uebersicht.getByRole('button', { name: 'Jetzt starten' }).tap()
   await expect(page.getByRole('button', { name: /Bahn 1, läuft$/ })).toBeVisible()
@@ -50,7 +50,7 @@ test('bereitet Sätze und Aktive vor, startet den ersten Satz und passt den Plan
   // Satz ist fest; der Plan ändert nur noch die kommenden Sätze.
   await page.getByRole('button', { name: 'Training' }).tap()
   await expect(
-    page.getByRole('button', { name: 'Satz 1: 100 m · Freistil, läuft' }),
+    page.getByRole('button', { name: 'Satz 1: 100 m, läuft' }),
   ).toBeVisible()
   await expect(page.getByRole('button', { name: 'Zum laufenden Satz' })).toBeVisible()
 
@@ -62,18 +62,18 @@ test('bereitet Sätze und Aktive vor, startet den ersten Satz und passt den Plan
   await sheet.getByRole('button', { name: 'Mehr Wiederholungen' }).tap()
   await sheet.getByRole('button', { name: 'Satz hinzufügen' }).tap()
   await expect(
-    page.getByRole('button', { name: 'Satz 2: 2×100 m · Freistil, offen' }),
+    page.getByRole('button', { name: 'Satz 2: 2×100 m, offen' }),
   ).toBeVisible()
 
   // Bearbeiten des offenen Satzes: eine Wiederholung weniger, dann speichern.
   // Die Beschriftung fällt dadurch auf „100 m“ zurück (1× wird nicht
   // ausgeschrieben).
-  await page.getByRole('button', { name: 'Satz 2: 2×100 m · Freistil, offen' }).tap()
+  await page.getByRole('button', { name: 'Satz 2: 2×100 m, offen' }).tap()
   const bearbeiten = page.getByRole('dialog')
   await bearbeiten.getByRole('button', { name: 'Weniger Wiederholungen' }).tap()
   await bearbeiten.getByRole('button', { name: 'Satz speichern' }).tap()
   await expect(
-    page.getByRole('button', { name: 'Satz 2: 100 m · Freistil, offen' }),
+    page.getByRole('button', { name: 'Satz 2: 100 m, offen' }),
   ).toBeVisible()
 
   // Die Aktiven gelten für alle noch offenen Sätze: zweimal weniger Bahn

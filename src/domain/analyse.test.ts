@@ -205,12 +205,9 @@ describe('analyseRunden', () => {
 })
 
 describe('istAnalyseSatz', () => {
-  it('nimmt Trainingssätze mit Splits und lässt Wettkämpfe aus', () => {
+  it('nimmt Sätze mit Splits auf', () => {
     const training = satz('t1')
     expect(istAnalyseSatz(training, [runde('t1', 1, [[30_000, 60_000]])])).toBe(true)
-
-    const wettkampfSatz = { ...satz('w1'), wettkampfId: 'wk1' }
-    expect(istAnalyseSatz(wettkampfSatz, [runde('w1', 1, [[30_000, 60_000]])])).toBe(false)
 
     const ohneSplits = satz('leer')
     expect(istAnalyseSatz(ohneSplits, [])).toBe(false)
@@ -222,7 +219,6 @@ describe('istAnalyseSatzAusRunden', () => {
     const training = satz('t1')
     const runden = [runde('t1', 1, [[30_000, 60_000]])]
     expect(istAnalyseSatzAusRunden(training, runden)).toBe(true)
-    expect(istAnalyseSatzAusRunden({ ...training, wettkampfId: 'wk1' }, runden)).toBe(false)
     expect(istAnalyseSatzAusRunden(training, [])).toBe(false)
   })
 })

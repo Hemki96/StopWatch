@@ -10,8 +10,7 @@
  * der monotonen Uhr (`performance.now()`) und gelten nur in der laufenden
  * Seitensitzung; `startWallMs`, `erfasstAt` und `erstelltAm` sind
  * `Date.now()`-Werte und überleben einen Reload. Optionale Felder sind so
- * gewählt, dass ältere Backups weiter laden (fehlendes `modus` gilt als
- * Training).
+ * gewählt, dass ältere Backups weiter laden.
  */
 
 /**
@@ -41,7 +40,7 @@ export const SCHWIMMARTEN: readonly { wert: Schwimmart; label: string }[] = [
 ]
 
 /**
- * Anzeige-Einheit eines Laufs oder Wettkampfs.
+ * Anzeige-Einheit eines Laufs.
  *
  * `m` ist die Voreinstellung; fehlt das Feld in älteren Daten, gilt Meter.
  * Gespeichert wird immer kanonisch in Metern — die Einheit steuert nur
@@ -55,14 +54,6 @@ export type Einheit = 'm' | 'yd'
  * bewusst nicht frei.
  */
 export type Beckenlaenge = 25 | 50 | 22.86
-
-/**
- * Ein Lauf ist entweder Training (Anschläge pro Länge) oder Wettkampf (ein
- * Tap pro Bahn ist das Ziel). Der Modus entscheidet über die Bedienung, nicht
- * über die Datenhaltung: Beide bestehen aus Bahnen mit Anschlägen. Fehlt das
- * Feld in älteren Datensätzen, gilt `training`.
- */
-export type LaufModus = 'training' | 'wettkampf'
 
 /**
  * Die Konfiguration eines Laufs. `streckeM: null` bedeutet offene Strecke.
@@ -80,6 +71,12 @@ export interface LaufKonfiguration {
   schwimmart: Schwimmart
   /** Anzeige-Einheit; fehlt = `m`. */
   einheit?: Einheit
+  /**
+   * Gewünschte Zahl der Zwischenzeiten. Fehlt der Wert oder ist er `null`,
+   * ergibt er sich aus Strecke und Beckenlänge (letzte Länge = Ziel). `0`
+   * bedeutet, dass schon der erste Anschlag das Ziel ist.
+   */
+  zwischenzeiten?: number | null
 }
 
 /**
@@ -103,16 +100,6 @@ export interface Anschlag {
 }
 
 /**
- * Endgültiger Wettkampf-Status einer Bahn ohne Zielzeit.
- *
- * `dns` = did not start (nicht gestartet), `dnf` = did not finish (nicht
- * beendet). Markierte Bahnen zählen nicht in Platzierung und Rückstand und
- * werden im CSV als `DNS` bzw. `DNF` ausgewiesen. Im Training kommt der Status
- * nicht vor.
- */
-export type WettkampfStatus = 'dns' | 'dnf'
-
-/**
  * Eine Bahn ist ein einzelner Timer innerhalb eines Laufs und gehört genau
  * einem Schwimmer (oder niemandem, `schwimmerId: null`).
  */
@@ -131,16 +118,11 @@ export interface Bahn {
   /** Monotone Startzeit der Bahn (`performance.now`), null solange nicht gestartet. */
   startMs: number | null
   anschlaege: Anschlag[]
-  /**
-   * Endgültig ohne Zeit beendet (`dns`/`dnf`), nur im Wettkampf. Fehlt das Feld,
-   * ist die Bahn offen bzw. normal gewertet; ältere Backups laden unverändert.
-   */
-  status?: WettkampfStatus
 }
 
 /**
- * Eine Messung über eine oder mehrere Bahnen. Im Wettkampf ist ein Lauf ein
- * Heat; bei einer Serie eine Wiederholung.
+ * Eine Messung über eine oder mehrere Bahnen. Bei einer Serie ist ein Lauf eine
+ * Wiederholung.
  */
 export interface Lauf {
   id: string
@@ -156,27 +138,7 @@ export interface Lauf {
   startversatzMs: number
   /** 1-basierte Wiederholung innerhalb einer geplanten Serie, sonst null. */
   wiederholung: number | null
-  /** Training oder Wettkampf. Ältere Datensätze ohne Feld gelten als Training. */
-  modus?: LaufModus
   bahnen: Bahn[]
-}
-
-/**
- * Ein Wettkampftag. Disziplinen und Läufe hängen über den Satz daran; der
- * Wettkampf ist damit nur der Rahmen um mehrere Sätze.
- */
-export interface Wettkampf {
-  id: string
-  /** Anzeigename des Wettkampfs, z. B. „Herbstpokal“. */
-  name: string
-  /** Wettkampftag als ISO-Datum (YYYY-MM-DD). */
-  datum: string
-  /** Beckenlänge, kanonisch in Metern. */
-  beckenlaengeM: Beckenlaenge
-  /** Anzeige-Einheit des Wettkampfs; fehlt = `m`. */
-  einheit?: Einheit
-  /** Erstellungszeitpunkt als Wanduhr (`Date.now`), für Sortierung und Backup. */
-  erstelltAm: number
 }
 
 /**
@@ -211,10 +173,8 @@ export interface SatzPlan {
 }
 
 /**
- * Ein Satz ist der Container für Läufe: entweder ein freier Trainingssatz,
- * eine Serie (`plan` gesetzt) oder eine Wettkampfdisziplin (`wettkampfId`
- * gesetzt). Die drei Fälle schließen sich in der Praxis aus; die Domain prüft
- * das nicht hart, die Erzeuger halten es ein.
+ * Ein Satz ist der Container für Läufe: entweder ein freier Trainingssatz
+ * oder eine Serie (`plan` gesetzt).
  */
 export interface Satz {
   id: string
@@ -222,12 +182,15 @@ export interface Satz {
   datum: string
   /** Anzeigename, z. B. „100 m Freistil“ oder der Name einer Serie. */
   bezeichnung: string
+  /**
+   * Name des Trainingstags, z. B. „Kader A“. Er gilt für alle Sätze desselben
+   * Datums und wird dort gepflegt; fehlt er, hat der Tag keinen Namen.
+   */
+  tagesbezeichnung?: string
   /** Läufe mit identischer Konfiguration am selben Tag landen im selben Satz. */
   konfiguration: LaufKonfiguration
   /** Plan, wenn der Satz eine Serie mit festem Takt ist. */
   plan: SatzPlan | null
-  /** Gesetzt, wenn der Satz eine Disziplin eines Wettkampfs ist. */
-  wettkampfId?: string | null
   erstelltAm: number
 }
 
@@ -266,6 +229,11 @@ export interface Training {
   bahnen: number
   /** Anzahl der Reihen (Startgruppen) für alle noch nicht gestarteten Sätze. */
   reihen: number
+  /**
+   * Startet den nächsten noch offenen Satz automatisch, sobald der aktuelle
+   * vollständig im Ziel ist. Fehlt das Feld (ältere Trainings), gilt `false`.
+   */
+  autostart?: boolean
   /**
    * Schwimmer je Bahn, Reihe für Reihe: erst alle Bahnen der Reihe 1, dann
    * Reihe 2. Die Länge ist `bahnen × reihen`; `null` heißt ohne Zuordnung.

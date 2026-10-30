@@ -6,26 +6,23 @@ Zeitmessung für Schwimmtrainer am Beckenrand. Mobile-first PWA, offline, ohne K
 
 ## Was die App tut
 
-Ein **Lauf** besteht aus bis zu zehn **Bahnen** je **Reihe** und bis zu fünf Reihen. Alle Bahnen einer Reihe starten gemeinsam; mit einem **Startversatz** startet Reihe 2 z. B. 10 s nach Reihe 1, Reihe 3 nach 20 s. So messen drei Personen sofort und drei weitere nach 10 s. Danach tippt der Trainer jede Bahn bei jedem **Anschlag** an. Bei konfigurierter Strecke ist der letzte Anschlag das Ziel und erzeugt einen **Split** pro **Länge**.
+Ein **Lauf** besteht aus bis zu zehn **Bahnen** je **Reihe** und bis zu fünf Reihen. Alle Bahnen einer Reihe starten gemeinsam; mit einem **Startversatz** startet Reihe 2 z. B. 10 s nach Reihe 1, Reihe 3 nach 20 s. So messen drei Personen sofort und drei weitere nach 10 s. Danach tippt der Trainer jede Bahn bei jedem **Anschlag** an. Wie viele **Zwischenzeiten** vor dem Ziel liegen, ist einstellbar; ohne eigene Zahl ergibt es sich aus der Strecke (ein Split pro **Länge**).
 
 Mehrere Läufe können **gleichzeitig aktiv** sein. Oben in der Leiste wird zwischen ihnen gewechselt; die anderen laufen im Hintergrund weiter.
 
 Ein **Satz mit Plan** ist eine **Serie**: mehrere Wiederholungen im festen Takt, z. B. 5×100 m alle 2:00. Beim Start stehen alle Runden fest. Die Serien-Ansicht zeigt eine Zeile pro Schwimmer; ein Tap schließt die älteste offene Runde. Läuft die nächste Runde schon, während jemand noch unterwegs ist, bleibt die alte Runde sichtbar und wird als überfällig markiert.
 
-Ein **Training** ist die Vorbereitung einer Einheit: Vorab legst du die **Aktiven** je Bahn und mehrere **Trainingssätze** in fester Reihenfolge an. Im Training startest du Satz für Satz; vor jedem Start zeigt eine Übersicht Aktive und Reihenfolge. Noch nicht gestartete Sätze lassen sich währenddessen ändern, ergänzen, löschen oder verschieben. Erst beim Start entstehen aus einem Trainingssatz ein Satz und seine Läufe — gemessene Zeiten bleiben unangetastet.
-
-Der **Wettkampfmodus** ist ein eigener Tab: Ein **Wettkampf** bündelt **Disziplinen** (z. B. 100 m Freistil) mit mehreren **Läufen** (Heats). Eine **Meldeliste** lässt sich als CSV importieren; daraus entstehen Disziplinen, Läufe, Bahnen und Schwimmer. Im Wettkampf ist ein Tap nach dem Start sofort die **Zielzeit** — keine Längen-Splits, dafür ein Stift für eine von Hand nachgetragene oder korrigierte Zeit. Nach dem Lauf zeigt jede Bahn ihren Platz und den Rückstand; die Ergebnisliste lässt sich als CSV teilen.
+Ein **Training** ist die Vorbereitung einer Einheit: Vorab legst du die **Aktiven** je Bahn und mehrere **Trainingssätze** in fester Reihenfolge an. Im Training startest du Satz für Satz; vor jedem Start zeigt eine Übersicht Aktive und Reihenfolge. Optional startet der nächste Satz nach dem letzten Ziel automatisch, ohne Rückkehr in den Training-Tab. Noch nicht gestartete Sätze lassen sich währenddessen ändern, ergänzen, löschen oder verschieben. Erst beim Start entstehen aus einem Trainingssatz ein Satz und seine Läufe — gemessene Zeiten bleiben unangetastet.
 
 - Zeiten auf Hundertstel, abgeschnitten statt gerundet
 - Messung aus Zeitstempeln (`performance.now()`), unabhängig von Rendering
 - **Startübersicht** vor jedem Start: Becken, Strecke, Bahnen, Schwimmer, Startzeiten, Takt und die
   Reihenfolge der Trainingssätze prüfen, dann erst startet die Uhr
-- Splits, Bestzeiten je Schwimmer/Strecke/Schwimmart/Beckenlänge, Pace pro 100 m oder 100 yd
-- Meter und Yards: 25-Yard-Becken, Umrechnung an einer Stelle, getrennte Bestzeiten
+- Splits, frei einstellbare Zahl der Zwischenzeiten, Bestzeiten je Schwimmer/Strecke/Beckenlänge,
+  Pace pro 100 m oder 100 yd
+- Meter als einzige Eingabe; alte Yard-Läufe bleiben lesbar und getrennt
 - Startversatz zwischen Reihen, mehrere aktive Läufe, Serien mit festem Takt
-- Trainingsplan mit Aktiven, mehreren Sätzen in fester Reihenfolge und Anpassung während des Trainings
-- Wettkampfmodus mit Disziplinen, Heats, Platzierung und Zielzeit pro Tap
-- Meldelisten-Import als CSV (Vorlage in der App), Ergebnisse als CSV
+- Trainingsplan mit Aktiven, mehreren Sätzen in fester Reihenfolge, optionalem automatischem Satzwechsel und Anpassung während des Trainings
 - Verlauf gruppiert nach **Satz**, CSV-Export (inkl. Runde, Takt, Versatz), JSON-Backup
 - **Analyse** im Verlauf: Matrix Person × Runde, Längenzeiten je Person, Abweichung zur Vorrunde
   und Vergleich mit dem letzten gleichen Satz — ohne zusätzliche Speicherung
@@ -59,12 +56,10 @@ src/
     lauf.ts        Start, Anschlag, Finish, Undo, Streckenprüfung, Startversatz
     serie.ts       Runden einer Serie, Zeile pro Schwimmer, Planprüfung
     training.ts    Trainingsplan, Aktive, Satzfortschritt und Reihenfolge
-    wettkampf.ts   Wettkampf, Disziplin, Heat, Ergebnis und Platzierung
-    meldeliste.ts  Toleranter CSV-Import für Startlisten
     format.ts      Zeitformatierung, Countdown und Abschneiden auf Hundertstel
     analyse.ts     Bestzeiten, Deltas, Pace
   storage/       IndexedDB (idb), Schema, Repositories und Backup-Prüfung
-  app/           React-Kontext, Fachmodule (Lauf, Wettkampf, Training), Tab-Abstimmung, Hooks
+  app/           React-Kontext, Fachmodule (Lauf, Training), Tab-Abstimmung, Hooks
   ui/            Screens und Komponenten (Dialoge, Onboarding, Lauf-Detail)
   export/        CSV und Datei-Ausgabe
 ```
@@ -80,33 +75,14 @@ Der Zeitkern ist frei von Seiteneffekten: `startAll(lauf, now, wallNow)` bekommt
 - **Überlappende Runden sind erlaubt.** Bei festem Takt kann die nächste Runde starten, während ein Schwimmer noch in der vorigen ist. Die App versteckt das nicht, sondern markiert die offene Runde als überfällig.
 - **Korrekturen sind sichtbar.** Anschläge lassen sich im Lauf-Detail nachträglich korrigieren. Korrigierte Zeiten tragen `manuell` (auch im CSV), damit eine Bestzeit nicht unbemerkt von Hand entsteht.
 - **Gestartete Trainingssätze sind fest.** Ein Trainingssatz lässt sich nur ändern, solange er nicht gestartet wurde. Danach zählen die gemessenen Läufe; Änderungen an Aktiven und Reihenfolge gelten nur für die kommenden Sätze. Siehe `docs/adr/0007-training-als-plan.md`.
-- **Wettkampf ohne Splits.** Im Wettkampfmodus ist ein Tap das Ziel. Wer Zwischenzeiten braucht, misst im Timer-Tab. Die Meldeliste ist eine CSV; eine Anbindung an eine bestimmte Wettkampfsoftware gibt es bewusst nicht. Siehe `docs/adr/0006-wettkampfmodus.md`.
 - **Geteilte GitHub-Pages-Origin.** Alle Projektseiten desselben Accounts laufen unter `https://hemki96.github.io`; IndexedDB und `localStorage` sind originweit, nicht pfadgebunden. Die App kapselt ihre Daten deshalb im Namensraum `beckenrand.v2` und übernimmt bestehende Daten nicht destruktiv. Das verhindert Kollisionen, ist aber **keine** Sicherheitsgrenze gegen fremdes JavaScript auf derselben Origin — dafür wäre eine eigene Domain nötig. Siehe `docs/adr/0011-geteilte-origin-und-speicher-namensraum.md`.
-
-## Meldeliste importieren
-
-Im Tab „Wettkampf“ unter „Meldeliste importieren“ (oder „Meldeliste hinzufügen“) lässt sich eine CSV einfügen oder als Datei wählen. Die App zeigt vor dem Import eine Vorschau mit Disziplinen, Läufen und Starts. Eine Vorlage lässt sich direkt herunterladen.
-
-```
-disziplin;strecke;schwimmart;lauf;bahn;name;jahrgang
-100 m Freistil;100 m;freistil;1;3;Anna Muster;2010
-100 m Freistil;100 m;freistil;1;4;Ben Beispiel;2011
-100 m Freistil;100 m;freistil;2;3;Clara Muster;2010
-50 m Brust;50 m;brust;1;1;Dana Beispiel;2012
-```
-
-In einem Yard-Wettkampf stehen `100 yd Freistil;100 yd` in den ersten beiden Spalten. Ohne Einheit
-gilt die Einheit des Wettkampfs; ein Meter-Eintrag in einem Yard-Wettkampf wird mit Zeilennummer
-abgelehnt.
-
-Erkannt werden auch englische Spaltennamen (`lane`, `heat`, `distance`, `stroke`, `name`), getrennte Spalten `vorname`/`nachname`, Komma oder Semikolon und eine einfache Liste `bahn;name`. Einheiten werden als `m`, `yd`, `yard(s)` oder `y` erkannt. Fehlt die Bahn, vergibt die App die nächste freie. Fehlt die Disziplin, gelten die Vorgaben im Import-Dialog. Die Strecke muss ein Vielfaches der Beckenlänge sein.
 
 ## Dokumentation
 
 - [`docs/README.md`](docs/README.md) — Einstieg in die vollständige Dokumentation
-- [`docs/handbuch/`](docs/handbuch/README.md) — Bedienung für Trainer:innen: Timer, Serien, Training, Wettkampf, Verlauf, Backup und FAQ
+- [`docs/handbuch/`](docs/handbuch/README.md) — Bedienung für Trainer:innen: Timer, Serien, Training, Verlauf, Backup und FAQ
 - [`docs/entwicklung/`](docs/entwicklung/README.md) — Architektur, Datenmodell, Domänenreferenz, Oberfläche, Tests und Deployment
 - [`design/redesign-referenz/`](design/redesign-referenz/README.md) — Design-Referenz: Screens, Raster, Tokens, Zustände und Barrierefreiheit
 - [`ROADMAP.md`](ROADMAP.md) — Funktionsumfang je Major-Version und bewusste Nicht-Ziele
-- [`GLOSSARY.md`](GLOSSARY.md) — die Begriffe der Domäne (Lauf, Bahn, Reihe, Länge, Split, Anschlag, Satz, Serie, Training, Aktive, Startversatz, Takt, PB, Wettkampf, Disziplin, Meldeliste)
+- [`GLOSSARY.md`](GLOSSARY.md) — die Begriffe der Domäne (Lauf, Bahn, Reihe, Länge, Split, Anschlag, Satz, Serie, Training, Aktive, Startversatz, Takt, PB)
 - [`docs/adr/`](docs/adr/) — getroffene Entscheidungen und ihre Alternativen

@@ -5,13 +5,12 @@ Beckenrand bis zu Verlauf, Auswertung und Datensicherung.
 
 ## Die Bereiche der App
 
-Die untere Leiste hat sechs Bereiche:
+Die untere Leiste hat fünf Bereiche:
 
 | Bereich | Zweck |
 | --- | --- |
 | **Timer** | Einzelne Läufe messen, mehrere Läufe parallel verwalten |
 | **Training** | Eine Einheit vorbereiten und Satz für Satz abarbeiten |
-| **Wettkampf** | Wettkämpfe, Disziplinen, Heats und Meldelisten verwalten |
 | **Verlauf** | Gemessene Läufe ansehen, korrigieren, exportieren und löschen |
 | **Schwimmer** | Namen, Jahrgänge und Bestzeiten pflegen |
 | **Mehr** | Design, Standardwerte für den nächsten Lauf, Daten und Installation |
@@ -22,7 +21,7 @@ Der Tab **Mehr** heißt in der Leiste „Mehr“, die Seite selbst „Einstellun
 
 | Geste | Wirkung |
 | --- | --- |
-| **Tippen** | Startet eine Bahn oder erfasst den nächsten Anschlag. Im Wettkampf ist der erste Tipp nach dem Start das Ziel. |
+| **Tippen** | Startet eine Bahn oder erfasst den nächsten Anschlag. |
 | **Lange drücken** (ca. 0,45 s) | Nimmt die letzte Aktion dieser Bahn zurück: erst den letzten Anschlag, dann den Start. Auf einer noch unberührten Bahn passiert nichts. |
 | **Wischen** | Scrollt Listen und bewegt Bottom Sheets nach unten. Ein Wisch ersetzt keinen Tipp. |
 | **Sheet schließen** | Über „Schließen“, den abgedunkelten Hintergrund, die Zurück-Geste oder Escape. |
@@ -36,10 +35,9 @@ App nur teilweise und lässt sich durch Ziehen am Griff schließen.
 2. [Timer und Bahnen](02-timer.md) — einzelner Lauf, Startversatz, offene Strecke, mehrere Läufe
 3. [Serien](03-serien.md) — Wiederholungen im festen Takt, überfällige Runden, „Weiter“
 4. [Training](04-training.md) — Aktive, Trainingssätze, Reihenfolge, Fortschritt
-5. [Wettkampf](05-wettkampf.md) — Wettkampf, Disziplin, Heat, Meldeliste, Platzierung
-6. [Verlauf und Auswertung](06-verlauf-und-auswertung.md) — Splits, Korrekturen, Bestzeiten, CSV
-7. [Daten und Backup](07-daten-und-backup.md) — lokale Speicherung, Backup, Import, Löschen
-8. [Probleme und FAQ](08-probleme-und-faq.md) — Ladehemmung, zweiter Tab, Update, fehlende Zeiten
+5. [Verlauf und Auswertung](06-verlauf-und-auswertung.md) — Splits, Korrekturen, Bestzeiten, CSV
+6. [Daten und Backup](07-daten-und-backup.md) — lokale Speicherung, Backup, Import, Löschen
+7. [Probleme und FAQ](08-probleme-und-faq.md) — Ladehemmung, zweiter Tab, Update, fehlende Zeiten
 
 ## Grundsätze, die überall gelten
 
@@ -69,7 +67,5 @@ Die App benutzt eine eigene, im Repository festgelegte Sprache. Die wichtigsten 
 - **Satz** — eine Gruppe von Läufen mit gleicher Konfiguration, z. B. 8×100 m.
 - **Serie** — ein Satz mit festem Takt und mehreren Wiederholungen.
 - **Training** — der Plan einer Einheit aus Aktiven und Trainingssätzen.
-- **Wettkampf** — der Rahmen aus Disziplinen und Heats.
-- **Meldeliste** — die Startliste als CSV.
 
 Die vollständige und verbindliche Fassung steht in [`GLOSSARY.md`](../../GLOSSARY.md).

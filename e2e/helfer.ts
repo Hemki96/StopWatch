@@ -66,7 +66,12 @@ export async function oeffneApp(page: Page): Promise<void> {
  */
 export async function starteLauf(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Start', exact: true }).tap()
-  await page.getByRole('button', { name: 'Jetzt starten', exact: true }).tap()
+  // Erst wenn die Übersicht sichtbar ist, ist der Startknopf auch wirklich
+  // antippbar; ein Tap während der Einblendung träfe sonst den Hintergrund und
+  // würde das Sheet nur schließen.
+  const starten = page.getByRole('button', { name: 'Jetzt starten', exact: true })
+  await expect(starten).toBeVisible()
+  await starten.tap()
 }
 
 /**
@@ -106,14 +111,13 @@ export async function warteAufSchwimmerzuordnung(page: Page): Promise<void> {
 }
 
 /**
- * Wartet, bis die Zielzeiten eines Wettkampfs wirklich in IndexedDB liegen.
+ * Wartet, bis die Zielzeiten wirklich in IndexedDB liegen.
  *
  * @param page - Seite mit geöffneter App.
  * @param anzahl - Mindestzahl an Bahnen mit einem Anschlag `istFinish`.
  * @returns Promise, das auflöst, sobald genug Zielanschläge gespeichert sind.
  *
- * Gezählt wird über alle Läufe hinweg, weil die Heats eines Wettkampfs als
- * einzelne Läufe gespeichert sind. Gleiche Begründung wie oben: Die Anzeige
+ * Gezählt wird über alle Läufe hinweg. Gleiche Begründung wie oben: Die Anzeige
  * ist sofort, die Persistenz asynchron; erst nach diesem Warten ist ein
  * Reload verlustfrei.
  */
@@ -243,18 +247,18 @@ export async function warteAufSatzbezeichnung(page: Page, bezeichnung: string): 
   }, bezeichnung)
 }
 
-
 /**
- * Wartet, bis so viele Wettkampf-Bahnen wie erwartet einen Status tragen.
+ * Wartet, bis ein Tagesname wirklich in IndexedDB liegt.
  *
  * @param page - Seite mit geöffneter App.
- * @param anzahl - Mindestzahl an Bahnen mit `status: 'dns'` oder `'dnf'`.
- * @returns Promise, das auflöst, sobald der Status in IndexedDB liegt.
- *
- * Wie bei den Zielzeiten ist die Anzeige sofort, das Schreiben asynchron. Erst
- * nach diesem Warten ist ein Reload verlustfrei.
+ * @param bezeichnung - Erwarteter Wert im Feld `tagesbezeichnung` mindestens
+ *   eines Satzes. Der Name wird beim Speichern auf alle Sätze des Tages
+ *   geschrieben; ein Treffer genügt als Beleg für den abgeschlossenen Schreibvorgang.
  */
-export async function warteAufWettkampfStatus(page: Page, anzahl: number): Promise<void> {
+export async function warteAufTagesbezeichnung(
+  page: Page,
+  bezeichnung: string,
+): Promise<void> {
   await page.waitForFunction(async (erwartet) => {
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
       const anfrage = indexedDB.open('beckenrand.v2')
@@ -262,24 +266,17 @@ export async function warteAufWettkampfStatus(page: Page, anzahl: number): Promi
       anfrage.onerror = () => reject(anfrage.error)
     })
     try {
-      const laeufe = await new Promise<
-        Array<{ bahnen?: Array<{ status?: string }> }>
-      >((resolve, reject) => {
-        const tx = db.transaction('lauf', 'readonly')
-        const anfrage = tx.objectStore('lauf').getAll()
-        anfrage.onsuccess = () => resolve(anfrage.result)
-        anfrage.onerror = () => reject(anfrage.error)
-      })
-      const markiert = laeufe.reduce(
-        (summe, lauf) =>
-          summe +
-          (lauf.bahnen ?? []).filter((bahn) => bahn.status === 'dns' || bahn.status === 'dnf')
-            .length,
-        0,
+      const satze = await new Promise<Array<{ tagesbezeichnung?: string }>>(
+        (resolve, reject) => {
+          const tx = db.transaction('satz', 'readonly')
+          const anfrage = tx.objectStore('satz').getAll()
+          anfrage.onsuccess = () => resolve(anfrage.result)
+          anfrage.onerror = () => reject(anfrage.error)
+        },
       )
-      return markiert >= erwartet
+      return satze.some((satz) => satz.tagesbezeichnung === erwartet)
     } finally {
       db.close()
     }
-  }, anzahl)
+  }, bezeichnung)
 }

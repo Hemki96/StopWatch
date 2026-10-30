@@ -7,7 +7,7 @@ Ein **Training** bündelt die Aktiven je Bahn und mehrere **Trainingssätze** in
 - **Trainingssätze sofort als `Satz` und `Lauf` anlegen**: Die Vorbereitung wäre sofort messbar, aber jeder noch nicht gestartete Satz würde im Verlauf, in Bestzeiten und im Backup als unvollständiger Lauf auftauchen. Außerdem müsste jede Planänderung bestehende Läufe umschreiben.
 - **Nur die Einstellungen als Vorlage speichern**: Deckt „nächster Lauf“ ab, aber nicht mehrere Sätze in einer Einheit und keine Aktivenliste über Sätze hinweg.
 - **Ein Trainingssatz als eigenes Messobjekt**: Hätte eine zweite Zeitachse neben `Satz`/`Lauf` gebraucht. Der vorhandene Zeitkern (Serie mit festem Takt, Startversatz, Undo) bliebe ungenutzt.
-- **Automatisch zum nächsten Satz springen**: Ein Timer im Hintergrund würde im gedrosselten Browser unzuverlässig und nähme dem Trainer die Kontrolle über die Pause. Der nächste Satz wird deshalb bewusst gestartet.
+- **Automatisch zum nächsten Satz springen**: Ein Timer im Hintergrund würde im gedrosselten Browser unzuverlässig und nähme dem Trainer die Kontrolle über die Pause. Der nächste Satz wird deshalb bewusst gestartet. Ein optionaler, ausdrücklich eingeschalteter automatischer Wechsel ist in [ADR 0012](0012-automatischer-satzwechsel.md) beschrieben.
 
 ## Consequences
 

@@ -82,8 +82,9 @@ export function formatTakt(sekunden: number): string {
 
 /**
  * Stand der Zwischenzeiten als kurzer Text für die Bahnanzeige: `2/3
- * Zwischenzeiten` bei fester Strecke, `2 Zwischenzeiten` bei offener Strecke.
- * `gesamt` zählt nur die Zwischenzeiten, nicht das Ziel; `null` heißt offen.
+ * Zwischenzeiten` bei bekannter Gesamtzahl, `2 Zwischenzeiten` bei offener
+ * Strecke ohne Vorgabe. `gesamt` zählt nur die Zwischenzeiten, nicht das Ziel;
+ * `null` heißt offen.
  */
 export function formatZwischenzeiten(erfasst: number, gesamt: number | null): string {
   if (gesamt === null) {
@@ -156,8 +157,8 @@ export function formatStrecke(streckeM: number | null, einheit: Einheit = 'm'): 
  * Datum als lokales ISO-Datum (YYYY-MM-DD), nicht UTC.
  *
  * `toISOString()` würde am Abend je nach Zeitzone schon den nächsten Tag
- * liefern; Wettkampf- und Trainingsdaten sollen aber den Tag am Beckenrand
- * tragen. Die Bestandteile kommen deshalb aus den lokalen Gettern.
+ * liefern; Trainingsdaten sollen aber den Tag am Beckenrand tragen. Die
+ * Bestandteile kommen deshalb aus den lokalen Gettern.
  */
 export function lokalesDatum(ms: number): string {
   const d = new Date(ms)

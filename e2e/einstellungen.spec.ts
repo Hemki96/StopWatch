@@ -3,7 +3,7 @@
  * und die Vorbereitung des nächsten Laufs.
  *
  * Nutzerreise: Beim ersten Start führt das Onboarding durch Beckenlänge,
- * Strecke, Schwimmart und Bahnen und legt dabei die Schwimmer an. Später
+ * Strecke und Bahnen und legt dabei die Schwimmer an. Später
  * wechselt der Trainer das Design oder die Vorbereitung und erwartet beides
  * nach einem Neustart unverändert. Zuletzt darf eine laufende Messung ihre
  * Strecke nicht mehr ändern.
@@ -35,7 +35,6 @@ test('führt beim ersten Start durch das Onboarding und merkt sich die Auswahl',
   // im DOM zu raten.
   await page.locator('section', { hasText: 'Beckenlänge' }).getByRole('button', { name: '25 m' }).tap()
   await page.locator('section', { hasText: 'Strecke' }).getByRole('button', { name: '100 m' }).tap()
-  await page.locator('section', { hasText: 'Schwimmart' }).getByRole('button', { name: 'Brust' }).tap()
   await page.getByRole('button', { name: 'Weiter' }).tap()
 
   await expect(page.getByText('Schritt 3 von 3')).toBeVisible()
@@ -53,7 +52,7 @@ test('führt beim ersten Start durch das Onboarding und merkt sich die Auswahl',
 
   // Die Kopfzeile fasst die gewählte Konfiguration zusammen — der sichtbare
   // Beweis, dass Onboarding-Werte und Bahnzahl übernommen wurden.
-  await expect(page.getByText('25 m · 100 m · Brust · 3 Bahnen')).toBeVisible()
+  await expect(page.getByText('25 m · 100 m · 3 Bahnen')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeVisible()
 
   // Namen wurden als Schwimmer angelegt.
@@ -65,7 +64,7 @@ test('führt beim ersten Start durch das Onboarding und merkt sich die Auswahl',
   // überlebt den Reload, die Konfiguration wird aus `localStorage` gelesen.
   await page.reload()
   await expect(page.getByText('Schritt 1 von 3')).toHaveCount(0)
-  await expect(page.getByText('25 m · 100 m · Brust · 3 Bahnen')).toBeVisible()
+  await expect(page.getByText('25 m · 100 m · 3 Bahnen')).toBeVisible()
 })
 
 // Nutzerreise: Design umschalten und die Wahl beim nächsten Öffnen wiederfinden.
@@ -105,7 +104,7 @@ test('ändert die Vorbereitung des nächsten Laufs dauerhaft', async ({ page }) 
   // Die Kopfzeile zeigt die aktuelle Vorbereitung und öffnet beim Tippen das
   // Sheet; der ganze Name dient als eindeutiger Locator.
   await page
-    .getByRole('button', { name: /50 m · 100 m · Freistil · 6 Bahnen/ })
+    .getByRole('button', { name: /50 m · 100 m · 6 Bahnen/ })
     .tap()
 
   const sheet = page.getByRole('dialog')
@@ -114,12 +113,38 @@ test('ändert die Vorbereitung des nächsten Laufs dauerhaft', async ({ page }) 
   await sheet.getByRole('button', { name: 'Schließen' }).tap()
 
   // Die Zusammenfassung in der Kopfzeile spiegelt die Änderung sofort.
-  await expect(page.getByText('50 m · 200 m · Freistil · 5 Bahnen')).toBeVisible()
+  await expect(page.getByText('50 m · 200 m · 5 Bahnen')).toBeVisible()
 
   // Der Reload prüft die Persistenz: Die Vorbereitung liegt in
   // `localStorage` (`beckenrand.v2.einstellungen`), nicht nur im React-State.
   await page.reload()
-  await expect(page.getByText('50 m · 200 m · Freistil · 5 Bahnen')).toBeVisible()
+  await expect(page.getByText('50 m · 200 m · 5 Bahnen')).toBeVisible()
+})
+
+// Nutzerreise: Die Zahl der Zwischenzeiten ist frei einstellbar. Sie bleibt
+// nach dem Reload erhalten und ersetzt die Ableitung aus der Beckenlänge.
+test('stellt die Zahl der Zwischenzeiten ein und merkt sie sich', async ({ page }) => {
+  await oeffneApp(page)
+  await page.getByRole('button', { name: /50 m · 100 m · 6 Bahnen/ }).tap()
+
+  const sheet = page.getByRole('dialog')
+  // Automatisch sind es bei 100 m im 50-m-Becken eine Zwischenzeit.
+  const anzahl = sheet.getByLabel('Anzahl Zwischenzeiten')
+  await expect(anzahl).toHaveValue('1')
+  // Die Zahl lässt sich direkt eintippen, ohne Plus/Minus zu treffen.
+  await anzahl.fill('3')
+  await expect(sheet.locator('[data-zwischenzeiten="3"]')).toBeVisible()
+  await sheet.getByRole('button', { name: 'Schließen' }).tap()
+
+  // Nach dem Neustart steht die eigene Zahl weiterhin im Sheet.
+  await page.reload()
+  await page.getByRole('button', { name: /50 m · 100 m · 6 Bahnen/ }).tap()
+  const erneut = page.getByRole('dialog')
+  await expect(erneut.getByLabel('Anzahl Zwischenzeiten')).toHaveValue('3')
+  await expect(erneut.getByRole('button', { name: 'Automatisch' })).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  )
 })
 
 // Nutzerreise: Zwei Reihen à drei Personen. Die Einstellung zeigt die
@@ -128,7 +153,7 @@ test('ändert die Vorbereitung des nächsten Laufs dauerhaft', async ({ page }) 
 test('teilt den nächsten Lauf in Reihen und startet sie versetzt', async ({ page }) => {
   await oeffneApp(page)
   await page
-    .getByRole('button', { name: /50 m · 100 m · Freistil · 6 Bahnen/ })
+    .getByRole('button', { name: /50 m · 100 m · 6 Bahnen/ })
     .tap()
 
   const sheet = page.getByRole('dialog')
@@ -158,7 +183,7 @@ test('teilt den nächsten Lauf in Reihen und startet sie versetzt', async ({ pag
 test('stellt einen eigenen Takt frei ein', async ({ page }) => {
   await oeffneApp(page)
   await page
-    .getByRole('button', { name: /50 m · 100 m · Freistil · 6 Bahnen/ })
+    .getByRole('button', { name: /50 m · 100 m · 6 Bahnen/ })
     .tap()
   const sheet = page.getByRole('dialog')
   // Erst ab zwei Wiederholungen ist der Takt sichtbar.
@@ -173,7 +198,7 @@ test('stellt einen eigenen Takt frei ein', async ({ page }) => {
   // Nach dem Reload ist die Vorbereitung eine Serie: Die Kopfzeile nennt
   // Wiederholungen und Takt.
   await page
-    .getByRole('button', { name: /50 m · 2×100 m · Freistil · 6 Bahnen · Takt 01:40/ })
+    .getByRole('button', { name: /50 m · 2×100 m · 6 Bahnen · Takt 01:40/ })
     .tap()
   const erneut = page.getByRole('dialog')
   await expect(erneut.getByLabel('Takt Minuten')).toHaveValue('1')
@@ -190,7 +215,7 @@ test('sperrt die Strecke nach dem ersten Anschlag auch in der Oberfläche', asyn
   await page.getByRole('button', { name: /Bahn 1, läuft$/ }).tap()
 
   await page
-    .getByRole('button', { name: /50 m · 100 m · Freistil · 6 Bahnen/ })
+    .getByRole('button', { name: /50 m · 100 m · 6 Bahnen/ })
     .tap()
   const sheet = page.getByRole('dialog')
   // Die Sperre wirkt nicht nur im Domänenmodell, sondern ist sichtbar:

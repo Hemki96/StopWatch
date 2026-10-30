@@ -55,7 +55,7 @@ Latenz vortäuschen, die es nicht gibt.
 
 ```
 ┌──────────────┐  44 px hoch, 12 px Radius
-│  Freistil    │  14 px, 600
+│  Automatisch │  14 px, 600
 └──────────────┘
 ```
 
@@ -199,18 +199,6 @@ Für `Verlauf`/`Analyse` und `System`/`Hell`/`Dunkel`.
 - Bei > 12 Runden wird aus den Segmenten ein durchgehender Balken.
 - Long-Press und reduzierte Bewegung wie `LaneTile`.
 
-## Wettkampf-Kachel (`WettkampfLane`)
-
-**Datei:** `src/ui/WettkampfLane.tsx`
-
-- Wie `LaneTile`, aber:
-  - **keine** Längenfortschrittslinie,
-  - Status `bereit`, `läuft`, `im Ziel`, `DNS`, `DNF`,
-  - Platz und Rückstand statt Länge/Split,
-  - Stift (44 px Ziel) für eine manuelle Zielzeit,
-  - Zeit „DNS“/„DNF“ in `--warn-text`, nicht als Zahl.
-- Ein Tap ist die Zielzeit. Kein Undo per Long-Press; Korrektur über den Stift.
-
 ## Ergebniszeile
 
 **Datei:** `src/ui/LaufErgebnis.tsx`
@@ -340,7 +328,6 @@ Für `Verlauf`/`Analyse` und `System`/`Hell`/`Dunkel`.
 | `Bestaetigung` | `Bestaetigung.tsx` | offen, gefahr/nicht gefahr |
 | `LaneTile` | `LaneTile.tsx` | bereit, geplant, läuft, Ziel, unterbrochen, gedrückt |
 | `SerieAnsicht` | `SerieAnsicht.tsx` | bereit, wartet, läuft, überfällig, Ziel |
-| `WettkampfLane` | `WettkampfLane.tsx` | bereit, läuft, Ziel, DNS, DNF |
 | `LaufErgebnis` | `LaufErgebnis.tsx` | PB, Delta, kein PB, offen |
 | `Feld`/`Chip`/`TaktWahl` | `Felder.tsx` | default, selected, disabled, error |
 | `Startuebersicht` | `Startuebersicht.tsx` | Lauf, Training, Warnung |

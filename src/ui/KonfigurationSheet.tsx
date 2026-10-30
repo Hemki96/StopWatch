@@ -2,7 +2,7 @@
  * Konfiguration von Lauf und nächstem Lauf.
  *
  * Dasselbe Sheet dient zwei Zwecken: Im Modus „lauf“ ändert es den sichtbaren
- * Lauf (Beckenlänge, Strecke, Schwimmart und die Schwimmer je Bahn und Reihe), im Modus
+ * Lauf (Beckenlänge, Strecke, Zwischenzeiten und die Schwimmer je Bahn und Reihe), im Modus
  * „einstellungen“ die Vorgaben für den nächsten Lauf samt Bahnen je Reihe, Reihen, Serie und
  * Schwimmerzuordnung. Die Werte werden direkt in `app/AppProvider` gespeichert;
  * Sperren und Prüfungen kommen aus domain/lauf und domain/serie.
@@ -13,11 +13,12 @@ import {
   beckenlaengenFuer,
   einheitVon,
   formatBeckenlaenge,
-  standardBeckenlaenge,
   streckeAnzeige,
 } from '../domain/einheit'
 import {
   bahnenNachReihen,
+  automatischeZwischenzeiten,
+  eingestellteZwischenzeiten,
   isStreckeLocked,
   istVielfacheDerBeckenlaenge,
   reihenVon,
@@ -25,26 +26,14 @@ import {
 } from '../domain/lauf'
 import { istSerie, warnungSeriePlan } from '../domain/serie'
 import { MAX_BAHNEN, MAX_REIHEN, bahnenGesamt, ordneAktiveUm } from '../domain/training'
-import {
-  SCHWIMMARTEN,
-  type Beckenlaenge,
-  type Einheit,
-  type LaufKonfiguration,
-  type Schwimmart,
-} from '../domain/types'
-import { Chip, Feld, TaktWahl } from './Felder'
+import { type Beckenlaenge, type LaufKonfiguration } from '../domain/types'
+import { Chip, Feld, TaktWahl, ZwischenzeitenWahl } from './Felder'
 import { Sheet } from './Sheet'
 
 // Feste Auswahlwerte der Chips. Ein bereits gesetzter, hier nicht enthaltener
 // Wert (z. B. aus einem Backup) wird später ergänzt, damit er sichtbar bleibt.
 const STRECKEN = [50, 100, 200, 400, 800, 1500] as const
 
-/**
- * Einheiten-Wechsel: Die angezeigte Zahl bleibt erhalten (100 m → 100 yd), die
- * kanonische Strecke wird neu berechnet. Passt sie nicht zur neuen
- * Beckenlänge, gelten zwei Beckenlängen. So wechselt der Trainer die Einheit,
- * ohne eine ungültige Kombination zu erzeugen.
- */
 const VERSATZE = [0, 5_000, 10_000, 15_000, 20_000, 30_000] as const
 
 interface KonfigurationSheetProps {
@@ -55,9 +44,9 @@ interface KonfigurationSheetProps {
 }
 
 /**
- * Sheet für Strecke, Beckenlänge, Schwimmart, Startversatz und Serie.
+ * Sheet für Strecke, Beckenlänge, Zwischenzeiten, Startversatz und Serie.
  *
- * Im Laufmodus sind Strecke, Beckenlänge und Schwimmart nach dem ersten
+ * Im Laufmodus sind Strecke, Beckenlänge und Zwischenzeiten nach dem ersten
  * Anschlag gesperrt und bei einer Serie immer, weil alle Runden vorausgeplant
  * sind. Startversatz und Takt sind dort nur informativ; im Einstellungsmodus
  * legen sie den nächsten Lauf fest. Die Schwimmerauswahl schreibt entweder in
@@ -73,6 +62,10 @@ export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetP
   const plan = serie ? (satz?.plan ?? null) : null
   const konfiguration: LaufKonfiguration =
     modus === 'lauf' && lauf ? lauf.konfiguration : app.einstellungen.konfiguration
+  // Eigene Zahl und abgeleiteter Wert getrennt halten: Die Anzeige zeigt bei
+  // „Automatisch“ den Wert, der sich aus Strecke und Beckenlänge ergibt.
+  const zwischenzeitenWert = eingestellteZwischenzeiten(konfiguration)
+  const zwischenzeitenAutomatisch = automatischeZwischenzeiten(konfiguration)
   // Eine Serie ist nach dem Anlegen fest; ein einzelner Lauf erst nach dem
   // ersten Anschlag. Der Startversatz hat eine eigene Sperre im Laufmodus.
   const gesperrt = modus === 'lauf' && lauf ? isStreckeLocked(lauf) || serie : false
@@ -155,40 +148,8 @@ export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetP
     aendere(naechste)
   }
 
-  /** Wechselt Meter/Yards und übernimmt die angezeigte Streckenzahl. */
-  const setzeEinheit = (einheit: Einheit) => {
-    if (einheit === einheitVon(konfiguration)) return
-    const anzeige = streckeAnzeige(konfiguration.streckeM, einheitVon(konfiguration))
-    const beckenlaengeM = standardBeckenlaenge(einheit)
-    const streckeM =
-      anzeige === null
-        ? null
-        : istVielfacheDerBeckenlaenge(anzeigeZuMeter(anzeige, einheit), beckenlaengeM)
-          ? anzeigeZuMeter(anzeige, einheit)
-          : beckenlaengeM * 2
-    aendere({ einheit, beckenlaengeM, streckeM })
-  }
-
   return (
     <Sheet open={open} onClose={onClose} titel={modus === 'lauf' ? 'Lauf' : 'Nächster Lauf'}>
-      <Feld
-        label="Einheit"
-        hint="Strecken und Pace erscheinen in dieser Einheit. Gespeichert wird intern in Metern."
-      >
-        <div className="flex gap-2">
-          {(['m', 'yd'] as const).map((wert) => (
-            <Chip
-              key={wert}
-              aktiv={einheitVon(konfiguration) === wert}
-              disabled={gesperrt}
-              onClick={() => setzeEinheit(wert)}
-            >
-              {wert === 'm' ? 'Meter' : 'Yards'}
-            </Chip>
-          ))}
-        </div>
-      </Feld>
-
       <Feld label="Beckenlänge">
         <div className="flex flex-wrap gap-2">
           {beckenlaengenFuer(einheitVon(konfiguration)).map((wert) => (
@@ -235,19 +196,22 @@ export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetP
         </div>
       </Feld>
 
-      <Feld label="Schwimmart">
-        <div className="flex flex-wrap gap-2">
-          {SCHWIMMARTEN.map(({ wert, label }) => (
-            <Chip
-              key={wert}
-              aktiv={konfiguration.schwimmart === wert}
-              disabled={gesperrt}
-              onClick={() => aendere({ schwimmart: wert as Schwimmart })}
-            >
-              {label}
-            </Chip>
-          ))}
-        </div>
+      <Feld
+        label="Zwischenzeiten"
+        hint={
+          serie
+            ? 'Bei einer Serie nach dem Anlegen gesperrt.'
+            : gesperrt
+              ? 'Gesperrt, sobald der erste Anschlag erfasst wurde.'
+              : 'So viele Zwischenzeiten nimmst du, der nächste Anschlag ist das Ziel. Tippe die Zahl direkt ein oder nutze „Automatisch“.'
+        }
+      >
+        <ZwischenzeitenWahl
+          wert={zwischenzeitenWert}
+          automatisch={zwischenzeitenAutomatisch}
+          disabled={gesperrt}
+          onWert={(wert) => aendere({ zwischenzeiten: wert })}
+        />
       </Feld>
 
       {modus === 'einstellungen' ? (

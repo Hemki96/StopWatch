@@ -1,5 +1,5 @@
 /**
- * Rahmen der App: Ladephase, Onboarding, Hinweisbanner und die sechs Bereiche.
+ * Rahmen der App: Ladephase, Onboarding, Hinweisbanner und die fünf Bereiche.
  *
  * `App` entscheidet anhand von `geladen` und dem Onboarding-Merkmal, was
  * gerendert wird, und hält den aktiven Tab als lokalen State. Alle Daten kommen
@@ -26,21 +26,19 @@ import {
   PeopleIcon,
   TimerIcon,
   TrainingIcon,
-  TrophyIcon,
   XIcon,
 } from './ui/icons'
 
-/** Die sechs Bereiche. Die IDs sind zugleich die Schlüssel in `TABS`. */
-type Tab = 'timer' | 'training' | 'wettkampf' | 'verlauf' | 'schwimmer' | 'einstellungen'
+/** Die fünf Bereiche. Die IDs sind zugleich die Schlüssel in `TABS`. */
+type Tab = 'timer' | 'training' | 'verlauf' | 'schwimmer' | 'einstellungen'
 
 /**
  * Navigationsreihenfolge der unteren Leiste. Die Reihenfolge ist bewusst fest
- * (Messung zuerst) und muss zum `grid-cols-6` der Navigation passen.
+ * (Messung zuerst) und muss zum `grid-cols-5` der Navigation passen.
  */
 const TABS = [
   { id: 'timer' as const, label: 'Timer', Icon: TimerIcon },
   { id: 'training' as const, label: 'Training', Icon: TrainingIcon },
-  { id: 'wettkampf' as const, label: 'Wettkampf', Icon: TrophyIcon },
   { id: 'verlauf' as const, label: 'Verlauf', Icon: HistoryIcon },
   { id: 'schwimmer' as const, label: 'Schwimmer', Icon: PeopleIcon },
   { id: 'einstellungen' as const, label: 'Mehr', Icon: GearIcon },
@@ -57,9 +55,6 @@ const TABS = [
  */
 const TrainingScreen = lazy(() =>
   import('./ui/TrainingScreen').then((modul) => ({ default: modul.TrainingScreen })),
-)
-const WettkampfScreen = lazy(() =>
-  import('./ui/WettkampfScreen').then((modul) => ({ default: modul.WettkampfScreen })),
 )
 const HistoryScreen = lazy(() =>
   import('./ui/HistoryScreen').then((modul) => ({ default: modul.HistoryScreen })),
@@ -265,7 +260,6 @@ export default function App() {
             <Suspense fallback={<BereichLadezustand />}>
               {tab === 'timer' && <TimerScreen />}
               {tab === 'training' && <TrainingScreen onZumTimer={() => setTab('timer')} />}
-              {tab === 'wettkampf' && <WettkampfScreen />}
               {tab === 'verlauf' && <HistoryScreen />}
               {tab === 'schwimmer' && <SchwimmerScreen />}
               {tab === 'einstellungen' && <SettingsScreen />}
@@ -280,7 +274,7 @@ export default function App() {
           aria-label="Bereiche"
           className="order-last border-t border-line bg-surface rail:order-first rail:w-24 rail:shrink-0 rail:border-r rail:border-t-0"
         >
-          <div className="mx-auto grid w-full max-w-lg grid-cols-6 rail:max-w-none rail:grid-cols-1 rail:gap-1 rail:px-2 rail:py-4">
+          <div className="mx-auto grid w-full max-w-lg grid-cols-5 rail:max-w-none rail:grid-cols-1 rail:gap-1 rail:px-2 rail:py-4">
             {TABS.map(({ id, label, Icon }) => {
               const aktiv = tab === id
               return (

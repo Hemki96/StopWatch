@@ -37,6 +37,7 @@ import {
   validateKonfiguration,
 } from '../domain/lauf'
 import { letzterAnschlag, runden as rundenVon, istSerie } from '../domain/serie'
+import { setzeTagesnamen } from '../domain/tag'
 import { MAX_BAHNEN, bahnenGesamt } from '../domain/training'
 import { newId } from '../domain/id'
 import { deleteLauf, deleteSatzUndLaeufe, saveLauf, saveMehrere, saveSatz } from '../storage/repository'
@@ -107,6 +108,11 @@ export interface LaufAktionen {
   loescheLauf: (id: string) => void
   loescheSatz: (id: string) => void
   benenneSatz: (id: string, bezeichnung: string) => void
+  /**
+   * Benennt einen Trainingstag im Verlauf. Der Name gilt für alle Sätze des
+   * Datums; ein leerer Text entfernt ihn.
+   */
+  benenneTag: (datum: string, bezeichnung: string) => void
   aktiviereSatz: (satz: Satz) => string | null
   /** Schreibt einen beliebigen Lauf; die Tab-Rolle prüfen die Aufrufer. */
   aendereLauf: (lauf: Lauf, naechster: Lauf) => void
@@ -207,7 +213,7 @@ export function createLaufAktionen(deps: LaufAktionenDeps): LaufAktionen {
 
   /**
    * Schreibpfad für einen beliebigen Lauf, nicht nur den sichtbaren. Wird für
-   * Serienrunden, Wettkampf-Heats und Korrekturen im Lauf-Detail gebraucht.
+   * Serienrunden und Korrekturen im Lauf-Detail gebraucht.
    * Das Tor wird hier erneut geprüft, damit kein Aufrufer die Sicherheitsprüfung
    * vergessen kann.
    */
@@ -512,7 +518,6 @@ export function createLaufAktionen(deps: LaufAktionenDeps): LaufAktionen {
           (satz) =>
             satz.datum === datum &&
             satz.plan === null &&
-            !satz.wettkampfId &&
             gleicheKonfiguration(satz.konfiguration, konfiguration),
         )
       if (vorhandenerSatz) {
@@ -688,6 +693,21 @@ export function createLaufAktionen(deps: LaufAktionenDeps): LaufAktionen {
   }
 
   /**
+   * Benennt einen Tag im Verlauf. Der Name liegt an jedem Satz des Datums,
+   * damit Verlauf und Analyse ihn ohne zusätzlichen Speicher lesen können.
+   * Geschrieben wird nur, wenn sich tatsächlich etwas ändert.
+   */
+  function benenneTag(datum: string, bezeichnung: string): void {
+    if (!istAktiv() || !datum) return
+    const naechste = setzeTagesnamen(satzeRef.current, datum, bezeichnung)
+    if (naechste === satzeRef.current) return
+    setSatze(naechste)
+    verfolge(() =>
+      saveMehrere({ satze: naechste.filter((satz) => satz.datum === datum) }),
+    )
+  }
+
+  /**
    * Wählt einen bereits angelegten Satz aus, ohne gemessene Zeiten anzutasten.
    * Bevorzugt wird eine noch offene Runde, sonst die erste. Der alte Anker
    * derselben Serie wird aus der Leiste entfernt, damit sie dort nicht
@@ -740,6 +760,7 @@ export function createLaufAktionen(deps: LaufAktionenDeps): LaufAktionen {
     loescheLauf,
     loescheSatz,
     benenneSatz,
+    benenneTag,
     aktiviereSatz,
     aendereLauf,
   }

@@ -14,11 +14,12 @@ import { haptic } from '../app/haptics'
 import { useReducedMotion } from '../app/useReducedMotion'
 import {
   elapsedMs,
+  eingestellteZwischenzeiten,
   finishMs,
   laneStatusAt,
   lastSplit,
-  lengthCount,
   zwischenzeiten,
+  zwischenzeitenGesamt,
 } from '../domain/lauf'
 import { formatCountdown, formatTime, formatZwischenzeiten } from '../domain/format'
 import type { Bahn, LaufKonfiguration } from '../domain/types'
@@ -44,6 +45,8 @@ interface LaneTileProps {
   konfiguration: LaufKonfiguration
   /** Monotone Zeit aus `useNow`; treibt Countdown und laufende Zeit. */
   now: number
+  /** Ersatzbezeichnung ohne Schwimmer, z. B. „Lauf 1, Bahn 2“. */
+  ersatzName: string
   schwimmerName: string | null
   /** Kurzer Tap: Anschlag erfassen beziehungsweise Bahn starten. */
   onTap: (bahnId: string, now: number, wallNow: number) => void
@@ -62,6 +65,7 @@ export function LaneTile({
   bahn,
   konfiguration,
   now,
+  ersatzName,
   schwimmerName,
   onTap,
   onUndo,
@@ -99,10 +103,24 @@ export function LaneTile({
   // unterbrochen: Sie lässt sich nicht neu starten, weil der monotone
   // Bezugspunkt fehlt, und muss erst über langes Drücken zurückgesetzt werden.
   const unterbrochen = status === 'bereit' && bahn.anschlaege.length > 0
-  // Anzahl der Längen der Strecke; `null` bedeutet offene Strecke.
-  const gesamt = lengthCount(konfiguration)
+  // Zahl der Anschläge bis einschließlich Ziel; `null` bedeutet offene
+  // Strecke ohne eigene Vorgabe. Automatisch entspricht das den Längen,
+  // mit eigener Zahl den eingestellten Zwischenzeiten plus Ziel.
+  const zwischenzeitenBisZiel = zwischenzeitenGesamt(konfiguration)
+  const gesamt =
+    zwischenzeitenBisZiel === null ? null : zwischenzeitenBisZiel + 1
+  const eigeneZahl = eingestellteZwischenzeiten(konfiguration) !== null
+  // Der nächste Tap schließt ab, sobald alle Zwischenzeiten erfasst sind.
+  const naechsterIstZiel =
+    zwischenzeitenBisZiel !== null && bahn.anschlaege.length + 1 > zwischenzeitenBisZiel
   // Letzter Anschlag für die kleine Zeile unten rechts.
   const letzter = lastSplit(bahn)
+  // Ohne Schwimmerzuordnung bleibt die Kachel sonst namenlos. Statt einer
+  // leeren Zeile nennt sie dann die vom Aufrufer gebildete Ersatzbezeichnung
+  // („Lauf 1, Bahn 2“), damit beim Messen ohne Namen klar bleibt, welche Bahn
+  // gemeint ist.
+  const anzeigeName =
+    schwimmerName && schwimmerName.trim() !== '' ? schwimmerName : ersatzName
   // Große Zahl der Kachel: Zielzeit, Countdown bis zum Start oder laufende
   // Zeit. Der Countdown wird bei 0 gekappt, damit er nicht negativ läuft. Eine
   // unterbrochene Bahn zeigt ihren letzten erfassten Split eingefroren.
@@ -223,9 +241,13 @@ export function LaneTile({
     : status === 'laeuft'
       ? [
           `Zeit ${formatTime(ansageZeit)}.`,
-          gesamt
-            ? `Länge ${Math.min(bahn.anschlaege.length + 1, gesamt)} von ${gesamt}.`
-            : `Länge ${bahn.anschlaege.length + 1}.`,
+          eigeneZahl
+            ? naechsterIstZiel
+              ? 'Nächster Anschlag ist das Ziel.'
+              : `Zwischenzeit ${Math.min(bahn.anschlaege.length + 1, zwischenzeitenBisZiel ?? 0)} von ${zwischenzeitenBisZiel}.`
+            : gesamt
+              ? `Länge ${Math.min(bahn.anschlaege.length + 1, gesamt)} von ${gesamt}.`
+              : `Länge ${bahn.anschlaege.length + 1}.`,
           letzter ? `Letzter Anschlag ${formatTime(letzter.splitMs)}.` : null,
         ]
           .filter((teil): teil is string => teil !== null)
@@ -315,7 +337,7 @@ export function LaneTile({
           <span className="rounded-md bg-surface2 px-1.5 py-0.5 text-[11px] font-bold tracking-wide text-muted">
             {bahn.nummer}
           </span>
-          <span className="truncate text-[11px] font-medium text-muted">{schwimmerName ?? ''}</span>
+          <span className="truncate text-[11px] font-medium text-muted">{anzeigeName}</span>
         </div>
 
         {/* `clamp` hält die Zeit groß genug für den Blick aus einigen Metern,
@@ -342,9 +364,13 @@ export function LaneTile({
                   : status === 'geplant'
                     ? 'Start in'
                     : status === 'laeuft'
-                      ? gesamt
-                        ? `Länge ${Math.min(bahn.anschlaege.length + 1, gesamt)}/${gesamt}`
-                        : `Länge ${bahn.anschlaege.length + 1}`
+                      ? eigeneZahl
+                        ? naechsterIstZiel
+                          ? 'Ziel'
+                          : `Zwischenzeit ${bahn.anschlaege.length + 1}/${zwischenzeitenBisZiel}`
+                        : gesamt
+                          ? `Länge ${Math.min(bahn.anschlaege.length + 1, gesamt)}/${gesamt}`
+                          : `Länge ${bahn.anschlaege.length + 1}`
                       : 'Bereit'}
             </span>
 

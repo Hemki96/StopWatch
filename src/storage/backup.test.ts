@@ -4,8 +4,8 @@
  * Sichert ab, dass ein Backup erst geschrieben wird, wenn `pruefeBackup` es
  * akzeptiert, und dass die Meldung immer das erste konkrete Problem mit Pfad
  * nennt („Lauf 1, Bahn 1, Anschlag 1“) statt einer Sammelmeldung. Wichtige
- * Fälle sind ältere Versionen ohne `wettkampfe`/`trainings` und ohne die
- * späteren Lauf- und Satzfelder, ungültige Wertebereiche sowie ein
+ * Fälle sind ältere Versionen ohne `trainings` und ohne die späteren Lauf- und
+ * Satzfelder, ungültige Wertebereiche sowie ein
  * Export-Import-Roundtrip, der den Inhalt unverändert lassen muss.
  *
  * Die Fixture ist ein minimaler, aber vollständiger Bestand mit festen IDs und
@@ -103,7 +103,6 @@ const backup = {
   schwimmer: [schwimmer],
   satze: [satz],
   laeufe: [lauf],
-  wettkampfe: [],
   trainings: [],
 }
 
@@ -125,7 +124,6 @@ describe('pruefeBackup', () => {
       schwimmer: 1,
       satze: 1,
       laeufe: 1,
-      wettkampfe: 0,
       trainings: 0,
     })
   })
@@ -173,28 +171,30 @@ describe('pruefeBackup', () => {
     expect(ergebnis.fehler).toContain('einheit')
   })
 
-  // DNS/DNF ist ein optionales Bahnfeld; ein Backup mit Markierung bleibt
-  // vollständig einlesbar und unverändert.
-  it('erhält DNS und DNF am Lauf', () => {
+  it('prüft die gespeicherten Zwischenzeiten', () => {
     const roh = kopie()
-    const laeufe = roh.laeufe as Array<{ bahnen: Array<{ status?: string }> }>
-    ;laeufe[0]!.bahnen[0]!.status = 'dnf'
-    const ergebnis = pruefeBackup(roh)
-    expect(ergebnis.ok).toBe(true)
-    if (!ergebnis.ok) return
-    expect(ergebnis.backup.laeufe[0]?.bahnen[0]?.status).toBe('dnf')
-  })
+    const konfigurationRoh = (roh.laeufe as Record<string, unknown>[])[0]!
+      .konfiguration as Record<string, unknown>
+    konfigurationRoh.zwischenzeiten = 3
+    expect(pruefeBackup(roh).ok).toBe(true)
 
-  // Ein unbekannter Status wäre weder DNS noch DNF und würde in der Wertung
-  // stillschweigend als offene Bahn erscheinen; die Prüfung lehnt ihn ab.
-  it('lehnt einen unbekannten Bahnstatus ab', () => {
-    const roh = kopie()
-    const laeufe = roh.laeufe as Array<{ bahnen: Array<{ status?: string }> }>
-    ;laeufe[0]!.bahnen[0]!.status = 'verletzt'
+    konfigurationRoh.zwischenzeiten = 100
     const ergebnis = pruefeBackup(roh)
     expect(ergebnis.ok).toBe(false)
     if (ergebnis.ok) return
-    expect(ergebnis.fehler).toContain('status')
+    expect(ergebnis.fehler).toContain('zwischenzeiten')
+  })
+
+  // Alte Wettkampf-Felder in einem Backup werden beim Einlesen still ignoriert.
+  it('ignoriert frühere Wettkampf-Felder', () => {
+    const roh = kopie()
+    roh.wettkampfe = [{ id: 'w1', name: 'Herbstpokal' }]
+    ;(roh.laeufe as Record<string, unknown>[])[0]!.modus = 'wettkampf'
+    ;(roh.satze as Record<string, unknown>[])[0]!.wettkampfId = 'w1'
+    const ergebnis = pruefeBackup(roh)
+    expect(ergebnis.ok).toBe(true)
+    if (!ergebnis.ok) return
+    expect('wettkampfe' in ergebnis.backup).toBe(false)
   })
 
   // Ohne Formatkennung könnte jede beliebige JSON-Datei als Backup gelten; die
@@ -255,6 +255,26 @@ describe('pruefeBackup', () => {
     expect(ergebnis.ok).toBe(false)
     if (ergebnis.ok) return
     expect(ergebnis.fehler).toContain('datum')
+  })
+
+  // Die Tagesbezeichnung ist optional; vorhanden muss sie ein Text sein und
+  // unverändert durch die Prüfung gehen.
+  it('akzeptiert eine Tagesbezeichnung und behält sie', () => {
+    const roh = kopie()
+    ;(roh.satze as Record<string, unknown>[])[0]!.tagesbezeichnung = 'Kader A'
+    const ergebnis = pruefeBackup(roh)
+    expect(ergebnis.ok).toBe(true)
+    if (!ergebnis.ok) return
+    expect(ergebnis.backup.satze[0]?.tagesbezeichnung).toBe('Kader A')
+  })
+
+  it('lehnt eine nicht-textuelle Tagesbezeichnung ab', () => {
+    const roh = kopie()
+    ;(roh.satze as Record<string, unknown>[])[0]!.tagesbezeichnung = 42
+    const ergebnis = pruefeBackup(roh)
+    expect(ergebnis.ok).toBe(false)
+    if (ergebnis.ok) return
+    expect(ergebnis.fehler).toContain('tagesbezeichnung')
   })
 })
 
@@ -326,65 +346,6 @@ describe('Serienfelder im Backup', () => {
   })
 })
 
-// Wettkämpfe kamen mit Version 2 hinzu; sie sind optional und werden sonst als
-// leere Liste ergänzt.
-describe('Wettkämpfe im Backup', () => {
-  // Rahmen mit festem Datum und 50-m-Becken als gültiger Fall.
-  const wettkampf = {
-    id: 'w1',
-    name: 'Herbstpokal',
-    datum: '2026-10-29',
-    beckenlaengeM: 50,
-    erstelltAm: 1,
-  }
-
-  it('akzeptiert Wettkämpfe und zählt sie', () => {
-    const ergebnis = pruefeBackup({ ...kopie(), wettkampfe: [wettkampf] })
-    expect(ergebnis.ok).toBe(true)
-    if (!ergebnis.ok) return
-    expect(ergebnis.zusammenfassung.wettkampfe).toBe(1)
-  })
-
-  it('liest ein älteres Backup ohne Wettkämpfe als leere Liste', () => {
-    const roh = kopie()
-    delete roh.wettkampfe
-    const ergebnis = pruefeBackup(roh)
-    expect(ergebnis.ok).toBe(true)
-    if (!ergebnis.ok) return
-    expect(ergebnis.backup.wettkampfe).toEqual([])
-  })
-
-  // Nur 25 und 50 m sind gültige Beckenlängen; 33 m würde jede Längenrechnung
-  // unbrauchbar machen.
-  it('lehnt eine ungültige Beckenlänge ab', () => {
-    const ergebnis = pruefeBackup({
-      ...kopie(),
-      wettkampfe: [{ ...wettkampf, beckenlaengeM: 33 }],
-    })
-    expect(ergebnis.ok).toBe(false)
-    if (ergebnis.ok) return
-    expect(ergebnis.fehler).toContain('beckenlaengeM')
-  })
-
-  it('akzeptiert Wettkampf- und Modusfelder an Satz und Lauf', () => {
-    const roh = kopie()
-    ;(roh.satze as Record<string, unknown>[])[0]!.wettkampfId = 'w1'
-    ;(roh.laeufe as Record<string, unknown>[])[0]!.modus = 'wettkampf'
-    expect(pruefeBackup(roh).ok).toBe(true)
-  })
-
-  // Ein Heat erkennt man am Modus `wettkampf`; `staffel` ist kein bekannter
-  // Wert und wird abgelehnt, damit die Bedienlogik eindeutig bleibt.
-  it('lehnt einen unbekannten Laufmodus ab', () => {
-    const roh = kopie()
-    ;(roh.laeufe as Record<string, unknown>[])[0]!.modus = 'staffel'
-    const ergebnis = pruefeBackup(roh)
-    expect(ergebnis.ok).toBe(false)
-    if (ergebnis.ok) return
-    expect(ergebnis.fehler).toContain('modus')
-  })
-})
-
 // Trainings kamen mit Version 3 hinzu; die Prüfung spiegelt die Grenzen aus
 // `training.ts`, damit ein Backup nichts enthält, was die App nicht anlegen kann.
 describe('Trainings im Backup', () => {
@@ -434,6 +395,17 @@ describe('Trainings im Backup', () => {
     expect(ergebnis.ok).toBe(false)
     if (ergebnis.ok) return
     expect(ergebnis.fehler).toContain('aktive')
+  })
+
+  // `autostart` ist optional, muss aber ein Wahrheitswert sein.
+  it('lehnt einen ungültigen automatischen Satzwechsel ab', () => {
+    const ergebnis = pruefeBackup({
+      ...kopie(),
+      trainings: [{ ...training, autostart: 'ja' }],
+    })
+    expect(ergebnis.ok).toBe(false)
+    if (ergebnis.ok) return
+    expect(ergebnis.fehler).toContain('autostart')
   })
 
   // 21 überschreitet `MAX_WIEDERHOLUNGEN` von 20; die App könnte den Plan nicht
@@ -569,11 +541,11 @@ describe('Grenzen und Konsistenz im Backup', () => {
 describe('zusammenfassungText', () => {
   it('formatiert Singular und Plural', () => {
     expect(
-      zusammenfassungText({ schwimmer: 1, wettkampfe: 0, trainings: 0, satze: 1, laeufe: 1 }),
-    ).toBe('1 Schwimmer, 0 Wettkämpfe, 0 Trainings, 1 Satz, 1 Lauf')
+      zusammenfassungText({ schwimmer: 1, trainings: 0, satze: 1, laeufe: 1 }),
+    ).toBe('1 Schwimmer, 0 Trainings, 1 Satz, 1 Lauf')
     expect(
-      zusammenfassungText({ schwimmer: 2, wettkampfe: 1, trainings: 2, satze: 3, laeufe: 5 }),
-    ).toBe('2 Schwimmer, 1 Wettkampf, 2 Trainings, 3 Sätze, 5 Läufe')
+      zusammenfassungText({ schwimmer: 2, trainings: 2, satze: 3, laeufe: 5 }),
+    ).toBe('2 Schwimmer, 2 Trainings, 3 Sätze, 5 Läufe')
   })
 })
 
@@ -587,7 +559,6 @@ describe('Import-Konflikte', () => {
       schwimmer: [{ ...schwimmer }],
       satze: [{ ...satz }],
       laeufe: [JSON.parse(JSON.stringify(lauf)) as Lauf],
-      wettkampfe: [],
       trainings: [],
     }
   }

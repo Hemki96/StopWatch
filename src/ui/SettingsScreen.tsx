@@ -14,7 +14,6 @@ import { useApp, type Backup, type ImportKonflikte } from '../app/AppProvider'
 import { useInstallPrompt } from '../app/pwa'
 import { formatStrecke, formatTakt, lokalesDatum } from '../domain/format'
 import { einheitVon, formatBeckenlaenge } from '../domain/einheit'
-import { SCHWIMMARTEN } from '../domain/types'
 import { csvDateiname, laeufeAlsCsv } from '../export/csv'
 import { speichereDatei, waehleDatei } from '../export/datei'
 import { Bestaetigung } from './Bestaetigung'
@@ -103,7 +102,6 @@ export function SettingsScreen() {
   const konfiguration = app.einstellungen.konfiguration
   const speicher = app.speicherSchutz
   const einheit = einheitVon(konfiguration)
-  const art = SCHWIMMARTEN.find((s) => s.wert === konfiguration.schwimmart)?.label ?? ''
   // Solange Konflikte lokal bleiben, wäre „übernommen“ für die Backup-Zahl
   // falsch: Ein Teil der Datensätze wird übersprungen.
   const importUmfangText = importVorschau
@@ -117,7 +115,6 @@ export function SettingsScreen() {
     app.einstellungen.wiederholungen > 1
       ? `${app.einstellungen.wiederholungen}×${formatStrecke(konfiguration.streckeM, einheit)}`
       : formatStrecke(konfiguration.streckeM, einheit),
-    art,
     app.einstellungen.reihen > 1
       ? `${app.einstellungen.bahnen * app.einstellungen.reihen} Personen in ${app.einstellungen.reihen} Reihen`
       : `${app.einstellungen.bahnen} Bahnen`,

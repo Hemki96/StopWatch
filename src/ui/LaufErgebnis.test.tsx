@@ -124,6 +124,19 @@ describe('LaufErgebnis', () => {
     ergebnis.unmount()
   })
 
+  it('nennt ohne Schwimmer Lauf und Bahn statt „Ohne Namen“', () => {
+    const start = createLauf(K100, [{ nummer: 2 }])
+    const id = start.bahnen[0]!.id
+    const lauf = tapLane(tapLane(startAll(start, 0, 1), id, 30_000, 2), id, 60_000, 3)
+    const ergebnis = render(
+      <LaufErgebnis lauf={lauf} laeufe={[lauf]} schwimmerName={namen} onUndo={() => undefined} />,
+    )
+
+    expect(ergebnis.container.textContent).toContain('Lauf 1, Bahn 2')
+    expect(ergebnis.container.textContent).not.toContain('Ohne Namen')
+    ergebnis.unmount()
+  })
+
   it('meldet das Zurücknehmen einer Bahn', () => {
     const lauf = zweiBahnen()
     const zurueck = vi.fn()

@@ -9,8 +9,9 @@
 // @vitest-environment jsdom
 import { act } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createLauf, startAll } from '../domain/lauf'
-import type { Lauf, Satz } from '../domain/types'
+import { createLauf, startAll, tapLane } from '../domain/lauf'
+import { neuerTrainingsSatz } from '../domain/training'
+import type { Lauf, Satz, Training } from '../domain/types'
 import { render } from '../test/render'
 import { TimerScreen } from './TimerScreen'
 
@@ -26,6 +27,8 @@ const { appWert } = vi.hoisted(() => ({
     aktiveRunden: [] as Lauf[],
     aktiveEintraege: [] as unknown[],
     laeufe: [] as Lauf[],
+    satze: [] as Satz[],
+    trainings: [] as Training[],
     schwimmer: [] as { id: string; name: string }[],
     einstellungen: {
       konfiguration: { beckenlaengeM: 50, streckeM: 100, schwimmart: 'freistil' },
@@ -49,6 +52,8 @@ const { appWert } = vi.hoisted(() => ({
     schliesseAktivenLauf: vi.fn(),
     verwerfeAktivenLauf: vi.fn(),
     startAlle: vi.fn(),
+    starteTrainingsSatz: vi.fn(),
+    zeigeToast: vi.fn(),
     neuerLauf: vi.fn(),
     setzeKonfiguration: vi.fn(),
     setzeEinstellungen: vi.fn(),
@@ -81,6 +86,15 @@ function laufend(): Lauf {
         : bahn,
     ),
   }
+}
+
+/** Beendet beide Bahnen eines 100-m-Laufs im 50-m-Becken (zwei Längen). */
+function beende(lauf: Lauf): Lauf {
+  return lauf.bahnen.reduce(
+    (aktuell, bahn) =>
+      tapLane(tapLane(aktuell, bahn.id, 30_000, 30_000), bahn.id, 60_000, 60_000),
+    lauf,
+  )
 }
 
 /** Zwei Runden einer Serie; die jüngste Änderung liegt in Runde 2 auf Bahn 2. */
@@ -138,9 +152,13 @@ beforeEach(() => {
   appWert.aktiveRunden = []
   appWert.aktiveEintraege = []
   appWert.laeufe = [lauf]
+  appWert.satze = []
+  appWert.trainings = []
   appWert.schwimmer = []
   appWert.brauchtTakt = false
   appWert.tabGesperrt = false
+  appWert.starteTrainingsSatz = vi.fn()
+  appWert.zeigeToast = vi.fn()
 })
 
 describe('TimerScreen: sichtbare Rücknahme', () => {
@@ -215,6 +233,138 @@ describe('TimerScreen: sichtbare Rücknahme', () => {
     // `rueckgaengigSerie` arbeitet mit dem Bahn-Index, nicht mit der Bahn-ID.
     expect(appWert.rueckgaengigSerie).toHaveBeenCalledWith(1)
     expect(appWert.rueckgaengig).not.toHaveBeenCalled()
+
+    ergebnis.unmount()
+  })
+})
+
+// Automatischer Satzwechsel: Das Training entscheidet, ob nach dem letzten
+// Ziel der nächste Satz beginnt. Ein bereits fertiger Satz beim Öffnen darf
+// nichts starten; nur der Übergang während der Messung zählt.
+describe('TimerScreen: automatischer Satzwechsel', () => {
+  /** Ein Training mit zwei Sätzen; der erste ist bereits gestartet. */
+  function trainingMitZweiSaetzen(): { training: Training; erster: Satz } {
+    const erster: Satz = {
+      id: 'satz-1',
+      datum: '2026-10-29',
+      bezeichnung: '',
+      konfiguration: KONFIGURATION,
+      plan: null,
+      erstelltAm: 1,
+    }
+    const training: Training = {
+      id: 'training-1',
+      datum: '2026-10-29',
+      bezeichnung: 'Test',
+      bahnen: 2,
+      reihen: 1,
+      autostart: true,
+      aktive: [null, null],
+      saetze: [
+        neuerTrainingsSatz({ id: 'ts1', konfiguration: KONFIGURATION }),
+        neuerTrainingsSatz({ id: 'ts2', konfiguration: KONFIGURATION }),
+      ],
+      gestartet: { ts1: erster.id },
+      erstelltAm: 1,
+    }
+    return { training, erster }
+  }
+
+  it('startet den nächsten Satz, sobald der aktuelle im Ziel ist', () => {
+    const { training, erster } = trainingMitZweiSaetzen()
+    const lauf = startAll(
+      createLauf(KONFIGURATION, [{ nummer: 1 }, { nummer: 2 }], erster.id),
+      0,
+      1_000,
+    )
+    appWert.aktiverLauf = lauf
+    appWert.aktiverSatz = erster
+    appWert.laeufe = [lauf]
+    appWert.satze = [erster]
+    appWert.trainings = [training]
+    appWert.starteTrainingsSatz = vi.fn(() => 'lauf-neu')
+
+    const ergebnis = render(<TimerScreen />)
+    expect(appWert.starteTrainingsSatz).not.toHaveBeenCalled()
+
+    // Der letzte Anschlag beider Bahnen schließt den Satz ab. Erst dieser
+    // Übergang löst den Wechsel aus, nicht der bereits fertige Zustand.
+    const beendet = beende(lauf)
+    appWert.aktiverLauf = beendet
+    appWert.laeufe = [beendet]
+    ergebnis.aktualisiere(<TimerScreen />)
+
+    expect(appWert.starteTrainingsSatz).toHaveBeenCalledWith(
+      training.id,
+      'ts2',
+      expect.any(Number),
+      expect.any(Number),
+    )
+    expect(appWert.zeigeToast).toHaveBeenCalledWith(expect.stringContaining('Satz 2'))
+
+    ergebnis.unmount()
+  })
+
+  it('startet nichts, wenn der automatische Wechsel ausgeschaltet ist', () => {
+    const { training, erster } = trainingMitZweiSaetzen()
+    training.autostart = false
+    const lauf = startAll(
+      createLauf(KONFIGURATION, [{ nummer: 1 }, { nummer: 2 }], erster.id),
+      0,
+      1_000,
+    )
+    appWert.aktiverLauf = lauf
+    appWert.aktiverSatz = erster
+    appWert.laeufe = [lauf]
+    appWert.satze = [erster]
+    appWert.trainings = [training]
+
+    const ergebnis = render(<TimerScreen />)
+    const beendet = beende(lauf)
+    appWert.aktiverLauf = beendet
+    appWert.laeufe = [beendet]
+    ergebnis.aktualisiere(<TimerScreen />)
+
+    expect(appWert.starteTrainingsSatz).not.toHaveBeenCalled()
+
+    ergebnis.unmount()
+  })
+
+  it('holt bei einem bereits angelegten nächsten Satz die fehlenden Starts nach', () => {
+    const { training, erster } = trainingMitZweiSaetzen()
+    const zweiter: Satz = { ...erster, id: 'satz-2' }
+    training.gestartet = { ts1: erster.id, ts2: zweiter.id }
+    const lauf = startAll(
+      createLauf(KONFIGURATION, [{ nummer: 1 }, { nummer: 2 }], erster.id),
+      0,
+      1_000,
+    )
+    // Der zweite Satz existiert, ist aber noch nicht gestartet.
+    const bereit = createLauf(
+      KONFIGURATION,
+      [{ nummer: 1 }, { nummer: 2 }],
+      zweiter.id,
+    )
+    appWert.aktiverLauf = lauf
+    appWert.aktiverSatz = erster
+    appWert.laeufe = [lauf, bereit]
+    appWert.satze = [erster, zweiter]
+    appWert.trainings = [training]
+    appWert.starteTrainingsSatz = vi.fn(() => 'lauf-neu')
+
+    const ergebnis = render(<TimerScreen />)
+    const beendet = beende(lauf)
+    appWert.aktiverLauf = beendet
+    appWert.laeufe = [beendet, bereit]
+    ergebnis.aktualisiere(<TimerScreen />)
+
+    expect(appWert.starteTrainingsSatz).toHaveBeenCalledWith(
+      training.id,
+      'ts2',
+      expect.any(Number),
+      expect.any(Number),
+    )
+    expect(appWert.startAlle).toHaveBeenCalled()
 
     ergebnis.unmount()
   })

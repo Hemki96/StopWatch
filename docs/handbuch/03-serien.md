@@ -194,20 +194,19 @@ Serie sinnvoll.
 | Strecke | Vielfaches der Beckenlänge; offen erlaubt |
 | Startzeiten | werden beim Start vorausberechnet, nicht später nachgeholt |
 
-## Serie, Training und Wettkampf abgrenzen
+## Serie und Training abgrenzen
 
 | Frage | Antwort |
 | --- | --- |
 | Mehrere Sätze hintereinander? | **Training** verwenden. Eine Serie ist genau ein Satz. |
-| Pausen zwischen den Sätzen? | **Training**: Der nächste Satz wird bewusst gestartet. |
-| Zwischenzeiten pro Länge? | **Serie** oder einzelner Lauf; im Wettkampf gibt es keine Splits. |
-| Startliste mit Heats? | **Wettkampf**. |
+| Pausen zwischen den Sätzen? | **Training**: Der nächste Satz wird bewusst gestartet oder per Schalter automatisch. |
+| Zwischenzeiten pro Länge? | **Serie** oder einzelner Lauf. |
 | Namen und Aktive vorab festlegen? | **Training**; in der Serie werden Namen im Lauf zugeordnet. |
 
-## Beispiel: 5×100 m Freistil, 2:00-Takt, 4 Bahnen
+## Beispiel: 5×100 m, 2:00-Takt, 4 Bahnen
 
-1. Unter **Mehr → Nächster Lauf** oder direkt im Timer-Sheet: Strecke 100 m, Schwimmart Freistil,
-   Becken 50 m, Bahnen 4.
+1. Unter **Mehr → Nächster Lauf** oder direkt im Timer-Sheet: Strecke 100 m, Zwischenzeiten
+   automatisch, Becken 50 m, Bahnen 4.
 2. **Serie** auf 5× stellen, **Takt** 2:00 wählen.
 3. **Start** tippen, in der Startübersicht `5×100 m` und den Takt prüfen, dann **Jetzt starten**.
 4. Runde 1 startet auf allen vier Bahnen. Der Takt läuft ab dem Startknopf.

@@ -31,7 +31,6 @@ const backup = {
   schwimmer: [],
   satze: [],
   laeufe: [],
-  wettkampfe: [],
   trainings: [],
 }
 

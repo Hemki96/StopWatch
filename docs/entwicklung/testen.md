@@ -42,11 +42,9 @@ brauchen kein DOM. Das ist Absicht: Der Zeitkern soll ohne Browser beweisbar sei
 | Lauf | `domain/lauf.test.ts`, `domain/grenzfaelle.test.ts` | Start, Versatz, Anschlag, Finish, Undo, Sperren, Korrekturen |
 | Serie | `domain/serie.test.ts` | Rundenzeile, Überholung, Fortschritt, Planprüfung |
 | Training | `domain/training.test.ts` | Aktive, Satzfortschritt, Reihenfolge, Validierung |
-| Wettkampf | `domain/wettkampf.test.ts` | Ein-Tap-Ziel, Platzierung, manuelle Zeit |
-| Meldeliste | `domain/meldeliste.test.ts` | Formate, Spalten, Fehler, Grenzen |
 | Format | `domain/format.test.ts` | Abschneiden, Parsen, Takt, Countdown |
 | Analyse | `domain/analyse.test.ts` | Bestzeiten, Delta, Pace |
-| CSV | `export/csv.test.ts`, `export/wettkampfCsv.test.ts` | Spalten, Escaping, Formelschutz |
+| CSV | `export/csv.test.ts` | Spalten, Escaping, Formelschutz |
 | Backup | `storage/backup.test.ts` | Schema, Versionen, Fehlerpfade |
 | Repository | `storage/repository.test.ts`, `.integration.test.ts` | Normalisierung, Transaktionen, Import |
 
@@ -69,7 +67,7 @@ import 'fake-indexeddb/auto'
 
 | Datei | Prüft |
 | --- | --- |
-| `app/AppProvider.test.tsx` | Laden, Speichern, aktive Läufe, Training, Wettkampf, Fehlerfälle |
+| `app/AppProvider.test.tsx` | Laden, Speichern, aktive Läufe, Training, Fehlerfälle |
 | `app/AppProvider.test.ts` | Normalisierung gespeicherter Einstellungen |
 | `app/schreibpfad.test.tsx` | Tab-Tor, Warteschlange, Wiederholung und Speicherfehler-Banner |
 | `app/tabKoordinator.test.ts` | Claim, Heartbeat, Takeover, Ausfall, kleinere Tab-ID |
@@ -116,7 +114,6 @@ Tests gegen eine fremde App auf demselben Port laufen und grün werden, ohne die
 | `verhalten.spec.ts` | Long-Press-Undo, Screenreader-Klick, offene Strecke, Schwimmer + Reload, Satz löschen, Escape-Stapel |
 | `serie.spec.ts` | Startversatz, mehrere Läufe, Serienrunden, Undo, Verlauf |
 | `training.spec.ts` | Training anlegen, Aktive, Satz starten, Sätze ergänzen und ändern |
-| `wettkampf.spec.ts` | Wettkampf anlegen, Namen, Zeiten, Reload; CSV-Import; manuelle Zeit und CSV-Export |
 | `verlauf.spec.ts` | Korrektur, CSV, Satz umbenennen, Lauf löschen |
 | `einstellungen.spec.ts` | Onboarding, Theme, Standardwerte, Streckensperre |
 | `backup.spec.ts` | Backup exportieren, alles löschen, importieren; ungültiges Backup |
@@ -144,7 +141,7 @@ Bevorzugt werden Rollen und Labels:
 ```ts
 page.getByRole('button', { name: 'Start', exact: true })
 page.getByRole('button', { name: /^Bahn 1, Anna, läuft$/ })
-page.getByLabel('Name des Wettkampfs')
+page.getByLabel('Name des Trainings')
 ```
 
 Die Bahn-Labels werden aus Bahnnummer, Name, Status und ggf. Platz gebildet. Sie sind damit

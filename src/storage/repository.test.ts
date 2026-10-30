@@ -18,15 +18,14 @@ import {
   normalizeOnLoad,
   normalizeSatzOnLoad,
   normalizeTrainingOnLoad,
-  normalizeWettkampfOnLoad,
 } from './repository'
 import type { Lauf, Satz, Training } from '../domain/types'
 
 // 100 m im 50-m-Becken; die Konfiguration bleibt beim Laden unverändert.
 const K100 = { beckenlaengeM: 50, streckeM: 100, schwimmart: 'freistil' } as const
 
-// Lauf-Normalisierung: Felder älterer Stände, Modus und die Zeitstempel nach
-// einem Neustart.
+// Lauf-Normalisierung: Felder älterer Stände und die Zeitstempel nach einem
+// Neustart.
 describe('normalizeOnLoad', () => {
   // Ältere Läufe kennen weder Startversatz noch Wiederholungsnummer; beide
   // werden auf 0 bzw. null gesetzt.
@@ -53,36 +52,19 @@ describe('normalizeOnLoad', () => {
     expect(normalisiert.bahnen.map((bahn) => bahn.startMs)).toEqual([null, null])
   })
 
-  // Fehlt der Modus, gilt der Lauf als Trainingslauf; nur `wettkampf` wird
-  // ausdrücklich übernommen.
-  it('ergänzt den Modus aus älteren Datensätzen als Training', () => {
-    const alt = { ...createLauf(K100, [{ nummer: 1 }]) } as Record<string, unknown>
-    delete alt.modus
-    expect(normalizeOnLoad(alt as unknown as Lauf).modus).toBe('training')
-  })
-
-  it('behält den Wettkampfmodus', () => {
-    const lauf = createLauf(K100, [{ nummer: 1 }], null, { modus: 'wettkampf' })
-    expect(normalizeOnLoad(lauf).modus).toBe('wettkampf')
-  })
-
-  // DNS/DNF ist endgültig: Der Status bleibt erhalten, die Startzeit ist nach
-  // dem Reload wertlos und wird entfernt. Ein unbekannter Wert fällt weg.
-  it('behält DNS/DNF und entfernt die Startzeit', () => {
-    const basis = createLauf(K100, [{ nummer: 1 }], null, { modus: 'wettkampf' })
-    const mitStatus = {
-      ...basis,
-      bahnen: [{ ...basis.bahnen[0]!, startMs: 1000, status: 'dns' as const }],
+  // Alte Wettkampf-Felder werden beim Laden verworfen.
+  it('entfernt den früheren Laufmodus und Bahnstatus', () => {
+    const lauf = createLauf(K100, [{ nummer: 1 }]) as Lauf & {
+      modus?: string
+      bahnen: (Lauf['bahnen'][number] & { status?: string })[]
     }
-    const normalisiert = normalizeOnLoad(mitStatus)
-    expect(normalisiert.bahnen[0]?.status).toBe('dns')
-    expect(normalisiert.bahnen[0]?.startMs).toBeNull()
+    lauf.modus = 'wettkampf'
+    lauf.bahnen[0]!.status = 'dns'
+    lauf.bahnen[0]!.startMs = 1000
 
-    const unbekannt = {
-      ...basis,
-      bahnen: [{ ...basis.bahnen[0]!, status: 'verletzt' as unknown as 'dns' }],
-    }
-    expect(normalizeOnLoad(unbekannt).bahnen[0]?.status).toBeUndefined()
+    const normalisiert = normalizeOnLoad(lauf)
+    expect('modus' in normalisiert).toBe(false)
+    expect('status' in (normalisiert.bahnen[0] ?? {})).toBe(false)
   })
 
   // Eine beendete Bahn ist ein abgeschlossener Messwert und behält Start (0)
@@ -99,41 +81,9 @@ describe('normalizeOnLoad', () => {
   })
 })
 
-// Yard-Wettkämpfe tragen die Einheit und die kanonische Länge 22,86 m. Ältere
-// Wettkämpfe ohne Feld bleiben Meter; ein unbekannter Wert fällt auf die
-// Vorgabe der Einheit zurück.
-describe('normalizeWettkampfOnLoad', () => {
-  it('behält Yard-Becken und Einheit', () => {
-    const wettkampf = {
-      id: 'w1',
-      name: 'Herbstpokal',
-      datum: '2026-10-29',
-      beckenlaengeM: 22.86 as const,
-      einheit: 'yd' as const,
-      erstelltAm: 1,
-    }
-    const normalisiert = normalizeWettkampfOnLoad(wettkampf)
-    expect(normalisiert.beckenlaengeM).toBe(22.86)
-    expect(normalisiert.einheit).toBe('yd')
-  })
-
-  it('fällt bei unbekannter Beckenlänge auf die Einheit zurück', () => {
-    const normalisiert = normalizeWettkampfOnLoad({
-      id: 'w1',
-      name: 'Herbstpokal',
-      datum: '2026-10-29',
-      beckenlaengeM: 33 as unknown as 25,
-      einheit: 'yd',
-      erstelltAm: 1,
-    })
-    expect(normalisiert.beckenlaengeM).toBe(22.86)
-  })
-})
-
-// Satz-Normalisierung: Plan und Wettkampfzuordnung sind erst später dazugekommen.
+// Satz-Normalisierung: Der Plan ist später dazugekommen; ein früherer
+// Wettkampfbezug wird verworfen.
 describe('normalizeSatzOnLoad', () => {
-  // Ein Satz ohne Plan bleibt ein frei gewachsener Satz; ohne Wettkampfbezug
-  // ist `wettkampfId` ausdrücklich null.
   it('ergänzt den fehlenden Plan als freien Satz', () => {
     const alt = {
       id: 's1',
@@ -143,11 +93,24 @@ describe('normalizeSatzOnLoad', () => {
       erstelltAm: 0,
     } as unknown as Satz
     expect(normalizeSatzOnLoad(alt).plan).toBeNull()
-    expect(normalizeSatzOnLoad(alt).wettkampfId).toBeNull()
+    expect(normalizeSatzOnLoad(alt).tagesbezeichnung).toBe('')
   })
 
-  it('behält die Wettkampfzuordnung', () => {
-    const satz: Satz = {
+  it('behält eine vorhandene Tagesbezeichnung', () => {
+    const satz = {
+      id: 's1',
+      datum: '2026-10-29',
+      bezeichnung: '100 m',
+      tagesbezeichnung: 'Kader A',
+      konfiguration: K100,
+      plan: null,
+      erstelltAm: 0,
+    } as Satz
+    expect(normalizeSatzOnLoad(satz).tagesbezeichnung).toBe('Kader A')
+  })
+
+  it('entfernt eine frühere Wettkampfzuordnung', () => {
+    const satz = {
       id: 's1',
       datum: '2026-10-29',
       bezeichnung: '100 m Freistil',
@@ -155,8 +118,9 @@ describe('normalizeSatzOnLoad', () => {
       plan: null,
       wettkampfId: 'w1',
       erstelltAm: 0,
-    }
-    expect(normalizeSatzOnLoad(satz).wettkampfId).toBe('w1')
+    } as Satz & { wettkampfId?: string }
+    const normalisiert = normalizeSatzOnLoad(satz)
+    expect('wettkampfId' in normalisiert).toBe(false)
   })
 })
 
@@ -181,6 +145,8 @@ describe('normalizeTrainingOnLoad', () => {
     expect(normalisiert.saetze).toEqual([])
     expect(normalisiert.gestartet).toEqual({})
     expect(normalisiert.bezeichnung).toBe('')
+    // Ältere Trainings kannten keinen automatischen Wechsel.
+    expect(normalisiert.autostart).toBe(false)
   })
 
   // 42 Bahnen werden auf `MAX_BAHNEN` (10) begrenzt; die Aktivenliste folgt der
@@ -199,5 +165,21 @@ describe('normalizeTrainingOnLoad', () => {
     })
     expect(normalisiert.bahnen).toBe(10)
     expect(normalisiert.aktive).toHaveLength(10)
+  })
+
+  it('behält einen ausdrücklich eingeschalteten automatischen Wechsel', () => {
+    const geladen = normalizeTrainingOnLoad({
+      id: 'tr1',
+      datum: '2026-10-29',
+      bezeichnung: '',
+      bahnen: 1,
+      reihen: 1,
+      autostart: true,
+      aktive: [],
+      saetze: [],
+      gestartet: {},
+      erstelltAm: 1,
+    })
+    expect(geladen.autostart).toBe(true)
   })
 })

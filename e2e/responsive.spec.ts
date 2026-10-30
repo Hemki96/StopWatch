@@ -34,7 +34,7 @@ test.describe('Tablet', () => {
     expect(navBox!.x).toBeLessThan(mainBox!.x)
 
     // Formulare werden zum zentrierten Fenster statt zum breiten Bottom Sheet.
-    await page.getByRole('button', { name: /50 m · 100 m · Freistil · 6 Bahnen/ }).tap()
+    await page.getByRole('button', { name: /50 m · 100 m · 6 Bahnen/ }).tap()
     const sheetBox = await page.getByRole('dialog').boundingBox()
     expect(sheetBox).not.toBeNull()
     expect(sheetBox!.width).toBeLessThanOrEqual(600)
@@ -62,7 +62,7 @@ test.describe('Handy quer', () => {
 
     const navBox = await page.getByRole('navigation', { name: 'Bereiche' }).boundingBox()
     expect(navBox).not.toBeNull()
-    // Breit und flach: sechs Einträge nebeneinander statt untereinander.
+    // Breit und flach: fünf Einträge nebeneinander statt untereinander.
     expect(navBox!.width).toBeGreaterThan(navBox!.height)
 
     const ueberlauf = await page.evaluate(

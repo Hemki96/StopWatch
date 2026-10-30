@@ -88,9 +88,6 @@ Beispiele für Begriffe:
 | Satz | Set |
 | Serie | Intervall, Kurs |
 | Training | Workout, Einheit |
-| Wettkampf | Meet, Event |
-| Disziplin | Bewerb |
-| Meldeliste | Startliste (als Erklärung erlaubt) |
 
 ## Zeit und Zustand
 
@@ -182,7 +179,6 @@ Beim Löschen einer Entität die Referenzen mitdenken:
 
 - Schwimmer löschen → Bahnen, Trainings und Einstellungen entkoppeln.
 - Satz löschen → Läufe mitlöschen; Trainingsverweis darf verwaisen.
-- Wettkampf löschen → Disziplinen und Läufe mitlöschen.
 
 ## Oberfläche
 

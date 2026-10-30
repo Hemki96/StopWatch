@@ -1,11 +1,11 @@
 /**
- * CSV-Export für Trainingszeiten und Wettkampfergebnisse.
+ * CSV-Export für Trainingszeiten.
  *
- * Beide Exporte sind Langformat-Tabellen (eine Zeile pro Anschlag bzw. pro
- * Start) mit Semikolon als Trenner, CRLF als Zeilenende und UTF-8-BOM, damit
- * deutsches Excel die Datei ohne Import-Dialog korrekt öffnet. Texte werden
- * nach RFC 4180 maskiert; Zellen, die Excel als Formel interpretieren würde,
- * bekommen ein führendes Apostroph.
+ * Der Export ist eine Langformat-Tabelle (eine Zeile pro Anschlag) mit
+ * Semikolon als Trenner, CRLF als Zeilenende und UTF-8-BOM, damit deutsches
+ * Excel die Datei ohne Import-Dialog korrekt öffnet. Texte werden nach RFC 4180
+ * maskiert; Zellen, die Excel als Formel interpretieren würde, bekommen ein
+ * führendes Apostroph.
  *
  * Datenfluss: Die UI übergibt die bereits geladenen Domänenobjekte, `csv.ts`
  * löst nur Referenzen (Satz, Schwimmer) in Bezeichnungen auf und formatiert
@@ -17,8 +17,7 @@
  */
 import { formatTime, lokalesDatum } from '../domain/format'
 import { einheitVon, streckeAnzeige } from '../domain/einheit'
-import { wettkampfErgebnis } from '../domain/wettkampf'
-import type { Lauf, Satz, Schwimmer, Wettkampf } from '../domain/types'
+import type { Lauf, Satz, Schwimmer } from '../domain/types'
 
 // Semikolon ist der Standard-Trenner in deutschem Excel; dadurch sind Kommas
 // in Zeiten und Dezimalzahlen kein Sonderfall.
@@ -151,104 +150,4 @@ export function laeufeAlsCsv(laeufe: Lauf[], satze: Satz[], schwimmer: Schwimmer
  */
 export function csvDateiname(): string {
   return `beckenrand-${lokalesDatum(Date.now())}.csv`
-}
-
-// Spalten des Wettkampf-Exports. `platz` und `status` machen die Wertung direkt
-// lesbar; `zeit_ms` bleibt für Berechnungen daneben stehen.
-const WETTKAMPF_KOPFZEILE = [
-  'wettkampf',
-  'datum',
-  'disziplin',
-  'strecke_m',
-  'strecke',
-  'einheit',
-  'schwimmart',
-  'lauf',
-  'platz',
-  'bahn',
-  'schwimmer',
-  'zeit_ms',
-  'zeit_formatiert',
-  'status',
-  'manuell',
-]
-
-/**
- * Ergebnisliste eines Wettkampfs: eine Zeile pro Start, gewertete Bahnen nach
- * Platz, offene Bahnen am Ende. Semikolon und BOM wie beim Trainings-Export,
- * damit deutsches Excel die Datei direkt öffnet.
- *
- * Erwartet in `satze` die Disziplinen des Wettkampfs (die Funktion filtert
- * nicht nach `wettkampfId`) und in `laeufe` die zugehörigen Heats. Disziplinen
- * werden nach `erstelltAm` sortiert, Heats innerhalb einer Disziplin nach
- * `wiederholung`; die Zeilenreihenfolge innerhalb eines Heats kommt aus
- * `wettkampfErgebnis` (Platzierung, offene Bahnen zuletzt).
- *
- * Pro Zeile: Wettkampfname und -datum, Disziplin, Strecke, Schwimmart, Heat,
- * Platz (leer bei offener Bahn), Bahn, Schwimmername, Zeit in ms und
- * formatiert, Status `Ziel` oder `offen` sowie die Manuell-Markierung der
- * Zielzeit. Der Rückstand wird nicht exportiert, nur der Platz.
- */
-export function wettkampfErgebnisseAlsCsv(
-  wettkampf: Wettkampf,
-  satze: Satz[],
-  laeufe: Lauf[],
-  schwimmer: Schwimmer[],
-): string {
-  const schwimmerName = new Map(schwimmer.map((eintrag) => [eintrag.id, eintrag.name]))
-  // Reihenfolge der Disziplinen = Reihenfolge ihrer Anlage im Wettkampf.
-  const zeilen = [...satze]
-    .sort((a, b) => a.erstelltAm - b.erstelltAm)
-    .flatMap((satz) => {
-      // Nur Heats dieser Disziplin. Ältere Läufe ohne Wiederholungsnummer
-      // bekommen den Sortierschlüssel 0 und stehen damit vorn; exportiert wird
-      // für sie die Heat 1.
-      const zugehoerige = laeufe
-        .filter((lauf) => lauf.satzId === satz.id)
-        .sort((a, b) => (a.wiederholung ?? 0) - (b.wiederholung ?? 0))
-      return zugehoerige.flatMap((lauf) =>
-        wettkampfErgebnis(lauf).map((zeile) =>
-          [
-            wettkampf.name,
-            wettkampf.datum,
-            satz.bezeichnung,
-            satz.konfiguration.streckeM ?? '',
-            streckeAnzeige(satz.konfiguration.streckeM, einheitVon(satz.konfiguration)) ?? '',
-            einheitVon(satz.konfiguration),
-            satz.konfiguration.schwimmart,
-            lauf.wiederholung ?? 1,
-            zeile.platz ?? '',
-            zeile.bahn.nummer,
-            zeile.bahn.schwimmerId ? (schwimmerName.get(zeile.bahn.schwimmerId) ?? '') : '',
-            // Offene Bahnen haben keine Zeit; die Zelle bleibt leer, damit
-            // Excel sie nicht als 0 zählt.
-            zeile.zeitMs ?? '',
-            zeile.zeitMs === null ? '' : formatTime(zeile.zeitMs),
-            // Status statt Zeit: DNS und DNF sind endgültig und für die
-            // Ergebnisliste eindeutig; nur wirklich offene Bahnen heißen offen.
-            zeile.status === 'dns'
-              ? 'DNS'
-              : zeile.status === 'dnf'
-                ? 'DNF'
-                : zeile.zeitMs === null
-                  ? 'offen'
-                  : 'Ziel',
-            zeile.manuell ? 1 : 0,
-          ]
-            .map(feld)
-            .join(TRENNER),
-        ),
-      )
-    })
-
-  return `\uFEFF${[WETTKAMPF_KOPFZEILE.join(TRENNER), ...zeilen].join('\r\n')}\r\n`
-}
-
-/**
- * Dateiname der Wettkampf-Ergebnisse, z. B.
- * `beckenrand-wettkampf-2026-10-29.csv`. Das Wettkampfdatum statt des
- * Exportdatums, damit die Datei zum Wettkampftag passt.
- */
-export function wettkampfCsvDateiname(wettkampf: Wettkampf): string {
-  return `beckenrand-wettkampf-${wettkampf.datum}.csv`
 }

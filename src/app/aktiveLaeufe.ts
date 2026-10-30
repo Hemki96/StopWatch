@@ -84,8 +84,6 @@ export function speichereAktivenLaufId(id: string | null): void {
  *
  * Regeln im Einzelnen:
  * - Unbekannte IDs (gelöschter Lauf) fallen weg.
- * - Wettkampf-Läufe erscheinen nie in der Trainingsleiste; sie werden im
- *   Wettkampf-Tab bedient.
  * - Vollständig beendete Läufe und Serien werden ausgeblendet, bleiben aber im
  *   Verlauf. Nach einem Neustart ist die Leiste dadurch aufgeräumt.
  * - Doppelte Einträge derselben Serie bzw. desselben Laufs werden über
@@ -96,7 +94,7 @@ export function bereinigeAktiveIds(ids: string[], laeufe: Lauf[], satze: Satz[])
   const gesehen = new Set<string>()
   for (const id of ids) {
     const lauf = laeufe.find((eintrag) => eintrag.id === id)
-    if (!lauf || lauf.modus === 'wettkampf') continue
+    if (!lauf) continue
     const satz = satze.find((eintrag) => eintrag.id === lauf.satzId)
     if (istSerie(satz) && satz) {
       const runden = rundenVon(laeufe, satz.id)
@@ -124,7 +122,7 @@ export function bereinigeAktiveIds(ids: string[], laeufe: Lauf[], satze: Satz[])
 export function waehleOffenenLauf(laeufe: Lauf[], satze: Satz[]): string | null {
   const kandidat = [...laeufe]
     .sort((a, b) => (b.startWallMs ?? 0) - (a.startWallMs ?? 0))
-    .find((lauf) => !isComplete(lauf) && lauf.modus !== 'wettkampf')
+    .find((lauf) => !isComplete(lauf))
   if (!kandidat) return null
   const satz = satze.find((eintrag) => eintrag.id === kandidat.satzId)
   const anker = istSerie(satz) && satz ? (rundenVon(laeufe, satz.id)[0] ?? kandidat) : kandidat
@@ -165,15 +163,10 @@ export function berechneAktiveEintraege(
  * vergessener Zähler würde den Bildschirm dauerhaft wachhalten.
  */
 export function berechneBrauchtTakt(eintraege: AktiverEintrag[], laeufe: Lauf[]): boolean {
-  return (
-    eintraege.some((eintrag) => {
-      if (eintrag.serie && eintrag.satz) {
-        return rundenVon(laeufe, eintrag.satz.id).some(hatLaufendeBahn)
-      }
-      return hatLaufendeBahn(eintrag.lauf)
-    }) ||
-    // Ein laufender Wettkampf-Lauf hält den Takt genauso nötig wie ein
-    // Trainingslauf, auch wenn er nicht in der Trainingsleiste steht.
-    laeufe.some((lauf) => lauf.modus === 'wettkampf' && hatLaufendeBahn(lauf))
-  )
+  return eintraege.some((eintrag) => {
+    if (eintrag.serie && eintrag.satz) {
+      return rundenVon(laeufe, eintrag.satz.id).some(hatLaufendeBahn)
+    }
+    return hatLaufendeBahn(eintrag.lauf)
+  })
 }

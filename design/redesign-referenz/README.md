@@ -39,14 +39,14 @@ implementierbar fest, damit die folgenden Tickets nicht blockiert sind.
 | Kein Scrollen während der Messung | Kein Seiten-Scroll; nur das Kachelfeld darf scrollen, Kopf und Aktionsleiste bleiben stehen | Bei 10 Bahnen auf 667-px-Handys physisch nicht anders lösbar |
 | Bottom Sheets mit Griff | vorhanden; auf `rail` zentriertes Fenster ohne Griff | Bestand |
 | Verwerfen-Dialog | `alertdialog`, Fokus auf „Abbrechen“, Bestätigung rot | Bestand |
-| Zehn Screens | Zehn Referenz-Screens plus Bestands-Screens (Training, Wettkampf, Serie, Analyse, Startübersicht, Banner) | App ist größer als der Brief |
+| Zehn Screens | Zehn Referenz-Screens plus Bestands-Screens (Training, Serie, Analyse, Startübersicht, Banner) | App ist größer als der Brief |
 | Export/Teilen im Lauf-Detail | CSV-Download; kein Web-Share | Kein Share-Ziel im Bestand, nicht Teil des Redesigns |
 
 ## Lesereihenfolge
 
 1. [Informationsarchitektur](01-informationsarchitektur.md) — Navigation, Ebenen, Abläufe
 2. [Screens](02-screens.md) — die zehn Screens aus dem Brief
-3. [Bestands-Screens](03-screens-bestand.md) — Training, Wettkampf, Serie, Analyse, Startübersicht, globales Gerüst
+3. [Bestands-Screens](03-screens-bestand.md) — Training, Serie, Analyse, Startübersicht, globales Gerüst
 4. [Layout und Raster](04-layout-und-raster.md) — Gerüst, Breakpoints, Bahnenraster, Sheets
 5. [Typografie](05-typografie.md) — Skala, Ziffern, deutsche Formate
 6. [Farben](06-farben.md) — Tokens, Kontraste, Statusfarben, Theme-Regeln
@@ -61,7 +61,7 @@ implementierbar fest, damit die folgenden Tickets nicht blockiert sind.
 | Nr. | Entscheidung | Begründung |
 | --- | --- | --- |
 | D1 | Ein Screen ist eine **Kontrollfläche**, keine Seite: fester Kopf, flexibler Inhalt, verankerte Aktionsleiste | Einhandbedienung am Beckenrand |
-| D2 | Sechs Tabs bleiben: Timer, Training, Wettkampf, Verlauf, Schwimmer, Mehr | Messung zuerst; bestehende IA funktioniert |
+| D2 | Fünf Tabs bleiben: Timer, Training, Verlauf, Schwimmer, Mehr | Messung zuerst; bestehende IA funktioniert |
 | D3 | Genau **eine** primäre Aktion je Screen, unten, 56–80 px hoch | Kein Suchen mit nassen Fingern |
 | D4 | Farbe ist **Status**, nie Dekoration. Zusätzlich immer Text oder Form | Sonne, Farbsehschwäche, Screenreader |
 | D5 | Keine Bilder, Verläufe, Glasflächen. Grafiken sind Zahlen, Haarlinien und das Beckenmuster im Leerzustand | Brief; Lesbarkeit bei Sonne |

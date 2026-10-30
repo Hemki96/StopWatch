@@ -14,21 +14,20 @@ Reihenfolge des Funktionsumfangs.
 
 ## 1.0 — „Am Beckenrand“
 
-Ziel: ein stabiles Trainings- und Wettkampfwerkzeug für metrische Becken. Die Kernfunktionen sind
-bereits in 0.1.0 vorhanden; 1.0 schließt die offenen Lücken und ergänzt die Auswertung.
+Ziel: ein stabiles Trainingswerkzeug für metrische Becken. Die Kernfunktionen sind bereits in 0.1.0
+vorhanden; 1.0 schließt die offenen Lücken und ergänzt die Auswertung.
 
 ### Inhalt
 
-- **Kern:** Timer, Startversatz, mehrere aktive Läufe, Serien, Training, Wettkampf, Verlauf,
-  Bestzeiten, CSV/JSON, Offline/PWA.
+- **Kern:** Timer, Startversatz, mehrere aktive Läufe, Serien, Training, Verlauf, Bestzeiten,
+  CSV/JSON, Offline/PWA.
+- **Training:** Sätze optional automatisch nacheinander starten; der Schalter gilt pro Training.
 - **Abschluss und Vertrauen:**
   - [#35](https://github.com/Hemki96/StopWatch/issues/35) Lauf-Ende: Ergebnisübersicht mit
     Bestzeit-Vergleich
   - [#36](https://github.com/Hemki96/StopWatch/issues/36) Statuszeile: verstrichene Laufzeit
   - [#37](https://github.com/Hemki96/StopWatch/issues/37) Schwimmer: Bestzeiten-Eintrag öffnet den
     Lauf
-  - [#38](https://github.com/Hemki96/StopWatch/issues/38) Wettkampf: DNS/DNF erfassen, anzeigen und
-    exportieren
   - [#39](https://github.com/Hemki96/StopWatch/issues/39) Schwimmer-Liste: „alle zeigen“ absichern
 - **Analyse:**
   - [#34](https://github.com/Hemki96/StopWatch/issues/34) Analyse: Zwischenzeiten im Satz
@@ -63,26 +62,26 @@ Ziel: metrische und Yard-Becken mit derselben Genauigkeit. Die Oberfläche bleib
 - [#40](https://github.com/Hemki96/StopWatch/issues/40) Einheiten-Fundament: Meter und Yards
 - [#41](https://github.com/Hemki96/StopWatch/issues/41) Einheiten im Messfluss
 - [#42](https://github.com/Hemki96/StopWatch/issues/42) Einheiten in Verlauf, Detail und Bestzeiten
-- [#43](https://github.com/Hemki96/StopWatch/issues/43) Einheiten in Training, Serien, Wettkampf
-  und CSV
-- Meldelisten-Import für Yard-Wettkämpfe
+- [#43](https://github.com/Hemki96/StopWatch/issues/43) Einheiten in Training, Serien und CSV
 - ADR und Handbuch zu Meter/Yards, Umrechnung und getrennten Bestzeiten
 
 **Nicht in 1.1:** automatische Umrechnung alter Läufe, UI-Sprachwechsel, imperiale Zeitformate.
 
-## 1.2 — „Wettkampf & Team“
+> **Nachtrag:** Mit [ADR 0013](docs/adr/0013-nur-meter-in-der-eingabe.md) entfällt die
+> Einheitenwahl in der Oberfläche. Neue Läufe sind immer Meter; alte Yard-Läufe bleiben lesbar und
+> getrennt.
 
-Ziel: einen ganzen Wettkampftag abbilden, nicht nur einzelne Heats.
+## 1.2 — „Training & Team“
 
-- Staffeln inklusive Aufstellung und Wechselzeiten
+Ziel: Trainingseinheiten und die Gruppe am Beckenrand besser abbilden.
+
+- Trainingsvorlagen für wiederkehrende Einheiten
+- Anwesenheit und Saisonkalender
 - Vereins- und Teamdaten sowie Jahrgang und Geschlecht am Schwimmer
-- Erweiterte Meldelisten-Formate (z. B. Hy-Tek- und SwimRankings-CSV)
-- Wertung nach Altersklasse und Geschlecht
-- Ergebnis-PDF oder teilbare Ergebnisliste
-- Offene Entscheidung: Welche Meldelisten-Formate zuerst kommen, entscheidet der nächste
-  Wettkampfbedarf.
+- Staffel-Aufstellung innerhalb einer Trainingseinheit
+- Teilbare Trainingszusammenfassung
 
-**Nicht in 1.2:** direkte Anbindung an eine Wettkampfsoftware, Live-Ergebnisdienst im Netz.
+**Nicht in 1.2:** externe Ergebnisdienste, Live-Übertragung im Netz.
 
 ## 1.3 — „Analyse vertiefen“
 
@@ -104,7 +103,6 @@ abgeleitet; es gibt keine neue Speicherung von Aggregaten.
 - Hintergrundbetrieb mit Taps (Grenze der PWA, siehe
   [ADR 0001](docs/adr/0001-pwa-statt-native.md))
 - Apple Watch, Bluetooth-Taster und andere Hardware
-- Direkte Wettkampfsoftware-API
 - Sprachsteuerung
 - Wechsel der UI-Sprache
 
@@ -112,8 +110,6 @@ abgeleitet; es gibt keine neue Speicherung von Aggregaten.
 
 - **Einheiten:** Kanonische Speicherung in Metern und die Behandlung von 25-Yard-Becken werden in
   [#40](https://github.com/Hemki96/StopWatch/issues/40) als ADR festgehalten.
-- **Wettkampf-Formate:** Die Reihenfolge der Meldelisten-Importe hängt vom ersten echten
-  Wettkampfbedarf ab.
 - **Analyse:** Diagramme bleiben in 1.3 lesend; eine manuelle Referenzwahl kommt erst, wenn der
   automatische Vergleich nachweislich daneben liegt.
 

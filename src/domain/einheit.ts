@@ -58,6 +58,32 @@ export function streckeAnzeige(streckeM: number | null, einheit: Einheit): numbe
   return streckeM === null ? null : meterZuAnzeige(streckeM, einheit)
 }
 
+/**
+ * Überführt eine Konfiguration in die einzige Eingabe-Einheit Meter.
+ *
+ * Die Einheit wird nicht mehr gewählt; neue Läufe sind immer Meter. Alte
+ * Yard-Konfigurationen bleiben lesbar und werden beim Übernehmen in die
+ * Einstellungen oder beim Bearbeiten eines Plans umgerechnet. Dabei bleiben die
+ * angezeigten Zahlen erhalten (25 yd → 25 m, 100 yd → 100 m): Aus einem
+ * 25-Yard-Becken wird so ein 25-m-Becken, ohne dass eine unsichtbare Einheit
+ * zurückbleibt.
+ */
+export function alsMeterKonfiguration(
+  konfiguration: LaufKonfiguration,
+): LaufKonfiguration {
+  if (einheitVon(konfiguration) === 'm') {
+    if (konfiguration.einheit === undefined) return konfiguration
+    const { einheit: _einheit, ...ohneEinheit } = konfiguration
+    return ohneEinheit
+  }
+  const { einheit: _einheit, ...ohneEinheit } = konfiguration
+  return {
+    ...ohneEinheit,
+    beckenlaengeM: 25,
+    streckeM: streckeAnzeige(konfiguration.streckeM, 'yd'),
+  }
+}
+
 /** Erlaubte Beckenlängen je Einheit: Meter 25/50, Yards nur 25 yd. */
 export function beckenlaengenFuer(einheit: Einheit): readonly Beckenlaenge[] {
   return einheit === 'yd' ? ([BECKENLAENGE_25_YD_M] as const) : ([25, 50] as const)

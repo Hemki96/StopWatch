@@ -17,9 +17,9 @@
 import 'fake-indexeddb/auto'
 import { act } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Training } from '../domain/types'
+import type { Satz, Training } from '../domain/types'
 import { isComplete, isFinished } from '../domain/lauf'
-import { clearAll, loadAll } from '../storage/repository'
+import { clearAll, loadAll, saveSatz } from '../storage/repository'
 import { BACKUP_FORMAT, BACKUP_VERSION } from '../storage/backup'
 import { speicherSchluessel } from '../storage/namensraum'
 import { render, warteAuf } from '../test/render'
@@ -90,7 +90,7 @@ afterEach(() => {
 })
 
 // Deckt den Lebenszyklus des Providers ab: Startzustand, Einstellungen,
-// Läufe und Serien, Schwimmer, Wettkampf, Training, Persistenz und Design.
+// Läufe und Serien, Schwimmer, Training, Persistenz und Design.
 describe('AppProvider', () => {
   // Startzustand nach dem Laden: Der Tab hält die Messung (kein
   // BroadcastChannel), der Bestand ist leer, die Einstellungen sind Standard.
@@ -539,123 +539,6 @@ describe('AppProvider', () => {
     expect(app.wert().aktiverLauf).toBe(vorher)
   })
 
-  // Wettkampf, Disziplin, Meldeliste und Zielzeit in einem Durchlauf. Wichtig:
-  // Name und Bezeichnung werden getrimmt bzw. aus Strecke und Schwimmart
-  // abgeleitet, das Datum muss ISO sein, und ein Tap im Wettkampf erzeugt
-  // sofort einen Finish-Anschlag (keine Längen-Splits).
-  it('legt einen Wettkampf mit Disziplin an und wertet Zielzeiten', async () => {
-    const app = await geladeneApp()
-
-    let wettkampfId: string | null = null
-    act(() => {
-      wettkampfId = app.wert().erstelleWettkampf({
-        name: '  Herbstpokal  ',
-        datum: '2026-10-29',
-        beckenlaengeM: 50,
-      })
-    })
-    expect(app.wert().wettkampfe[0]).toMatchObject({
-      id: wettkampfId,
-      name: 'Herbstpokal',
-      datum: '2026-10-29',
-    })
-
-    let ungueltig: string | null = 'x'
-    // Nur ISO-Daten sind gültig; das deutsche Format wird abgelehnt, statt
-    // still falsch geparst zu werden.
-    act(() => {
-      ungueltig = app.wert().erstelleWettkampf({
-        name: 'Test',
-        datum: '29.10.2026',
-        beckenlaengeM: 50,
-      })
-    })
-    expect(ungueltig).toBeNull()
-
-    // Eine leere Bezeichnung wird aus Strecke und Schwimmart gebildet; jede
-    // Disziplin erzeugt ihre Heats als Läufe im Modus `wettkampf`.
-    let satzId: string | null = null
-    act(() => {
-      satzId = app.wert().erstelleWettkampfDisziplin(wettkampfId!, {
-        bezeichnung: '',
-        streckeM: 100,
-        schwimmart: 'freistil',
-        laeufe: 2,
-        bahnen: 3,
-      })
-    })
-    expect(satzId).not.toBeNull()
-    expect(app.wert().satze.find((satz) => satz.id === satzId)?.bezeichnung).toBe(
-      '100 m Freistil',
-    )
-    expect(app.wert().laeufe).toHaveLength(2)
-    expect(app.wert().laeufe.every((lauf) => lauf.modus === 'wettkampf')).toBe(true)
-
-    const lauf = app.wert().laeufe.find((eintrag) => eintrag.wiederholung === 1)!
-    // Namen aus der Meldeliste werden zu Schwimmern; leere Bahnen bleiben
-    // unbesetzt, statt einen Datensatz ohne Namen anzulegen.
-    act(() => app.wert().setzeWettkampfNamen(lauf.id, ['Anna', 'Ben', '']))
-    expect(app.wert().schwimmer.map((eintrag) => eintrag.name)).toEqual(['Anna', 'Ben'])
-    expect(app.wert().laeufe.find((eintrag) => eintrag.id === lauf.id)?.bahnen).toMatchObject([
-      { nummer: 1, schwimmerId: expect.any(String) },
-      { nummer: 2, schwimmerId: expect.any(String) },
-      { nummer: 3, schwimmerId: null },
-    ])
-
-    act(() => app.wert().starteWettkampfLauf(lauf.id, 0, 0))
-    const gestartet = app.wert().laeufe.find((eintrag) => eintrag.id === lauf.id)!
-    act(() => app.wert().tippeWettkampf(lauf.id, gestartet.bahnen[0]!.id, 60_000, 60_000))
-    expect(app.wert().laeufe.find((eintrag) => eintrag.id === lauf.id)?.bahnen[0]?.anschlaege).toHaveLength(1)
-
-    // Von Hand nachgetragene Zeit: ein Anschlag, sofort als Finish markiert
-    // und als `manuell` gekennzeichnet.
-    act(() => app.wert().setzeWettkampfZeit(lauf.id, gestartet.bahnen[1]!.id, 59_900))
-    expect(
-      app.wert().laeufe.find((eintrag) => eintrag.id === lauf.id)?.bahnen[1]?.anschlaege[0],
-    ).toMatchObject({ splitMs: 59_900, istFinish: true, manuell: true })
-
-    act(() => app.wert().rueckgaengigWettkampf(lauf.id, gestartet.bahnen[0]!.id))
-    expect(
-      app.wert().laeufe.find((eintrag) => eintrag.id === lauf.id)?.bahnen[0]?.anschlaege,
-    ).toHaveLength(0)
-
-    act(() => app.wert().benenneWettkampf(wettkampfId!, '  Winterpokal '))
-    expect(app.wert().wettkampfe[0]?.name).toBe('Winterpokal')
-
-    // Löschen des Wettkampfs räumt Disziplinen und deren Läufe mit ab.
-    act(() => app.wert().loescheWettkampf(wettkampfId!))
-    expect(app.wert().wettkampfe).toEqual([])
-    expect(app.wert().satze).toEqual([])
-    expect(app.wert().laeufe).toEqual([])
-  })
-
-  // Die Streckenprüfung gilt auch im Wettkampf: 75 m passen in kein 50-m-Becken,
-  // die Disziplin wird abgelehnt und es entstehen keine Läufe.
-  it('lehnt eine Disziplin ab, deren Strecke nicht ins Becken passt', async () => {
-    const app = await geladeneApp()
-    let wettkampfId: string | null = null
-    act(() => {
-      wettkampfId = app.wert().erstelleWettkampf({
-        name: 'Test',
-        datum: '2026-10-29',
-        beckenlaengeM: 50,
-      })
-    })
-
-    let ergebnis: string | null = 'x'
-    act(() => {
-      ergebnis = app.wert().erstelleWettkampfDisziplin(wettkampfId!, {
-        bezeichnung: 'Schief',
-        streckeM: 75,
-        schwimmart: 'freistil',
-        laeufe: 1,
-        bahnen: 2,
-      })
-    })
-    expect(ergebnis).toBeNull()
-    expect(app.wert().laeufe).toEqual([])
-  })
-
   // Ein Trainingsplan erzeugt zunächst keine Läufe: Erst der Start eines
   // Trainingssatzes macht daraus Satz und Läufe. Der doppelte Start ist
   // idempotent und liefert denselben Anker, statt den Satz zu verdoppeln.
@@ -752,6 +635,51 @@ describe('AppProvider', () => {
     )
   })
 
+  // Ein Tagesname hängt am Datum, nicht an einem einzelnen Satz: Die Aktion
+  // schreibt ihn auf alle Sätze des Tages. Der Test prüft State, Persistenz und
+  // den Reload, weil der Verlauf den Namen aus den Sätzen ableitet.
+  it('benennt einen Tag auf allen Sätzen und behält den Namen nach einem Neustart', async () => {
+    const basis: Satz = {
+      id: 'satz-a',
+      datum: '2026-10-27',
+      bezeichnung: '100 m',
+      konfiguration: K100,
+      plan: null,
+      erstelltAm: 0,
+    }
+    await saveSatz(basis)
+    await saveSatz({ ...basis, id: 'satz-b', bezeichnung: '200 m' })
+    await saveSatz({ ...basis, id: 'satz-c', datum: '2026-10-28', bezeichnung: '300 m' })
+
+    const app = await geladeneApp()
+    act(() => app.wert().benenneTag('2026-10-27', '  Kader A  '))
+
+    expect(
+      app
+        .wert()
+        .satze.filter((satz) => satz.datum === '2026-10-27')
+        .map((satz) => satz.tagesbezeichnung),
+    ).toEqual(['Kader A', 'Kader A'])
+    expect(
+      app.wert().satze.find((satz) => satz.datum === '2026-10-28')?.tagesbezeichnung,
+    ).toBe('')
+
+    await warteAuf(async () => {
+      const daten = await loadAll()
+      return daten.satze
+        .filter((satz) => satz.datum === '2026-10-27')
+        .every((satz) => satz.tagesbezeichnung === 'Kader A')
+    })
+
+    const neu = await geladeneApp()
+    expect(
+      neu
+        .wert()
+        .satze.filter((satz) => satz.datum === '2026-10-27')
+        .map((satz) => satz.tagesbezeichnung),
+    ).toEqual(['Kader A', 'Kader A'])
+  })
+
   // Die Leiste oben ist nur eine Auswahlhilfe: Ein vollständig beendeter Lauf
   // bleibt im Verlauf, wird beim Neustart aber nicht mehr als aktiv angeboten.
   it('räumt vollständig beendete Läufe beim Neustart aus der Leiste', async () => {
@@ -810,7 +738,7 @@ describe('AppProvider', () => {
     const pruefung = app.wert().pruefeBackupFuerImport(backup)
     expect(pruefung.ok).toBe(true)
     if (pruefung.ok) {
-      expect(pruefung.text).toBe('0 Schwimmer, 0 Wettkämpfe, 0 Trainings, 0 Sätze, 0 Läufe')
+      expect(pruefung.text).toBe('0 Schwimmer, 0 Trainings, 0 Sätze, 0 Läufe')
     }
     expect(app.wert().pruefeBackupFuerImport(null)).toEqual({
       ok: false,

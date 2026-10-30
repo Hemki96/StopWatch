@@ -13,9 +13,8 @@ Die fachlichen Daten liegen in der IndexedDB-Datenbank **`beckenrand.v2`** (Sche
 | Store | Inhalt |
 | --- | --- |
 | `schwimmer` | Namen, Jahrgang, Notiz |
-| `satz` | Sätze, Serienpläne, Disziplinen |
+| `satz` | Sätze und Serienpläne |
 | `lauf` | Läufe mit Bahnen und Anschlägen |
-| `wettkampf` | Wettkämpfe |
 | `training` | vorbereitete Trainings |
 
 Die Datenbank gehört zum **Origin** der App. `https://hemki96.github.io/StopWatch/` und ein lokaler
@@ -103,7 +102,7 @@ privater Modus, blockierte Website-Daten).
 | Wiederherstellbar | Nein | Ja |
 | Einstellungen | Nein | Nein |
 | Für Menschen lesbar | Ja, tabellarisch | Ja, technisches JSON |
-| Empfohlen | Nach jedem Wettkampf, für die Auswertung | Regelmäßig und vor riskanten Aktionen |
+| Empfohlen | Nach jeder Einheit, für die Auswertung | Regelmäßig und vor riskanten Aktionen |
 
 ## Backup sichern
 
@@ -125,7 +124,6 @@ als das direkte Öffnen in einer anderen App.
   "schwimmer": [],
   "satze": [],
   "laeufe": [],
-  "wettkampfe": [],
   "trainings": []
 }
 ```
@@ -139,11 +137,12 @@ Speicherung ändert.
 | Version | Inhalt |
 | --- | --- |
 | 1 | Schwimmer, Sätze, Läufe |
-| 2 | zusätzlich Wettkämpfe |
+| 2 | früher zusätzlich Wettkämpfe (wird beim Einlesen ignoriert) |
 | 3 | zusätzlich Trainings |
 
 Die aktuelle App schreibt **Version 3** und liest **Version 1 bis 3**. Fehlende Listen älterer
-Backups werden als leer ergänzt. Ein Backup einer neueren Version wird abgelehnt.
+Backups werden als leer ergänzt. Ein früheres Feld `wettkampfe` wird still verworfen. Ein Backup
+einer neueren Version wird abgelehnt.
 
 ## Backup einlesen
 
@@ -152,7 +151,7 @@ Backups werden als leer ergänzt. Ein Backup einer neueren Version wird abgelehn
 3. Die App prüft die Datei vollständig, **bevor** sie schreibt.
 4. Bei Erfolg erscheint eine Vorschau, z. B.:
    > Vorhandene Daten bleiben erhalten; neue Datensätze werden ergänzt. Übernommen werden:
-   > 12 Schwimmer, 1 Wettkampf, 2 Trainings, 8 Sätze, 24 Läufe.
+   > 12 Schwimmer, 2 Trainings, 8 Sätze, 24 Läufe.
 5. Gibt es Kollisionen, nennt die Vorschau zusätzlich Zahl und Art der Konflikte, z. B.
    > 3 Konflikte: 2 Läufe, 1 Schwimmer. 2 davon sind lokal neuer.
 6. **Importieren** bestätigt. Sollen die Konflikte bewusst durch den Stand des Backups ersetzt
@@ -194,7 +193,7 @@ Die Prüfung kontrolliert unter anderem:
 - gültiges `exportiertAm`,
 - Pflichtfelder, Datumsformat und IDs,
 - Beckenlänge 25/50 und gültige Strecken,
-- gültige Schwimmarten,
+- gültige Schwimmarten (für ältere Backups) und 0–99 Zwischenzeiten,
 - Anschläge mit Zeit, Reihenfolge und Finish-Flag,
 - Satzpläne und Trainingsgrenzen,
 - maximal 10 Bahnen, 20 Wiederholungen, 20 Sätze.
@@ -239,7 +238,6 @@ Löschen eines Laufs oder Satzes im Verlauf der bessere Weg.
 | --- | --- |
 | Nach dem ersten Einrichten | Speicherschutz anfordern und ein Backup testen |
 | Nach jedem Trainingstag | Backup sichern, wenn die Daten wichtig sind |
-| Nach jedem Wettkampf | Ergebnis-CSV exportieren **und** Backup sichern |
 | Vor einem App-Update | Backup sichern |
 | Vor „Alle Daten löschen“ | Backup sichern und den Import einmal prüfen |
 | Monatlich | Backup außerhalb des Geräts ablegen |
@@ -272,5 +270,4 @@ Gerät oder nach dem Löschen der Daten den Import testen.
 ## Verwandte Seiten
 
 - [Verlauf und Auswertung](06-verlauf-und-auswertung.md) — CSV-Formate
-- [Wettkampf](05-wettkampf.md#ergebnisse-exportieren) — Ergebnis-CSV
 - [Probleme und FAQ](08-probleme-und-faq.md) — wenn der Import scheitert

@@ -8,7 +8,7 @@
  * Version abgelehnt wird, ohne den vorhandenen Bestand anzutasten.
  *
  * Vorbedingung: Jeder Test startet in einem frischen Browser-Kontext, also mit
- * leerer IndexedDB. „0 Schwimmer, 0 Wettkämpfe, 0 Trainings“ ist deshalb
+ * leerer IndexedDB. „0 Schwimmer, 0 Trainings“ ist deshalb
  * eindeutig. Das Onboarding überspringt `oeffneApp`.
  *
  * Downloads und Dateiauswahl laufen über Playwright-Ereignisse
@@ -62,11 +62,11 @@ test('Backup exportieren, alles löschen und wieder einlesen', async ({ page }) 
   // schreibt der Import.
   await expect(page.getByText('Backup importieren?')).toBeVisible()
   await expect(
-    page.getByText(/0 Schwimmer, 0 Wettkämpfe, 0 Trainings, 1 Satz, 1 Lauf/),
+    page.getByText(/0 Schwimmer, 0 Trainings, 1 Satz, 1 Lauf/),
   ).toBeVisible()
   await page.getByRole('button', { name: 'Importieren', exact: true }).click()
   await expect(
-    page.getByText(/Übernommen: 0 Schwimmer, 0 Wettkämpfe, 0 Trainings, 1 Satz, 1 Lauf/),
+    page.getByText(/Übernommen: 0 Schwimmer, 0 Trainings, 1 Satz, 1 Lauf/),
   ).toBeVisible()
 
   // Gegenprobe in der Oberfläche: Der Verlauf zählt den wiederhergestellten

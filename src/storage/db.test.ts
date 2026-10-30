@@ -18,7 +18,7 @@ import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DATENBANK_NAME, LEGACY_DATENBANK_NAME, speicherSchluessel } from './namensraum'
 
-const STORES = ['schwimmer', 'satz', 'lauf', 'wettkampf', 'training'] as const
+const STORES = ['schwimmer', 'satz', 'lauf', 'training'] as const
 
 /** Legt eine Datenbank mit dem aktuellen Schema an (nur für Testdaten). */
 function oeffneMitSchema(name: string): Promise<IDBDatabase> {

@@ -145,7 +145,6 @@ Empfehlung:
   fehlen.
 - Unterbrochene Bahnen lange drücken, um die Anschläge schrittweise zurückzunehmen; danach neu
   starten.
-- Im Wettkampf den Heat erneut starten; vorhandene Zielzeiten bleiben.
 
 Eine **Tab-Übergabe** ist kein Reload: „Hier weiterarbeiten“ übernimmt die laufende Messung und
 rechnet die Startzeiten auf den neuen Tab um.
@@ -190,42 +189,6 @@ ganze Training löschen. Beim Löschen des Trainings bleiben bereits gemessene S
 Der Fortschritt wird aus den vorhandenen Sätzen und Läufen berechnet. Ein Satz wird erst fertig,
 wenn **alle** seine Läufe vollständig sind. Prüfe im Timer, ob noch eine Bahn offen ist. Wurde der
 Satz im Verlauf gelöscht, fällt der Trainingssatz auf **offen** zurück.
-
-## Wettkampf
-
-### Der Start-Knopf fehlt
-
-- Sind bereits alle Bahnen im Ziel, zeigt die App **Lauf beendet** und den nächsten Schritt.
-- Wurden alle Zeiten manuell eingetragen, gilt der Lauf ebenfalls als beendet, auch ohne Start.
-- Sind einzelne Zeiten manuell gesetzt und andere Bahnen offen, bleibt **Start** sichtbar.
-
-### Nach einem Tipp ist die Bahn sofort im Ziel
-
-Das ist der Wettkampfmodus: Ein Tipp pro Bahn ist das Ziel, es gibt keine Splits. Für
-Zwischenzeiten den **Timer**-Tab verwenden.
-
-### Eine Zielzeit ist falsch
-
-Den **Stift** neben der Bahn verwenden. Die neue Zeit wird als **manuell** markiert und ersetzt die
-bisherige Zielzeit. Langes Drücken entfernt die Zielzeit und nimmt die Bahn aus dem Ziel.
-
-### Die Platzierung stimmt nicht
-
-Die App sortiert nach auf Hundertstel abgeschnittenen Zeiten. Zeitgleiche Zeiten teilen sich den
-Platz (`1, 1, 3`). Der Rückstand bezieht sich auf die schnellste rohe Zeit. Offene Bahnen stehen am
-Ende. Wenn eine Zeit manuell korrigiert wurde, sofort prüfen, ob die Markierung **manuell** sichtbar
-ist.
-
-### Der Import erzeugt Duplikate
-
-Ein Import in einen bestehenden Wettkampf **ergänzt** und ersetzt nichts. Dieselbe Datei zweimal zu
-importieren erzeugt doppelte Disziplinen und Läufe. Vor einem erneuten Import entweder den
-Wettkampf löschen oder die Datei nur einmal übernehmen. Ein Backup vorher sichern.
-
-### „Bahn X ist doppelt belegt“
-
-In derselben Disziplin und demselben Lauf darf jede Bahn nur einmal vorkommen. Die Fehlermeldung
-nennt die Zeile. Entweder die Bahnnummer in der CSV ändern oder die doppelte Zeile entfernen.
 
 ## Daten und Backup
 
@@ -336,7 +299,6 @@ kein Fehler und keine Voraussetzung für die Bedienung.
 - Kein Sync zwischen Geräten.
 - Keine Cloud und kein Konto.
 - Kein automatisches Backup.
-- Keine Splits im Wettkampf.
 - Keine nachträgliche Änderung eines gestarteten Trainingssatzes.
 - Kein Fortsetzen eines unterbrochenen Laufs nach Reload.
 - Keine Bestzeit bei offener Strecke.
@@ -355,5 +317,4 @@ kein Fehler und keine Voraussetzung für die Bedienung.
 
 - [Daten und Backup](07-daten-und-backup.md)
 - [Timer und Bahnen](02-timer.md)
-- [Wettkampf](05-wettkampf.md)
 - [Entwicklerdokumentation](../entwicklung/README.md)

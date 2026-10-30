@@ -2,7 +2,9 @@
 
 ## Status
 
-Angenommen, 2026-10-29.
+Angenommen, 2026-10-29. Die Einheitenwahl in der Oberfläche entfällt mit
+[ADR 0013](0013-nur-meter-in-der-eingabe.md); die kanonische Speicherung und die
+Lesbarkeit alter Yard-Daten bleiben bestehen.
 
 ## Kontext
 
@@ -22,10 +24,8 @@ werden.
   `streckeM` bleiben immer Meter. Ein Yard-Lauf speichert 25 yd als `22.86` m
   und 100 yd als `91.44` m. Die Anzeige-Einheit steht getrennt in
   `konfiguration.einheit` (`m` oder `yd`); fehlt sie, gilt `m`.
-- **Ein Feld für alle Kontexte:** `Lauf`, `Satz`, `TrainingsSatz` und
-  Wettkampf-Disziplinen tragen die Einheit über dieselbe
-  `LaufKonfiguration`. Ein `Wettkampf` trägt zusätzlich `einheit`, damit die
-  Disziplinen eines Wettkampfs dieselbe Anzeige verwenden.
+- **Ein Feld für alle Kontexte:** `Lauf`, `Satz` und `TrainingsSatz` tragen die
+  Einheit über dieselbe `LaufKonfiguration`.
 - **Eine Umrechnungsstelle:** `src/domain/einheit.ts` enthält den Faktor
   1 yd = 0,9144 m, die Anzeige-Rundung auf ganze Yards, die Beckenlängen je
   Einheit und die Pace pro 100 in der jeweiligen Einheit. Anzeige-, Eingabe-
@@ -35,9 +35,8 @@ werden.
   ein Meter- und ein Yard-Becken zufällig dieselbe kanonische Länge hätten.
 - **Grenzen:** Für Yards ist nur das 25-Yard-Becken vorgesehen. Strecken sind
   ganze Yard-Vielfache; die kanonischen Meter werden auf zwei
-  Nachkommastellen gerundet. Ein Yard-Eintrag in einem Meter-Wettkampf (und
-  umgekehrt) wird mit Zeilennummer abgelehnt, statt still umgerechnet zu
-  werden.
+  Nachkommastellen gerundet. Ein Yard-Eintrag in einem Meter-Lauf (und
+  umgekehrt) wird abgelehnt, statt still umgerechnet zu werden.
 - **Rückwärtskompatibilität:** Backup-Version und IndexedDB-Schema bleiben
   unverändert. Fehlende Einheiten in alten Daten und Backups bedeuten Meter;
   vorhandene Meter-Läufe werden nicht angefasst. `beckenlaengeM` akzeptiert
@@ -64,8 +63,6 @@ werden.
 - `Beckenlaenge` ist nicht mehr auf `25 | 50` beschränkt, sondern kennt
   `22.86` für 25 yd. Validierungen prüfen Vielfache mit einer kleinen Toleranz,
   weil `91.44 / 22.86` in Gleitkomma nicht exakt `4` ergibt.
-- Der Meldelisten-Import erkennt `m`, `yd`, `yard(s)` und `y`; ohne Suffix
-  gilt die Einheit des Wettkampfs.
 - Das Handbuch beschreibt Umrechnung, Bedienung und die Grenzen; die
   Datenmodell- und Domain-Referenz nennen die abgeleiteten Anzeigen.
 - Alte Backups ohne Einheit bleiben unverändert gültig. Ein Import schreibt

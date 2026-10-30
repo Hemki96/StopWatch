@@ -21,7 +21,6 @@ import { formatStrecke, formatTakt } from './format'
 import { einheitVon, formatBeckenlaenge } from './einheit'
 import { newId } from './id'
 import {
-  SCHWIMMARTEN,
   type Lauf,
   type LaufKonfiguration,
   type Satz,
@@ -104,6 +103,8 @@ export function neuesTraining(daten: {
   bezeichnung?: string
   bahnen: number
   reihen?: number
+  /** Fehlt der Wert, startet ein neues Training seine Sätze automatisch. */
+  autostart?: boolean
   aktive?: (string | null)[]
   saetze?: TrainingsSatz[]
 }): Training {
@@ -121,6 +122,7 @@ export function neuesTraining(daten: {
     bezeichnung: daten.bezeichnung?.trim() ?? '',
     bahnen,
     reihen,
+    autostart: daten.autostart ?? true,
     // Zu lange Listen werden abgeschnitten, zu kurze mit `null` aufgefüllt.
     aktive: Array.from({ length: personen }, (_, index) => daten.aktive?.[index] ?? null),
     saetze: daten.saetze?.length ? daten.saetze : [neuerTrainingsSatz()],
@@ -130,14 +132,12 @@ export function neuesTraining(daten: {
 }
 
 /**
- * Die Kurzbeschreibung eines Satzes aus Strecke, Wiederholungen und Schwimmart,
- * z. B. „4×100 m · Freistil“. Bei einer Wiederholung entfällt das „n×“.
+ * Die Kurzbeschreibung eines Satzes aus Strecke und Wiederholungen,
+ * z. B. „4×100 m“. Bei einer Wiederholung entfällt das „n×“.
  */
 export function beschreibeTrainingsSatz(satz: TrainingsSatz): string {
   const strecke = formatStrecke(satz.konfiguration.streckeM, einheitVon(satz.konfiguration))
-  const art = SCHWIMMARTEN.find((eintrag) => eintrag.wert === satz.konfiguration.schwimmart)?.label
-  const distanz = satz.wiederholungen > 1 ? `${satz.wiederholungen}×${strecke}` : strecke
-  return art ? `${distanz} · ${art}` : distanz
+  return satz.wiederholungen > 1 ? `${satz.wiederholungen}×${strecke}` : strecke
 }
 
 /**
@@ -227,6 +227,9 @@ export function pruefeTraining(training: Training): string | null {
   }
   if (training.aktive.some((wert) => wert !== null && typeof wert !== 'string')) {
     return 'Die Aktiven dürfen nur Schwimmer-IDs oder null enthalten.'
+  }
+  if (training.autostart !== undefined && typeof training.autostart !== 'boolean') {
+    return 'Der automatische Satzwechsel muss wahr oder falsch sein.'
   }
   if (training.saetze.length === 0) return 'Ein Training braucht mindestens einen Satz.'
   if (training.saetze.length > MAX_TRAININGS_SAETZE) {
@@ -362,6 +365,23 @@ export function trainingZusammenfassung(fortschritt: TrainingsSatzFortschritt[])
     fertig: fortschritt.filter((eintrag) => eintrag.status === 'fertig').length,
     gesamt: fortschritt.length,
   }
+}
+
+/**
+ * Das Training, aus dem ein Satz entstanden ist. Die Zuordnung steht in
+ * `training.gestartet`; ein gelöschter Plan oder eine verwaiste Satz-ID ergibt
+ * `null`.
+ */
+export function trainingVonSatz(
+  trainings: readonly Training[] | null | undefined,
+  satzId: string | null,
+): Training | null {
+  if (!satzId || !trainings) return null
+  return (
+    trainings.find((training) =>
+      Object.values(training.gestartet).some((id) => id === satzId),
+    ) ?? null
+  )
 }
 
 /**

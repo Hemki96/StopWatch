@@ -6,18 +6,18 @@
  * Personen: die gemessene mit Bestzeit und die noch nicht zugeordnete mit dem
  * Hinweis „noch keiner Bahn zugeordnet“. Ein Tipp auf eine Bestzeit öffnet den
  * Lauf, in dem sie gemessen wurde; der Rückweg führt zum selben aufgeklappten
- * Schwimmer. Das gilt für Training und Wettkampf.
+ * Schwimmer.
  *
  * Die Listenregel weicht bewusst von #19 ab: Die Liste filtert nicht auf
  * Personen mit Bahnzuordnung, weil sich sonst ein gerade angelegter Name nicht
  * mehr bearbeiten oder später zuordnen ließe. Der Test hält beide Fälle fest.
  *
  * Vorbedingung: frischer Browser-Kontext je Test; Standardkonfiguration
- * (50-m-Becken, 100 m, Freistil, 6 Bahnen).
+ * (50-m-Becken, 100 m, 6 Bahnen).
  */
 
 import { expect, test, type Page } from '@playwright/test'
-import { oeffneApp, starteLauf, warteAufSchwimmerzuordnung, warteAufZielzeiten } from './helfer'
+import { oeffneApp, starteLauf, warteAufSchwimmerzuordnung } from './helfer'
 
 /** Legt einen Schwimmer über das Formular an. */
 async function legeSchwimmerAn(page: Page, name: string): Promise<void> {
@@ -105,40 +105,4 @@ test('öffnet aus einer Trainings-Bestzeit den Lauf und kehrt zum selben Schwimm
   await page.getByRole('button', { name: 'Zurück zu den Schwimmern' }).click()
   await expect(mia.getByRole('button', { expanded: true })).toBeVisible()
   await expect(bestzeit).toBeVisible()
-})
-
-test('öffnet aus einer Wettkampf-Bestzeit den Heat', async ({ page }) => {
-  await oeffneApp(page)
-  await page.getByRole('button', { name: 'Wettkampf', exact: true }).tap()
-  await page.getByRole('button', { name: 'Meldeliste importieren' }).tap()
-
-  await page.getByLabel('Name des Wettkampfs').fill('Herbstpokal')
-  await page
-    .getByRole('textbox', { name: 'Meldeliste' })
-    .fill(
-      [
-        'disziplin;strecke_m;schwimmart;lauf;bahn;name',
-        '50 m Brust;50;brust;1;1;Clara',
-      ].join('\n'),
-    )
-  await page.getByRole('button', { name: 'Importieren', exact: true }).tap()
-
-  await page.getByRole('button', { name: /50 m Brust/ }).tap()
-  await page.getByRole('button', { name: 'Start', exact: true }).tap()
-  await page.getByRole('button', { name: /^Bahn 1, Clara, läuft$/ }).tap()
-  await expect(
-    page.getByRole('button', { name: /^Bahn 1, Clara, im Ziel, 1\. Platz$/ }),
-  ).toBeVisible()
-  await warteAufZielzeiten(page, 1)
-
-  // Clara ist über den Import als Schwimmerin angelegt und hat eine
-  // Wettkampf-Bestzeit. Der Eintrag öffnet denselben Lauf mit der Laufnummer.
-  await page.getByRole('button', { name: 'Schwimmer' }).tap()
-  const clara = page.locator('li', { hasText: 'Clara' })
-  await clara.getByRole('button', { expanded: false }).click()
-  await clara.getByRole('button', { name: /^Clara, \d{2}\.\d{2}\.\d{4}, \d{2}:\d{2},\d{2}$/ }).click()
-  await expect(page.getByRole('button', { name: 'Zurück zu den Schwimmern' })).toBeVisible()
-  await expect(page.getByText(/^Lauf 1/)).toBeVisible()
-  await page.getByRole('button', { name: 'Zurück zu den Schwimmern' }).click()
-  await expect(clara.getByRole('button', { expanded: true })).toBeVisible()
 })

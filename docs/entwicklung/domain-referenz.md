@@ -18,9 +18,12 @@ const STANDARD_KONFIGURATION = {
   streckeM: 100,
   schwimmart: 'freistil',
 }
+
+const MAX_ZWISCHENZEITEN = 99
 ```
 
-Wird beim Onboarding und als Fallback verwendet.
+Wird beim Onboarding und als Fallback verwendet. `schwimmart` bleibt für alte Daten im Modell,
+wird aber nicht mehr in der Oberfläche gewählt.
 
 ### `lengthCount(konfiguration): number | null`
 
@@ -30,10 +33,26 @@ Anzahl der Längen. `null` bei offener Strecke. Rechnet `Math.round(streckeM / b
 lengthCount({ beckenlaengeM: 50, streckeM: 100, schwimmart: 'freistil' }) // 2
 ```
 
+### `automatischeZwischenzeiten(konfiguration): number | null`
+
+Zahl der Zwischenzeiten aus der Längenzahl: `Längen − 1`. Bei offener Strecke `null`.
+
+### `eingestellteZwischenzeiten(konfiguration): number | null`
+
+Die vom Trainer eingestellte Zahl (`zwischenzeiten`), sonst `null` für automatisch. Unbrauchbare
+Werte gelten als automatisch, zu große werden auf `MAX_ZWISCHENZEITEN` gekappt.
+
+### `zwischenzeitenGesamt(konfiguration): number | null`
+
+Die wirksame Zahl bis zum Ziel: erst die eingestellte Zahl, sonst die automatische. `null` heißt
+offen; der Trainer beendet dann über den Zielknopf. Der Ziel-Anschlag ist immer Nummer
+`gesamt + 1`.
+
 ### `validateKonfiguration(konfiguration): string | null`
 
 Prüft:
 
+- eine eingestellte Zwischenzeit ist eine ganze Zahl zwischen 0 und 99,
 - offene Strecke (`null`) ist gültig,
 - Strecke endlich und größer 0,
 - Strecke ist ein Vielfaches der Beckenlänge.
@@ -60,7 +79,6 @@ const lauf = createLauf(
 - `startversatzMs` wird auf ≥ 0 gerundet.
 - `reihe` fehlt oder ist unbrauchbar → 1.
 - `wiederholung` ist `null`, wenn nicht angegeben.
-- `modus` ist `training`, wenn nicht angegeben.
 - Alle Bahnen starten mit `startMs: null` und leeren Anschlägen.
 
 ### Statusabfragen
@@ -68,23 +86,18 @@ const lauf = createLauf(
 | Funktion | Rückgabe |
 | --- | --- |
 | `isFinished(bahn)` | true, wenn ein Anschlag `istFinish` hat |
-| `istBahnBeendet(bahn)` | true bei Finish **oder** Wettkampf-Status DNS/DNF |
+| `istBahnBeendet(bahn)` | true bei Finish |
 | `laneStatus(bahn)` | `bereit`, `laeuft` oder `beendet` — ohne Zeitbezug, kennt kein „geplant“ |
 | `laneStatusAt(bahn, now)` | zusätzlich `geplant`, wenn `startMs > now` |
 | `elapsedMs(bahn, now)` | `max(0, now - startMs)`, sonst 0 |
 | `finishMs(bahn)` | `splitMs` des Finish-Anschlags oder `null` |
 | `lastSplit(bahn)` | letzter Anschlag oder `null` |
-| `isComplete(lauf)` | true, wenn **alle** Bahnen beendet sind (Finish oder DNS/DNF) |
+| `isComplete(lauf)` | true, wenn **alle** Bahnen ein Finish haben |
 | `hasStarted(lauf)` | true, sobald irgendeine Bahn `startMs !== null` hat |
 | `hatLaufendeBahn(lauf)` | true, solange eine gestartete Bahn nicht beendet ist |
 | `hatBegonnen(lauf, wallNow?)` | true, wenn der Lauf im Verlauf erscheinen soll |
 
 `hatLaufendeBahn` zählt auch **geplante** Bahnen mit, weil ihr Countdown sonst einfrieren würde.
-DNS/DNF-Bahnen sind beendet und halten die Uhr nicht wach.
-
-`setzeWettkampfStatus(lauf, bahnId, status)` markiert eine offene Wettkampf-Bahn als `dns`/`dnf`
-oder hebt die Markierung mit `null` auf. Die Funktion ist im Training und auf gewerteten Bahnen
-wirkungslos. `undoLane` entfernt eine Markierung wie eine andere letzte Aktion.
 
 `hatBegonnen` ist bewusst wanduhrbasiert:
 
@@ -130,32 +143,16 @@ Der zentrale Schritt:
 2. `startMs === null` → `startLane`.
 3. `now < startMs` → unverändert (geplante Bahn).
 4. bereits Finish → unverändert.
-5. `modus === 'wettkampf'` → `finishLane`.
-6. sonst Anschlag anhängen:
+5. sonst Anschlag anhängen:
    - `laengeNr = anschlaege.length + 1`
    - `splitMs = max(0, now - startMs)`
-   - `istFinish = lengthCount !== null && laengeNr >= lengthCount`
+   - `istFinish = zwischenzeitenGesamt !== null && laengeNr > zwischenzeitenGesamt`
 
 #### `finishLane(lauf, bahnId, now, wallNow): Lauf`
 
-Beendet eine Bahn explizit. Nur erlaubt bei:
-
-- offener Strecke, **oder**
-- Wettkampfmodus.
-
-Bei fester Trainingsstrecke ist es ein No-Op; dort beendet der letzte Anschlag. Verlangt eine
-gestartete, nicht beendete Bahn und `now >= startMs`.
-
-#### `setzeZielzeit(lauf, bahnId, splitMs, erfasstAt = Date.now()): Lauf`
-
-Nur im Wettkampf. Truncates auf ganze Millisekunden.
-
-- Vorhandenes Finish → `splitMs`, `erfasstAt` und `manuell: true` werden ersetzt; `laengeNr` und
-  `istFinish` bleiben.
-- Kein Finish → neuer Finish-Anschlag mit der nächsten LängenNr und `manuell: true`.
-- Keine Startzeit nötig: Eine manuell erfasste Zeit kann eine nie gestartete Bahn beenden.
-
-Ungültige Werte (`NaN`, negativ) oder ein Nicht-Wettkampf-Lauf geben den Lauf unverändert zurück.
+Beendet eine Bahn explizit. Nur bei offener Strecke **ohne** eigene Zwischenzeiten erlaubt. Bei
+fester Strecke oder eingestellter Zahl ist es ein No-Op; dort beendet der Anschlag nach der letzten
+Zwischenzeit. Verlangt eine gestartete, nicht beendete Bahn und `now >= startMs`.
 
 #### `undoLane(lauf, bahnId): Lauf`
 
@@ -212,10 +209,6 @@ Fehler wird der Lauf unverändert zurückgegeben.
 #### `findBahn(lauf, bahnId)`
 
 Liefert die Bahn oder `undefined`.
-
-#### `istWettkampfLauf(lauf)`
-
-`lauf.modus === 'wettkampf'`.
 
 ## `serie.ts`
 
@@ -315,7 +308,7 @@ Erzeugt einen Plan mit Defaults:
 
 - neue ID,
 - leere Bezeichnung,
-- 50 m-Becken, 100 m, Freistil (oder `teil.konfiguration`),
+- 50 m-Becken, 100 m, automatische Zwischenzeiten (oder `teil.konfiguration`),
 - 1 Wiederholung,
 - Takt 120 s,
 - Startversatz 0.
@@ -323,10 +316,16 @@ Erzeugt einen Plan mit Defaults:
 ### `neuesTraining(daten): Training`
 
 - klemmt `bahnen` auf 1..10 je Reihe und `reihen` auf 1..5,
+- setzt `autostart` auf `true`, wenn nicht ausdrücklich `false` übergeben wurde,
 - füllt `aktive` auf genau `bahnen × reihen` Plätze,
 - legt mindestens einen Trainingssatz an,
 - `gestartet` ist leer,
 - `erstelltAm` ist `Date.now()`.
+
+### `trainingVonSatz(trainings, satzId): Training | null`
+
+Findet über `training.gestartet` das Training, aus dem ein gemessener Satz entstanden ist. Wird für
+den automatischen Satzwechsel im Timer gebraucht; ohne Treffer oder ohne `satzId` kommt `null`.
 
 ### `ordneAktiveUm(aktive, alt, neu): (string | null)[]`
 
@@ -339,9 +338,9 @@ Verhindert, dass „Reihe 1, Bahn 3“ beim Verkleinern zu „Reihe 2, Bahn 1“
 #### `beschreibeTrainingsSatz(satz): string`
 
 ```ts
-`${wiederholungen > 1 ? `${n}×` : ''}${formatStrecke(streckeM)} · ${artLabel}`
-// "4×100 m · Freistil"
-// "100 m · Freistil"
+`${wiederholungen > 1 ? `${n}×` : ''}${formatStrecke(streckeM)}`
+// "4×100 m"
+// "100 m"
 ```
 
 #### `trainingsSatzTitel(satz): string`
@@ -411,100 +410,21 @@ Der Fortschritt ist damit vollständig abgeleitet und kann nicht „hängen“.
 2. sonst erster `offen`,
 3. sonst `null`.
 
-## `wettkampf.ts`
+## `tag.ts`
 
-### `createWettkampf(daten): Wettkampf`
+Tagesbezeichnungen für den Verlauf. Ein Tag ist kein eigenes Objekt, sondern die Menge der Sätze
+mit demselben `datum`; der Name liegt als optionales Feld an diesen Sätzen.
 
-Trimmt den Namen, erzeugt ID und `erstelltAm`. Datum und Beckenlänge werden unverändert übernommen.
+### `tagesnamen(satze): Map<string, string>`
 
-### `disziplinBezeichnung(streckeM, schwimmart): string`
+Ordnet jedem Datum den ersten nicht-leeren `tagesbezeichnung`-Wert seiner Sätze zu. Sätze ohne
+Datum oder ohne Namen erzeugen keinen Eintrag.
 
-`"100 m Freistil"`; unbekannte Schwimmart fällt auf „Freistil“ zurück.
+### `setzeTagesnamen(satze, datum, bezeichnung): Satz[]`
 
-### `createWettkampfSatz(wettkampf, disziplin, erstelltAm?): Satz`
-
-- Bezeichnung: `disziplin.bezeichnung` oder generiert,
-- Konfiguration aus Wettkampf-Beckenlänge, Strecke und Schwimmart,
-- `plan: null`,
-- `wettkampfId: wettkampf.id`.
-
-### `createWettkampfLauf(satz, laufPlan, schwimmerFuer): Lauf`
-
-- `modus: 'wettkampf'`,
-- `startversatzMs: 0`,
-- `wiederholung: laufPlan.nummer`,
-- Bahnen nach Bahnnummer sortiert,
-- `schwimmerFuer(start)` löst den Namen in eine ID auf (`null` erlaubt).
-
-### `wettkampfErgebnis(lauf): WettkampfErgebnisZeile[]`
-
-```ts
-interface WettkampfErgebnisZeile {
-  bahn: Bahn
-  zeitMs: number | null
-  platz: number | null
-  rueckstandMs: number | null
-  manuell: boolean
-}
-```
-
-- Gewertete Bahnen nach `truncateToHundredths(zeitMs)`, dann Bahnnummer.
-- Offene Bahnen danach nach Bahnnummer.
-- Zeitgleiche auf Hundertstel teilen den Platz: `1, 1, 3`.
-- `rueckstandMs` bezieht sich auf die schnellste **rohe** Zeit.
-- `manuell` ist true, wenn der Finish-Anschlag `manuell` ist.
-
-### `wettkampfFortschritt(laeufe): { fertig, gesamt }`
-
-Summiert Bahnen und Finish-Bahnen über alle übergebenen Läufe.
-
-### `istWettkampfSatz(satz)`
-
-True, wenn `wettkampfId` ein nicht leerer String ist.
-
-## `meldeliste.ts`
-
-### `parseMeldeliste(text, vorgabe): MeldelisteErgebnis`
-
-```ts
-type MeldelisteErgebnis =
-  | { ok: true; meldeliste: Meldeliste }
-  | { ok: false; fehler: string }
-```
-
-Ablauf:
-
-1. BOM entfernen, Zeilen splittern, trimmen, Leerzeilen und `#`-Kommentare verwerfen.
-2. Auf höchstens 2.000 Zeilen prüfen.
-3. Trennzeichen aus der ersten Zeile raten (`;`, Tab, `,`).
-4. Kopfzeile erkennen; sonst nur 1 oder 2 Spalten erlauben.
-5. Jede Datenzeile parsen:
-   - Name aus `name` oder `vorname` + `nachname`,
-   - Strecke aus `strecke` oder Disziplintext oder Vorgabe; Suffixe `m`, `yd`, `yard(s)`, `y`
-     werden erkannt, ohne Suffix gilt `vorgabe.einheit` (Default `m`),
-   - eine ausdrücklich genannte Einheit, die nicht zur Vorgabe passt, bricht mit Zeilennummer ab,
-   - Schwimmart aus `schwimmart` oder Disziplintext oder Vorgabe,
-   - Lauf aus `lauf` oder Vorgabe (Default 1),
-   - Bahn aus `bahn` oder nächste freie 1..10,
-   - Jahrgang optional.
-6. Nach Disziplin (Name|Strecke|Art|Einheit) und Lauf gruppieren.
-7. Disziplinen in Dateireihenfolge, Heats und Bahnen sortiert zurückgeben.
-
-Fehler nennen die Zeilennummer. Warnungen (z. B. unbekannte Schwimmart) landen in
-`meldeliste.warnungen` und blockieren nicht.
-
-### `meldelisteVorlage(einheit = 'm'): string`
-
-UTF-8-BOM, Semikolon, CRLF, Beispielzeilen in der Einheit des Wettkampfs. Wird von „Vorlage laden“
-verwendet.
-
-### `meldelisteZusammenfassung(meldeliste): string`
-
-`"2 Disziplinen, 3 Läufe, 4 Starts"` mit korrekten Singularformen.
-
-### `istSchwimmart(wert): wert is Schwimmart`
-
-Type Guard gegen `SCHWIMMARTEN`.
+Setzt den getrimmten Namen auf **allen** Sätzen des Datums; ein leerer Text entfernt ihn. Sätze
+anderer Tage bleiben unverändert. Ändert sich nichts, kommt dieselbe Liste zurück — der Aufrufer
+kann den Schreibvorgang dann überspringen.
 
 ## `format.ts`
 
@@ -581,15 +501,17 @@ Alias für `formatTime`; für Eingabefelder gedacht.
 
 ### `lokalesDatum(ms): string`
 
-`YYYY-MM-DD` in der lokalen Zeitzone, nicht UTC. Wichtig für Wettkampf- und CSV-Daten.
+`YYYY-MM-DD` in der lokalen Zeitzone, nicht UTC. Wichtig für Trainings- und CSV-Daten.
 
 ## `einheit.ts`
 
-Die einzige Quelle für Meter ↔ Yards (ADR 0009).
+Die einzige Quelle für Meter ↔ Yards (ADR 0009). Neue Läufe sind immer Meter
+(ADR 0013); die Umrechnung bleibt für alte Yard-Daten lesbar.
 
 | Funktion | Ergebnis |
 | --- | --- |
 | `einheitVon(konfiguration)` | `'yd'` oder `'m'`; fehlendes Feld = Meter |
+| `alsMeterKonfiguration(konfiguration)` | entfernt `einheit`; alte Yards werden mit gleicher Anzeigezahl zu Metern |
 | `anzeigeZuMeter(wert, einheit)` | kanonische Meter, auf zwei Nachkommastellen gerundet |
 | `meterZuAnzeige(meter, einheit)` | Anzeigewert; Yards auf ganze Yards gerundet |
 | `beckenlaengenFuer(einheit)` | Meter `[25, 50]`, Yards `[22.86]` |
@@ -646,7 +568,7 @@ keine Aggregate in der Datenbank.
 | --- | --- |
 | `laengenZeiten(bahn)` | Längenzeiten aus kumulierten Splits (`splitMs` minus vorheriger Split) |
 | `analyseRunden(satz, laeufe)` | Runden nach Wiederholungsnummer, bei freien Sätzen nach Startzeit |
-| `istAnalyseSatz(satz, laeufe)` | true bei mindestens einem Split und keinem Wettkampf |
+| `istAnalyseSatz(satz, laeufe)` | true bei mindestens einem Split |
 | `rundenzahl(satz, laeufe)` | geplante Wiederholungen einer Serie, sonst Anzahl der Läufe |
 | `letzterGleicherSatz(aktuell, satze, laeufe)` | letzter früherer Satz mit gleicher Strecke, Schwimmart, Beckenlänge und Rundenzahl |
 | `analyseMatrix(runden, referenzRunden?)` | Zellen je Person und Runde mit Abweichung, Schnellster-Marke und Referenzzeit |

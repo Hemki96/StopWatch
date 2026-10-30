@@ -23,11 +23,11 @@ import {
   type TrainingsSatzStatus,
 } from '../domain/training'
 import {
-  SCHWIMMARTEN,
   type LaufKonfiguration,
   type SatzPlan,
   type Training,
 } from '../domain/types'
+import { zwischenzeitenGesamt } from '../domain/lauf'
 import { Sheet } from './Sheet'
 import { CheckIcon } from './icons'
 
@@ -195,8 +195,7 @@ export function StartuebersichtLauf({
   startversatzMs: number
   plan: SatzPlan | null
 }) {
-  const art =
-    SCHWIMMARTEN.find((eintrag) => eintrag.wert === konfiguration.schwimmart)?.label ?? ''
+  const zwischenzeiten = zwischenzeitenGesamt(konfiguration)
   const strecke = formatStrecke(konfiguration.streckeM)
   const serie = plan && plan.wiederholungen > 1 ? plan : null
   // Ein zu kurzer Takt wäre sonst erst mitten in der Serie sichtbar.
@@ -208,7 +207,14 @@ export function StartuebersichtLauf({
       <dl>
         <Zeile label="Beckenlänge" wert={`${konfiguration.beckenlaengeM} m`} />
         <Zeile label="Strecke" wert={serie ? `${serie.wiederholungen}×${strecke}` : strecke} />
-        <Zeile label="Schwimmart" wert={art} />
+        <Zeile
+          label="Zwischenzeiten"
+          wert={
+            zwischenzeiten === null
+              ? 'offen (Ziel per Knopf)'
+              : `${zwischenzeiten} ${zwischenzeiten === 1 ? 'Zwischenzeit' : 'Zwischenzeiten'}, dann das Ziel`
+          }
+        />
         <Zeile
           label="Bahnen"
           wert={

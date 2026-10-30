@@ -18,14 +18,13 @@ import {
   bahnReihe,
   createLauf,
   elapsedMs,
+  eingestellteZwischenzeiten,
   finishLane,
   finishMs,
   hatBegonnen,
   hatLaufendeBahn,
-  isComplete,
   isFinished,
   isStartLocked,
-  istBahnBeendet,
   isStreckeLocked,
   korrigiereAnschlag,
   laneStatus,
@@ -38,8 +37,6 @@ import {
   laufzeitMs,
   lengthCount,
   reihenVon,
-  setzeWettkampfStatus,
-  setzeZielzeit,
   startAll,
   startLane,
   tapLane,
@@ -47,6 +44,7 @@ import {
   updateStrecke,
   validateKonfiguration,
   zwischenzeiten,
+  zwischenzeitenGesamt,
 } from './lauf'
 import type { Lauf, LaufKonfiguration } from './types'
 
@@ -112,6 +110,49 @@ describe('zwischenzeiten', () => {
     const lauf = startAll(laufMit({ ...K100, streckeM: 50 }, 1), 0, 1000)
     expect(zwischenzeiten(bahn(lauf), lauf.konfiguration)).toEqual({ erfasst: 0, gesamt: 0 })
   })
+
+  // Eine eigene Zahl löst die Ableitung aus Strecke und Beckenlänge ab: Der
+  // Anschlag nach der letzten Zwischenzeit ist das Ziel, auch wenn die Strecke
+  // mehr oder weniger Längen hätte.
+  it('nutzt eine eingestellte Zahl statt der Längen', () => {
+    const konfiguration = { ...K100, zwischenzeiten: 3 } as const
+    expect(zwischenzeitenGesamt(konfiguration)).toBe(3)
+    let lauf = startAll(laufMit(konfiguration, 1), 0, 1000)
+    for (const [index, zeit] of [20_000, 40_000, 60_000].entries()) {
+      lauf = tapLane(lauf, bahn(lauf).id, zeit, 1000 + zeit)
+      expect(isFinished(bahn(lauf))).toBe(false)
+      expect(zwischenzeiten(bahn(lauf), lauf.konfiguration)).toEqual({
+        erfasst: index + 1,
+        gesamt: 3,
+      })
+    }
+    lauf = tapLane(lauf, bahn(lauf).id, 80_000, 81_000)
+    expect(isFinished(bahn(lauf))).toBe(true)
+  })
+
+  it('beendet auch eine offene Strecke nach der eingestellten Zahl', () => {
+    const konfiguration = { ...OFFEN, zwischenzeiten: 1 } as const
+    let lauf = startAll(laufMit(konfiguration, 1), 0, 1000)
+    lauf = tapLane(lauf, bahn(lauf).id, 30_000, 31_000)
+    expect(isFinished(bahn(lauf))).toBe(false)
+    lauf = tapLane(lauf, bahn(lauf).id, 60_000, 61_000)
+    expect(isFinished(bahn(lauf))).toBe(true)
+    expect(zwischenzeiten(bahn(lauf), lauf.konfiguration)).toEqual({ erfasst: 1, gesamt: 1 })
+  })
+
+  it('macht mit 0 Zwischenzeiten den ersten Anschlag zum Ziel', () => {
+    const konfiguration = { ...K100, zwischenzeiten: 0 } as const
+    const lauf = startAll(laufMit(konfiguration, 1), 0, 1000)
+    const nachTap = tapLane(lauf, bahn(lauf).id, 30_000, 31_000)
+    expect(isFinished(bahn(nachTap))).toBe(true)
+  })
+
+  it('kappt unbrauchbare eigene Werte auf automatisch oder die Grenze', () => {
+    expect(eingestellteZwischenzeiten({ ...K100, zwischenzeiten: null })).toBeNull()
+    expect(eingestellteZwischenzeiten(K100)).toBeNull()
+    expect(eingestellteZwischenzeiten({ ...K100, zwischenzeiten: 2.4 })).toBe(2)
+    expect(eingestellteZwischenzeiten({ ...K100, zwischenzeiten: -1 })).toBe(0)
+  })
 })
 
 // Nur Vielfache der Beckenlänge sind gültig: 75 m im 50-m-Becken und eine
@@ -145,6 +186,14 @@ describe('validateKonfiguration', () => {
     expect(validateKonfiguration({ ...K100, streckeM: 0 })).not.toBeNull()
     expect(validateKonfiguration(K100)).toBeNull()
     expect(validateKonfiguration(OFFEN)).toBeNull()
+  })
+
+  it('prüft die eingestellten Zwischenzeiten', () => {
+    expect(validateKonfiguration({ ...K100, zwischenzeiten: 3 })).toBeNull()
+    expect(validateKonfiguration({ ...OFFEN, zwischenzeiten: 3 })).toBeNull()
+    expect(validateKonfiguration({ ...K100, zwischenzeiten: -1 })).not.toBeNull()
+    expect(validateKonfiguration({ ...K100, zwischenzeiten: 1.5 })).not.toBeNull()
+    expect(validateKonfiguration({ ...K100, zwischenzeiten: 100 })).not.toBeNull()
   })
 })
 
@@ -617,84 +666,6 @@ describe('hatBegonnen', () => {  // Der Wanduhr-Anker liegt bei 1000; erst ab di
     expect(hatBegonnen(lauf, 5000)).toBe(true)
   })
 
-  // Im Wettkampf ist `wiederholung` die Laufnummer, keine Serienrunde; ein
-  // gestarteter Heat gehört deshalb sofort in den Verlauf.
-  it('zeigt einen gestarteten Wettkampf-Heat auch ab Lauf 2 sofort', () => {
-    const lauf = startAll(
-      createLauf(K100, [{ nummer: 1 }], null, { modus: 'wettkampf', wiederholung: 2 }),
-      0,
-      1000,
-    )
-    expect(hatBegonnen(lauf, 1000)).toBe(true)
-  })
-})
-
-
-// Wettkampf-Status: DNS/DNF beendet eine Bahn endgültig ohne Zeit. Eine
-// markierte Bahn nimmt weder Start noch Anschlag an und zählt nicht als
-// laufende Bahn; Zurücknehmen macht sie wieder offen.
-describe('setzeWettkampfStatus', () => {
-  /** Ein Heat mit einer Bahn, wie ihn der Wettkampf anlegt. */
-  function heat(bahnen = 1): Lauf {
-    return { ...laufMit(K100, bahnen), modus: 'wettkampf' }
-  }
-
-  it('markiert DNS, entfernt den Start und ignoriert weitere Taps', () => {
-    let lauf = startAll(heat(), 0, 1)
-    const id = bahn(lauf).id
-    lauf = setzeWettkampfStatus(lauf, id, 'dns')
-
-    expect(bahn(lauf).status).toBe('dns')
-    expect(bahn(lauf).startMs).toBeNull()
-    expect(istBahnBeendet(bahn(lauf))).toBe(true)
-    // Endgültig: kein Start, kein Anschlag, keine Zeit.
-    expect(tapLane(lauf, id, 5000, 5000)).toBe(lauf)
-    expect(startAll(lauf, 9000, 9000)).toBe(lauf)
-    expect(setzeZielzeit(lauf, id, 60_000)).toBe(lauf)
-  })
-
-  it('lässt DNF den Start stehen und beendet den Heat', () => {
-    let lauf = startAll(heat(2), 0, 1)
-    const [erste, zweite] = lauf.bahnen.map((eintrag) => eintrag.id)
-    lauf = tapLane(tapLane(lauf, erste!, 30_000, 2), erste!, 60_000, 3)
-    lauf = setzeWettkampfStatus(lauf, zweite!, 'dnf')
-
-    expect(bahn(lauf, 1).status).toBe('dnf')
-    expect(bahn(lauf, 1).startMs).toBe(0)
-    expect(istBahnBeendet(bahn(lauf, 1))).toBe(true)
-    // Alle Bahnen sind entschieden: eine Zeit, eine DNF.
-    expect(isComplete(lauf)).toBe(true)
-    expect(hatLaufendeBahn(lauf)).toBe(false)
-  })
-
-  it('hebt die Markierung wieder auf', () => {
-    // IDs sind je Aufruf neu; deshalb aus demselben Lauf markieren und lösen.
-    const basis = heat()
-    const id = bahn(basis).id
-    const lauf = setzeWettkampfStatus(basis, id, 'dns')
-    const offen = setzeWettkampfStatus(lauf, id, null)
-    expect(bahn(offen).status).toBeUndefined()
-    expect(istBahnBeendet(bahn(offen))).toBe(false)
-  })
-
-  it('lehnt Markierungen im Training und auf gewerteten Bahnen ab', () => {
-    const training = laufMit(K100, 1)
-    const id = bahn(training).id
-    expect(setzeWettkampfStatus(training, id, 'dns')).toBe(training)
-
-    let lauf = startAll(heat(), 0, 1)
-    lauf = tapLane(tapLane(lauf, id, 30_000, 2), id, 60_000, 3)
-    expect(setzeWettkampfStatus(lauf, id, 'dnf')).toBe(lauf)
-  })
-
-  it('nimmt den Status mit der letzten Aktion zurück', () => {
-    let lauf = startAll(heat(), 0, 1)
-    const id = bahn(lauf).id
-    lauf = setzeWettkampfStatus(lauf, id, 'dnf')
-    const zurueck = undoLane(lauf, id)
-    expect(bahn(zurueck).status).toBeUndefined()
-    expect(bahn(zurueck).startMs).toBeNull()
-  })
 })
 
 describe('unterbrochene Bahn', () => {

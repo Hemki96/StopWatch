@@ -17,12 +17,12 @@ Handy                              Tablet
 │  aktiver Screen              │    │ Timer│  aktiver Screen           │
 │                              │    │ Train│  (max. 5xl, zentriert)    │
 ├──────────────────────────────┤    │ …    │                           │
-│ Timer Training Wettkampf …   │    │      ├───────────────────────────┤
+│ Timer Training Verlauf …     │    │      ├───────────────────────────┤
 └──────────────────────────────┘    └──────┴───────────────────────────┘
         Toast (schwebend, optional)
 ```
 
-- Die Navigation hat sechs Einträge. Auf dem Handy liegt sie unten und verteilt sich auf sechs
+- Die Navigation hat fünf Einträge. Auf dem Handy liegt sie unten und verteilt sich auf fünf
   gleich breite Spalten; auf dem Tablet wird daraus eine schmale Leiste links.
 - Nur der Timer wird mit dem Start-Chunk geladen. Die übrigen Bereiche kommen per `React.lazy`
   beim ersten Aufruf nach; währenddessen zeigt die Inhaltsfläche einen Status statt eines leeren
@@ -45,7 +45,7 @@ Zwei eigene Varianten in `src/index.css` beschreiben die Geräteklassen, nicht n
 | `rail` | `min-width: 768px` **und** `min-height: 560px` | seitliche Navigation, zentrierte Sheets, mehrspaltige Listen |
 | `short` | `max-height: 520px` | flachere Navigation mit Symbol und Text nebeneinander (Handy quer) |
 
-Die Höhenbedingung verhindert, dass ein Handy im Querformat (z. B. 844 × 390) die sechs
+Die Höhenbedingung verhindert, dass ein Handy im Querformat (z. B. 844 × 390) die fünf
 Navigationseinträge untereinander quetscht. Umgekehrt bleibt ein Tablet im Querformat in der
 seitlichen Navigation. Das Manifest erlaubt deshalb beide Ausrichtungen (`orientation: "any"`).
 
@@ -66,7 +66,6 @@ seitlichen Navigation. Das Manifest erlaubt deshalb beide Ausrichtungen (`orient
 | Timer | `ui/TimerScreen.tsx` | Lauf anlegen, starten, messen, mehrere Läufe |
 | Serie | `ui/SerieAnsicht.tsx` | eine Zeile pro Bahn über mehrere Runden, nach Reihen gruppiert |
 | Training | `ui/TrainingScreen.tsx` | Pläne, Aktive, Sätze, Fortschritt |
-| Wettkampf | `ui/WettkampfScreen.tsx` | drei Ebenen: Wettkampf, Disziplin, Heat |
 | Verlauf | `ui/HistoryScreen.tsx` | nach Satz gruppierte Messungen |
 | Lauf-Detail | `ui/LaufDetail.tsx` | Splits, Korrekturen, PB, Export |
 | Schwimmer | `ui/SchwimmerScreen.tsx` | Namen, Jahrgänge, Bestzeiten |
@@ -103,29 +102,24 @@ dem letzten Ziel übernimmt `LaufErgebnis` die Rücknahme.
 Der Screen hat zwei Zustände:
 
 - **Liste** — alle Trainings, leerer Zustand, „Neues Training“.
-- **Detail** — Kopf mit Zurück, Datum, Name, Löschen; Aktive-Karte; Fortschrittsbalken; Satzliste;
-  „Satz hinzufügen“; feste Aktionsleiste mit nächstem Schritt.
+- **Detail** — Kopf mit Zurück, Datum, Name, Löschen; Aktive-Karte; Fortschrittsbalken;
+  Schalter „Sätze automatisch starten“; Satzliste; „Satz hinzufügen“; feste Aktionsleiste mit
+  nächstem Schritt.
 
 Die Satzzeile ist ein großer Button mit Nummer, Titel, Status-Badge und Metazeile. Nur offene Sätze
 öffnen die Bearbeitung; bereite und laufende führen in den Timer; fertige sind deaktiviert.
 
-### Wettkampf
-
-Drei Ebenen mit gemeinsamem `Kopf`:
-
-1. **Wettkampfliste** — Karten mit Name, Datum, Becken, Disziplinen und Zeiten; unten Import und
-   „Neuer Wettkampf“.
-2. **Disziplinen** — Karten mit Titel, Heats und Fortschritt; unten „Meldeliste hinzufügen“ und
-   „Disziplin anlegen“; Kopf mit Export und Löschen.
-3. **Heat** — Heat-Leiste, Bahnenliste, Statuszeile, Start- oder Fortschrittsleiste.
-
-Jede Ebene hat einen eigenen Zurück-Pfad: Heat → Disziplinen → Wettkämpfe.
+Ist der automatische Wechsel an, beobachtet der Timer den Übergang des sichtbaren Trainingssatzes
+nach „fertig“ und startet über `trainingVonSatz`, `trainingsFortschritt` und `naechsterSatz` den
+nächsten Satz. Der vorige Satz bleibt in der Laufleiste erreichbar.
 
 ### Verlauf und Detail
 
 Der Verlauf ist eine Liste von Satzgruppen, zunächst auf die neuesten 50 begrenzt. „Mehr laden“
 ergänzt weitere Gruppen unterhalb der Liste, ohne Gruppierung, Sortierung oder Scrollposition zu
-verändern. Die Satzliste der **Analyse** folgt derselben Grenze und nutzt dieselbe Fußzeile
+verändern. Jede Gruppe zeigt an der Tagesüberschrift zusätzlich den optionalen Tagesnamen; er gilt
+für alle Sätze desselben Datums und wird dort inline gepflegt (`domain/tag.ts`). Die Satzliste der
+**Analyse** folgt derselben Grenze und nutzt dieselbe Fußzeile
 (`MehrLaden`): Erst die sichtbaren Sätze werden ausgewertet und gerendert. Das Detail ist ein
 Vollbild-**Dialog** über `Dialog` (`role="dialog"`, `aria-modal`,
 `aria-labelledby`), kein Sheet, weil es viel Inhalt und eigene Aktionen hat. Fokusfalle, Startfokus
@@ -181,7 +175,7 @@ verwendet.
 `Sheet` mit Titel, einer ruhigen Liste (Label links, Wert rechts), einem bestätigenden **Jetzt
 starten** und optional **Ändern**:
 
-- `StartuebersichtLauf` zeigt Beckenlänge, Strecke, Schwimmart, Bahnen und Reihen, Startzeiten,
+- `StartuebersichtLauf` zeigt Beckenlänge, Strecke, Zwischenzeiten, Bahnen und Reihen, Startzeiten,
   Takt und die Schwimmer je Bahn; eine leere Bahn heißt ausdrücklich „frei“.
 - `StartuebersichtTraining` zeigt Aktive und alle Sätze in fester Reihenfolge und hebt den Satz
   hervor, dessen Uhr gleich beginnt.
@@ -230,15 +224,6 @@ Eine scrollbare Liste von Zeilen:
 
 Wie bei `LaneTile` sind Messfläche und Zielknopf Geschwister in einer nicht-interaktiven Hülle;
 ein Tap auf der Zeile schließt die Runde, ein Tap auf „Ziel“ beendet sie.
-
-### `WettkampfLane`
-
-Wie `LaneTile`, aber:
-
-- keine Längenfortschrittslinie,
-- Stift für manuelle Zielzeit,
-- Platz und Rückstand statt Länge,
-- Status **bereit**, **läuft**, **im Ziel**.
 
 ### `Felder.tsx`
 
@@ -290,8 +275,7 @@ polite Live-Region (`Ansage`) im Timer, die auch die Runde einer Serie nennt. De
 - **Tab** bleibt im Dialog.
 - **Ziel** ist bei offener Strecke ein eigener Knopf neben beziehungsweise unter der Messfläche
   und per Tab erreichbar; er liegt nicht in der Messfläche und löst deshalb nie zusätzlich einen
-  Anschlag aus. Der Stift in `WettkampfLane` liegt noch in der Kachel und stoppt dort die
-  Propagation.
+  Anschlag aus.
 - **Zurück** in der Fußzeile ist der sichtbare, per Tab erreichbare Ersatz für den langen Druck.
   Er liegt außerhalb aller Messflächen und kann deshalb nicht durch einen Fehltipp auf einer
   Bahn ausgelöst werden. Langes Drücken und Backspace/Delete bleiben unverändert.
@@ -382,7 +366,6 @@ Jeder Screen hat einen erklärenden Leerzustand:
 
 - Timer: „Nächster Lauf“ mit Bedienhinweisen.
 - Training: „Noch kein Training vorbereitet“.
-- Wettkampf: „Noch kein Wettkampf“.
 - Verlauf: „Noch keine Messungen.“
 - Schwimmer: „Noch keine Schwimmer.“
 

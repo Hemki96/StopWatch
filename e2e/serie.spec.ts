@@ -117,7 +117,7 @@ test('Startversatz hält spätere Reihen im Countdown und mehrere Läufe bleiben
   await expect(wartend).toContainText('Start in')
 
   await page.getByRole('button', { name: 'Weiteren Lauf anlegen' }).tap()
-  const chips = page.getByRole('button', { name: /^100 m · Freistil/ })
+  const chips = page.getByRole('button', { name: /^100 m/ })
   await expect(chips).toHaveCount(2)
 
   // Der neue Lauf ist vorbereitet; der alte läuft im Hintergrund weiter. Die

@@ -50,20 +50,6 @@ export function TrainingIcon({ className }: IconProps) {
   )
 }
 
-/** Pokal; Tab „Wettkampf“. */
-export function TrophyIcon({ className }: IconProps) {
-  return (
-    <svg {...base(className)}>
-      <path d="M8 4h8v4a4 4 0 0 1-8 0V4Z" />
-      <path d="M8 5H5a3 3 0 0 0 3 3" />
-      <path d="M16 5h3a3 3 0 0 1-3 3" />
-      <path d="M12 12v4" />
-      <path d="M9 20h6" />
-      <path d="M9 16h6v4H9z" />
-    </svg>
-  )
-}
-
 /** Uhr mit rückwärts gerichtetem Pfeil; Tab „Verlauf“. */
 export function HistoryIcon({ className }: IconProps) {
   return (
@@ -146,7 +132,7 @@ export function DownloadIcon({ className }: IconProps) {
   )
 }
 
-/** Pfeil aus dem Fach; Meldelisten-Import und Backup einlesen. */
+/** Pfeil aus dem Fach; Backup einlesen. */
 export function UploadIcon({ className }: IconProps) {
   return (
     <svg {...base(className)}>

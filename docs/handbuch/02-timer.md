@@ -39,7 +39,7 @@ auf, bevor Zeiten entstehen, die sich nicht mehr ändern lassen.
 
 Die Übersicht zeigt:
 
-- **Beckenlänge**, **Strecke** (bei einer Serie als `5×100 m`) und **Schwimmart**,
+- **Beckenlänge**, **Strecke** (bei einer Serie als `5×100 m`) und die **Zwischenzeiten**,
 - **Bahnen** je Reihe und die Zahl der **Reihen** samt Personenzahl,
 - den **Startversatz** und, falls gesetzt, die konkreten Startzeiten `R1 0 s · R2 10 s`,
 - bei einer Serie den **Takt**,
@@ -55,7 +55,7 @@ angelegt wurde, zeigt dieselbe Übersicht beim **Start alle**.
 Sobald mindestens ein Lauf aktiv ist, erscheint oben eine Leiste mit einem Eintrag pro Lauf:
 
 - **Punkt:** grün = fertig, Akzentfarbe = läuft, grau = bereit.
-- **Titel:** z. B. `100 m · Freistil` oder bei einer Serie `5×100 m · Freistil`.
+- **Titel:** z. B. `100 m` oder bei einer Serie `5×100 m`.
 - **Status:** `bereit`, `läuft` oder `Ziel`.
 - **Rundenanzeige:** bei einer Serie zusätzlich `R2/5`.
 - **+:** weiterer Lauf.
@@ -106,7 +106,19 @@ anlegen.
 Ein Tipp auf eine laufende Bahn erfasst einen **Anschlag**. Die angezeigte Zeit ist immer die
 kumulierte Zeit seit dem Start **dieser** Bahn, nicht seit dem Start des Laufs.
 
-Bei fester Strecke ist der letzte Anschlag automatisch das Ziel:
+### Zwischenzeiten
+
+Im Sheet **Nächster Lauf** (und bei einem Trainingssatz) stellst du unter **Zwischenzeiten** ein,
+wie viele Zwischenzeiten du vor dem Ziel nehmen möchtest. Tippe die Zahl direkt in das Feld oder
+nutze Plus/Minus. **Automatisch** leitet die Zahl aus Strecke und Beckenlänge ab und lässt sich
+jederzeit wieder wählen. Der Anschlag nach der letzten Zwischenzeit ist das Ziel.
+
+So kannst du z. B. bei 100 m im 50-m-Becken statt einer Zwischenzeit auch drei nehmen. Die Zahl gilt
+ab dem Start und ist nach dem ersten Anschlag gesperrt. Bei **Offener Strecke** bleibt die Zahl
+automatisch offen; erst der Knopf **Ziel** beendet die Bahn. Stellst du dort eine eigene Zahl ein,
+endet die Bahn ebenfalls automatisch nach der letzten Zwischenzeit.
+
+Automatisch gilt weiterhin:
 
 | Strecke | Becken | Längen | Tipps bis zum Ziel |
 | --- | --- | --- | --- |
@@ -115,18 +127,18 @@ Bei fester Strecke ist der letzte Anschlag automatisch das Ziel:
 | 200 m | 50 m | 4 | 4 |
 | 400 m | 25 m | 16 | 16 |
 
-Die Unterkante jeder Kachel zeigt den Fortschritt: ein Segment pro Länge, gefüllt nach jedem
-Anschlag. Darüber steht, wie viele **Zwischenzeiten** bereits erfasst sind, z. B. `2/3
-Zwischenzeiten`. Das Ziel zählt dabei nicht mit: Bei 100 m im 25-m-Becken gibt es drei
+Die Unterkante jeder Kachel zeigt den Fortschritt: ein Segment pro Zwischenzeit und Ziel, gefüllt
+nach jedem Anschlag. Darüber steht, wie viele **Zwischenzeiten** bereits erfasst sind, z. B. `2/3
+Zwischenzeiten`. Das Ziel zählt dabei nicht mit: Bei 100 m im 25-m-Becken gibt es automatisch drei
 Zwischenzeiten und den Zielanschlag. Bei offener Strecke entfällt die Gesamtzahl (`2
 Zwischenzeiten`); bei einer Strecke über genau eine Länge fehlt die Zeile, weil es keine
 Zwischenzeit gibt.
 
 ### Offene Strecke
 
-Bei **Offener Strecke** gibt es keine automatische Längenanzahl. Jeder Tipp ist ein Split; die Bahn
-endet erst über den Knopf **Ziel** auf der Kachel. Ist eine Bahn bereits im Ziel, ändert ein weiterer
-Tipp nichts mehr.
+Bei **Offener Strecke** ohne eigene Zahl gibt es keine automatische Längenanzahl. Jeder Tipp ist ein
+Split; die Bahn endet erst über den Knopf **Ziel** auf der Kachel. Ist eine Bahn bereits im Ziel,
+ändert ein weiterer Tipp nichts mehr.
 
 Unten erscheint bei offener Strecke **„Alle beenden“**. Der Knopf beendet alle gerade laufenden
 Bahnen mit demselben Zeitpunkt und ist praktisch, wenn eine ganze Gruppe gleichzeitig anschlägt.
@@ -150,11 +162,14 @@ Bahn startet nur diese. Das ist die Ausnahme; der übliche Weg ist **Start alle*
 └──────────────────────────────────┘
 ```
 
+Mit einer eigenen Zahl steht in der kleinen Zeile stattdessen `Zwischenzeit 1/3` beziehungsweise
+`Ziel`, sobald der nächste Anschlag abschließt.
+
 | Zustand | Große Zeit | Kleine Zeile |
 | --- | --- | --- |
 | **bereit** | `00:00,00` | `Bereit` |
 | **geplant** | Countdown | `Start in`, `wartet` |
-| **läuft** | laufende Zeit | `Länge 2/4`, `1/3 Zwischenzeiten`, letzter Split |
+| **läuft** | laufende Zeit | `Länge 2/4` oder `Zwischenzeit 2/3`, `1/3 Zwischenzeiten`, letzter Split |
 | **beendet** | Zielzeit | `Ziel`, `3/3 Zwischenzeiten` |
 
 ### Statuszeile und Laufzeit
@@ -172,8 +187,7 @@ Laufzeit.
 Sind bei einem einzelnen Lauf alle Bahnen im Ziel, ersetzt eine **Ergebnisübersicht** die Kacheln.
 Je Bahn stehen Bahnnummer, Schwimmer, Zielzeit und der Vergleich mit der persönlichen Bestzeit:
 
-- **Bestzeit**, wenn die Zeit die schnellste dieser Kombination aus Strecke, Schwimmart und
-  Beckenlänge ist.
+- **Bestzeit**, wenn die Zeit die schnellste dieser Kombination aus Strecke und Beckenlänge ist.
 - Andernfalls der Rückstand, z. B. `+06,00 zum PB`.
 - **kein PB**, wenn die Bahn keinen Schwimmer hat oder die Strecke offen ist.
 - **korrigiert**, wenn die Zielzeit von Hand geändert wurde.
@@ -230,7 +244,7 @@ Die Daten bleiben im Verlauf.
 | Feld | Änderbar im laufenden Lauf? |
 | --- | --- |
 | Schwimmerzuordnung | Ja, jederzeit über das Sheet. |
-| Beckenlänge, Strecke, Schwimmart | Nur solange **kein** Anschlag erfasst wurde; bei einer Serie sofort gesperrt. |
+| Beckenlänge, Strecke, Zwischenzeiten | Nur solange **kein** Anschlag erfasst wurde; bei einer Serie sofort gesperrt. |
 | Startversatz | Nein, er ist beim Anlegen fest. |
 | Wiederholungen / Takt | Nein; eine Serie ist nach dem Anlegen gesperrt. |
 
@@ -239,7 +253,7 @@ lassen sich nicht in einen anderen Lauf übertragen.
 
 ## Display, Wachhalten und Grenzen
 
-- Solange die Messansicht (**Timer** oder **Wettkampf**) sichtbar ist und eine Bahn läuft oder auf
+- Solange die Messansicht **Timer** sichtbar ist und eine Bahn läuft oder auf
   ihren Start wartet, fordert die App einen **Wake Lock** an und hält den Bildschirm nach
   Möglichkeit wach.
 - Kann der Browser den Wake Lock nicht halten, erscheint unter dem Timer ein gelber Hinweis:
@@ -277,20 +291,21 @@ die noch völlig unberührt sind. Vollständige Runden bleiben erhalten. Siehe
 - **Startversatz** von 0 bis 120 s zwischen zwei Reihen.
 - **Takt** von 10 s bis 60 min in den Einstellungen; gängige Werte stehen als Chip bereit, jeder
   andere lässt sich über Minuten und Sekunden eingeben.
-- **Einheiten** Meter oder Yards. Bei Yards gibt es nur das 25-Yard-Becken (22,86 m); Strecken
-  werden in ganzen Yards gewählt. Gespeichert wird kanonisch in Metern, die Anzeige folgt der
-  Einheit des Laufs.
-- **Strecken** 50, 100, 200, 400, 800, 1.500 in der gewählten Einheit oder offen. Die Strecke muss
-  ein Vielfaches der Beckenlänge sein.
+- **Einheit** ist immer Meter. Eine Auswahl zwischen Meter und Yards gibt es nicht mehr. Alte
+  Yard-Läufe bleiben im Verlauf mit ihrer damaligen Einheit sichtbar.
+- **Strecken** 50, 100, 200, 400, 800, 1.500 m oder offen. Die Strecke muss ein Vielfaches der
+  Beckenlänge sein.
+- **Zwischenzeiten** 0 bis 99, automatisch aus Strecke und Beckenlänge oder frei eingestellt. Die
+  Zahl ist nach dem ersten Anschlag gesperrt.
 - Ein Lauf gehört zu genau einem **Satz**. Ein einzelner Lauf aus dem Timer mit gleicher
   Konfiguration am selben Tag landet im selben Satz; eine Serie und ein gestarteter Trainingssatz
   haben immer einen eigenen Satz.
 
 ## Tipps für den Beckenrand
 
-- Die **Startübersicht** vor dem Start prüfen: Einheit, Beckenlänge, Strecke, Bahnen und Schwimmer
-  stehen dort noch einmal. Nach dem ersten Anschlag sind Einheit, Beckenlänge, Strecke und
-  Schwimmart gesperrt.
+- Die **Startübersicht** vor dem Start prüfen: Beckenlänge, Strecke, Zwischenzeiten, Bahnen und
+  Schwimmer stehen dort noch einmal. Nach dem ersten Anschlag sind Beckenlänge, Strecke und
+  Zwischenzeiten gesperrt.
 - Bei vielen Bahnen die Kacheln nicht zu klein werden lassen: 10 Bahnen sind auf einem kleinen
   Handy eng. Für 8–10 Bahnen ein größeres Gerät oder Querformat verwenden — die App zeigt dann
   mehr Spalten und rückt auf dem Tablet die Navigation an die Seite. Auf einem kleinen Handy im

@@ -13,16 +13,29 @@ type Schwimmart =
   | 'freistil' | 'brust' | 'ruecken'
   | 'schmetterling' | 'lagen' | 'beliebig'
 
-type Beckenlaenge = 25 | 50
-type LaufModus = 'training' | 'wettkampf'
+type Beckenlaenge = 25 | 50 | 22.86
 
 interface LaufKonfiguration {
   beckenlaengeM: Beckenlaenge  // 25 | 50 | 22.86 (25 yd), kanonisch in Metern
   streckeM: number | null      // null = offene Strecke, kanonisch in Metern
-  schwimmart: Schwimmart
-  einheit?: 'm' | 'yd'         // Anzeige-Einheit; fehlt = 'm'
+  schwimmart: Schwimmart       // bleibt für alte Daten; wird nicht mehr gewählt
+  einheit?: 'm' | 'yd'         // nur noch für alte Yard-Daten; neue Läufe = 'm'
+  zwischenzeiten?: number | null // null/fehlt = automatisch aus Strecke und Becken
 }
 ```
+
+`zwischenzeiten` ist die Zahl der Anschläge vor dem Ziel. Fehlt sie, ergibt sie sich aus der
+Längenzahl (`Längen − 1`); bei offener Strecke bleibt sie offen. In Backups wird der Wert auf
+`0 … 99` geprüft; ältere Backups ohne Feld bleiben gültig.
+
+`schwimmart` wird weiterhin gespeichert und geprüft, damit ältere Backups unverändert laden. Die
+Oberfläche bietet keine Auswahl mehr an; neue Läufe verwenden `freistil`.
+
+`einheit` wird ebenfalls nur noch gelesen: Neue Läufe und Einstellungen werden ohne das Feld
+gespeichert (Meter). Alte Yard-Läufe behalten `einheit: 'yd'` und werden weiterhin in Yards
+angezeigt. Die Einstellungen und bearbeitete Trainingssätze werden beim Laden über
+`alsMeterKonfiguration` auf Meter gebracht; die angezeigten Zahlen bleiben dabei erhalten
+(25 yd → 25 m, 100 yd → 100 m). Siehe [ADR 0013](../adr/0013-nur-meter-in-der-eingabe.md).
 
 ### Anschlag
 
@@ -49,7 +62,6 @@ interface Bahn {
   schwimmerId: string | null
   startMs: number | null         // performance.now, null = nicht gestartet
   anschlaege: Anschlag[]
-  status?: 'dns' | 'dnf'         // nur Wettkampf, endgültig ohne Zeit
 }
 ```
 
@@ -62,8 +74,7 @@ interface Lauf {
   konfiguration: LaufKonfiguration
   startWallMs: number | null     // Date.now-Anker
   startversatzMs: number         // 0..120000, Abstand zwischen Reihen
-  wiederholung: number | null    // 1-basiert bei Serie/Heat
-  modus?: LaufModus              // fehlt = 'training'
+  wiederholung: number | null    // 1-basiert bei einer Serie
   bahnen: Bahn[]
 }
 ```
@@ -75,9 +86,9 @@ interface Satz {
   id: string
   datum: string                  // YYYY-MM-DD
   bezeichnung: string
+  tagesbezeichnung?: string      // Name des Tages, für alle Sätze desselben Datums
   konfiguration: LaufKonfiguration
   plan: SatzPlan | null          // gesetzt bei einer Serie
-  wettkampfId?: string | null    // gesetzt bei einer Disziplin
   erstelltAm: number
 }
 
@@ -88,22 +99,10 @@ interface SatzPlan {
 }
 ```
 
-Ein `Satz` ist **entweder** ein freier Trainingssatz, **oder** eine Serie (`plan !== null`),
-**oder** eine Wettkampfdisziplin (`wettkampfId` gesetzt). Die drei Fälle schließen sich in der
-Praxis aus; die Domain prüft das nicht hart, die Erzeuger halten es ein.
-
-### Wettkampf
-
-```ts
-interface Wettkampf {
-  id: string
-  name: string
-  datum: string                  // YYYY-MM-DD
-  beckenlaengeM: Beckenlaenge   // kanonisch in Metern
-  einheit?: 'm' | 'yd'          // Anzeige-Einheit; fehlt = 'm'
-  erstelltAm: number
-}
-```
+Ein `Satz` ist **entweder** ein freier Trainingssatz **oder** eine Serie (`plan !== null`).
+`tagesbezeichnung` ist der im Verlauf vergebene Name des Trainingstags, z. B. „Kader A“. Er ist
+kein eigenes Objekt: Beim Umbenennen schreibt die App denselben Wert auf alle Sätze des Datums;
+beim Lesen gilt der erste nicht-leere Wert. Ältere Backups ohne das Feld bleiben gültig.
 
 ### Schwimmer
 
@@ -135,6 +134,7 @@ interface Training {
   bezeichnung: string
   bahnen: number                 // 1..10, je Reihe
   reihen: number                 // 1..5
+  autostart?: boolean            // fehlt = false; neue Trainings = true
   aktive: (string | null)[]      // Länge = bahnen × reihen, Reihe für Reihe
   saetze: TrainingsSatz[]        // 1..20
   gestartet: Record<string, string> // TrainingsSatz.id -> Satz.id
@@ -148,7 +148,6 @@ interface Training {
 ## Beziehungen
 
 ```
-Wettkampf 1 ─── n Satz          (Satz.wettkampfId)
 Satz      1 ─── n Lauf          (Lauf.satzId)
 Lauf      1 ─── n Bahn
 Bahn      0 ─── n Anschlag
@@ -158,13 +157,12 @@ Training  1 ─── n TrainingsSatz (eingebettet)
 Training  n ─── n Satz          (Training.gestartet, TrainingsSatz.id -> Satz.id)
 ```
 
-### Die drei Satz-Arten
+### Die zwei Satz-Arten
 
-| Art | `plan` | `wettkampfId` | Läufe |
-| --- | --- | --- | --- |
-| Freier Satz / einzelner Lauf | `null` | `null` | ein Lauf, `wiederholung: null` |
-| Serie | gesetzt | `null` | `wiederholungen` Läufe, `wiederholung: 1..n` |
-| Wettkampfdisziplin | `null` | gesetzt | ein Lauf pro Heat, `wiederholung: Heatnummer` |
+| Art | `plan` | Läufe |
+| --- | --- | --- |
+| Freier Satz / einzelner Lauf | `null` | ein Lauf, `wiederholung: null` |
+| Serie | gesetzt | `wiederholungen` Läufe, `wiederholung: 1..n` |
 
 Ein einzelner Lauf aus dem **Timer** am selben Tag mit derselben Konfiguration landet im selben
 Satz. Eine Serie bekommt immer einen eigenen Satz, auch wenn die Konfiguration identisch ist. Ein
@@ -189,10 +187,6 @@ eigene Tabelle und keine Migrationsschritte.
 - Höchstens der letzte Anschlag hat `istFinish === true`. Ein Finish beendet die Bahn.
 - Ein nachträglich korrigierter Anschlag trägt `manuell: true`.
 - Eine Bahn mit Finish ist beendet; weitere Tipps ändern nichts.
-- `status` ist optional und nur im Wettkampf erlaubt: `dns` (nicht gestartet) oder `dnf` (nicht
-  beendet). Markierte Bahnen haben keine Zielzeit und nehmen keinen Start und keinen Anschlag mehr
-  an; sie zählen als beendet, aber nicht in Platzierung und Rückstand. Beim Laden wird `startMs`
-  auf `null` gesetzt.
 
 ### Lauf
 
@@ -200,7 +194,6 @@ eigene Tabelle und keine Migrationsschritte.
 - `startversatzMs` ist eine ganze Zahl zwischen 0 und 120.000. Er staffelt die Reihen, nicht die
   einzelnen Bahnen: Alle Bahnen einer Reihe starten gemeinsam.
 - `wiederholung` ist `null` oder eine ganze Zahl ab 1.
-- `modus` ist `training` oder `wettkampf`; fehlt es, gilt `training`.
 - `startWallMs` ist der Wanduhr-Anker des Laufs. Er wird beim ersten Start gesetzt.
 - Bei einer Serie ist `startWallMs` pro Runde um den Takt versetzt, damit der Verlauf die richtige
   Startzeit zeigt.
@@ -208,6 +201,8 @@ eigene Tabelle und keine Migrationsschritte.
 ### Satz und Plan
 
 - `datum` entspricht `^\d{4}-\d{2}-\d{2}$`.
+- `tagesbezeichnung` ist optional und, wenn gesetzt, ein Text. Alle Sätze desselben Datums sollen
+  denselben Namen tragen; beim Lesen zählt der erste nicht-leere Wert.
 - `streckeM` ist `null` oder eine positive Zahl, die ein Vielfaches der Beckenlänge ist.
 - Ein `SatzPlan` hat 2 bis 20 Wiederholungen, einen Takt größer 0 und höchstens 3.600 s sowie einen
   Startversatz bis 120.000 ms.
@@ -217,19 +212,11 @@ eigene Tabelle und keine Migrationsschritte.
 
 - 1 bis 10 Bahnen je Reihe und 1 bis 5 Reihen.
 - `aktive.length === bahnen × reihen`; die Liste ist Reihe für Reihe geordnet.
+- `autostart` ist optional und, wenn gesetzt, ein Wahrheitswert.
 - 1 bis 20 Trainingssätze.
 - Jeder Trainingssatz hat gültige Konfiguration, 1 bis 20 Wiederholungen und gültigen Takt.
 - `gestartet` enthält nur `TrainingsSatz.id -> Satz.id`-Paare.
 - Eine verwaiste Zuordnung (Satz gelöscht) ist erlaubt und wird als „offen“ behandelt.
-
-### Wettkampf
-
-- `name` ist nicht leer.
-- `datum` ist ein ISO-Datum.
-- `beckenlaengeM` ist 25, 50 oder 22,86 (25-Yard-Becken). Kanonisch gespeichert wird immer in
-  Metern; `einheit` steuert nur Anzeige und Eingabe (ADR 0009).
-- Eine Yard-Konfiguration speichert 100 yd als `streckeM: 91.44`; die Längenprüfung arbeitet mit
-  einer kleinen Toleranz, weil `91.44 / 22.86` in Gleitkomma nicht exakt 4 ergibt.
 
 ### Referenzielle Integrität
 
@@ -247,7 +234,6 @@ Zufall. IDs sind opak und werden nie angezeigt. Sie verbinden:
 
 - `Bahn.schwimmerId` → `Schwimmer.id`
 - `Lauf.satzId` → `Satz.id`
-- `Satz.wettkampfId` → `Wettkampf.id`
 - `Training.aktive[]` → `Schwimmer.id`
 - `Training.gestartet` → `Satz.id`
 
@@ -263,23 +249,21 @@ Zusammenführung und kein Ersetzen.
 - `startversatzMs`: fehlt/ungültig → 0; sonst gerundet, nicht negativ.
 - `wiederholung`: nur positive ganze Zahl, sonst `null`.
 - `bahnen[].reihe`: fehlt/ungültig → 1; sonst gerundet, nicht kleiner als 1.
-- `modus`: nur `wettkampf` bleibt, sonst `training`.
+- Frühere Wettkampf-Felder (`modus`, `status`) werden verworfen.
 - Laufende oder geplante Bahnen ohne Finish: `startMs = null`.
   Das ist die Reload-Regel; bereits erfasste Anschläge bleiben.
 
 ### `normalizeSatzOnLoad(satz)`
 
 - `plan` fehlt → `null`.
-- `wettkampfId` fehlt → `null`.
-
-### `normalizeWettkampfOnLoad(wettkampf)`
-
-- Beckenlänge: nur 25 bleibt 25, sonst 50.
+- `tagesbezeichnung` fehlt oder ist kein Text → leerer Text.
+- Ein früheres `wettkampfId` wird verworfen.
 
 ### `normalizeTrainingOnLoad(training)`
 
 - `bezeichnung` fehlt → leer.
 - `bahnen` auf 1..10 je Reihe begrenzt, `reihen` auf 1..5; fehlende Reihen → 1.
+- `autostart` fehlt → `false`; nur ein ausdrückliches `true` bleibt erhalten.
 - `aktive` auf genau `bahnen × reihen` Plätze aufgefüllt/gekürzt.
 - `saetze` fehlt → leeres Array; `gestartet` fehlt → leeres Objekt.
 
@@ -290,9 +274,8 @@ Zusammenführung und kein Ersetzen.
 ```ts
 interface BeckenrandDB extends DBSchema {
   schwimmer: { key: string; value: Schwimmer; indexes: { 'by-name': string } }
-  satz:      { key: string; value: Satz;      indexes: { 'by-datum': string; 'by-wettkampf': string } }
+  satz:      { key: string; value: Satz;      indexes: { 'by-datum': string } }
   lauf:      { key: string; value: Lauf;      indexes: { 'by-satz': string } }
-  wettkampf: { key: string; value: Wettkampf; indexes: { 'by-datum': string } }
   training:  { key: string; value: Training;  indexes: { 'by-datum': string } }
 }
 ```
@@ -303,7 +286,7 @@ interface BeckenrandDB extends DBSchema {
 | Version | 3 |
 | Primärschlüssel | jeweils `id` |
 | Upgrade v1 | `schwimmer`, `satz`, `lauf` |
-| Upgrade v2 | `wettkampf`, Index `by-wettkampf` auf `satz` |
+| Upgrade v2 | früher `wettkampf` und Index `by-wettkampf`; wird nicht mehr angelegt |
 | Upgrade v3 | `training` |
 
 Das Upgrade läuft in `upgrade(db, alteVersion, …)` schrittweise. Ein alter Tab mit Version 1 oder 2
@@ -320,7 +303,7 @@ als Rückfall, falls die Übernahme scheitert. Details:
 
 ### Snapshot und Sortierung von `loadAll`
 
-`loadAll` liest alle fünf Stores in genau einer `readonly`-Transaktion und wartet
+`loadAll` liest alle vier Stores in genau einer `readonly`-Transaktion und wartet
 `tx.done` ab. IndexedDB legt den Snapshot beim Öffnen der Transaktion fest: Ein
 Import oder eine Tab-Übergabe ist damit entweder vollständig sichtbar oder gar
 nicht, nie als halber Stand zwischen zwei Stores. Sortiert wird anschließend im
@@ -328,7 +311,6 @@ Speicher:
 
 - Schwimmer: nach Name, deutsch.
 - Sätze: nach Datum absteigend.
-- Wettkämpfe: nach Datum, dann `erstelltAm`, absteigend.
 - Trainings: nach Datum, dann `erstelltAm`, absteigend.
 - Läufe: keine Sortierung; die Oberfläche sortiert nach Bedarf.
 
@@ -350,7 +332,6 @@ interface Backup {
   schwimmer: Schwimmer[]
   satze: Satz[]
   laeufe: Lauf[]
-  wettkampfe: Wettkampf[]       // ab Version 2
   trainings: Training[]         // ab Version 3
 }
 ```
@@ -362,7 +343,7 @@ interface Backup {
 - Formatkennung und Version,
 - `exportiertAm` als parsebares Datum,
 - Listenfelder,
-- jeden Schwimmer, Satz, Lauf, Wettkampf und jedes Training,
+- jeden Schwimmer, Satz, Lauf und jedes Training,
 - Konfiguration, Datumsformat, IDs,
 - Anschläge inklusive `laengeNr`, `splitMs`, `erfasstAt`, `istFinish`, `manuell`,
 - Bahnnummern 1..10 und Reihen 1..5,
@@ -377,7 +358,7 @@ Die Prüfung ist **strenger** als die Laufzeit-Normalisierung: Ein Backup muss v
 
 ### Import
 
-`importBackup` prüft erneut und schreibt in einer Transaktion über alle fünf Stores. `put` bedeutet:
+`importBackup` prüft erneut und schreibt in einer Transaktion über alle vier Stores. `put` bedeutet:
 
 - gleiche ID → überschreiben,
 - neue ID → ergänzen,
@@ -397,14 +378,12 @@ Der Trainings-CSV-Export ist eine **Denormalisierung** des Modells:
 
 Damit ist die Datei flach und in Excel auswertbar, ohne Joins. Der Preis ist Redundanz.
 
-Der Wettkampf-CSV-Export ist eine Zeile pro **Start** und enthält bereits Platz, Zeit und Status;
-er ist eine Ergebnisliste, kein Rohdatenexport.
-
 ## Was NICHT im Modell steht
 
 - Keine Stammdaten wie Verein, Geburtsdatum oder Geschlecht.
 - Keine Saison, keine Wertung, keine Rekorde.
-- Keine Wettkampf-Anmeldung oder Startgeld.
+- Kein eigener Tag-Datensatz: Die Tagesbezeichnung liegt am Satz
+  ([ADR 0014](../adr/0014-tagesbezeichnung-am-satz.md)).
 - Keine Benutzerkonten oder Berechtigungen.
 - Keine Synchronisationsmetadaten wie `updatedAt` oder Konfliktversionen.
 
@@ -415,4 +394,4 @@ laden. Ein Pflichtfeld ohne Normalisierung bricht sonst das Laden.
 
 - [Domänenreferenz](domain-referenz.md) — Funktionen, die diese Typen verändern
 - [Architektur](architektur.md) — Zeitkern und Datenfluss
-- [ADRs](../adr/) — Entscheidungen hinter Satz, Serie, Training und Wettkampf
+- [ADRs](../adr/) — Entscheidungen hinter Satz, Serie und Training

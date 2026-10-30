@@ -13,7 +13,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { haptic } from '../app/haptics'
 import { useReducedMotion } from '../app/useReducedMotion'
-import { finishMs, lengthCount, bahnenNachReihen, zwischenzeiten } from '../domain/lauf'
+import {
+  finishMs,
+  eingestellteZwischenzeiten,
+  bahnenNachReihen,
+  zwischenzeiten,
+  zwischenzeitenGesamt,
+} from '../domain/lauf'
 import { abweichungZurVorrunde } from '../domain/analyse'
 import {
   formatCountdown,
@@ -224,10 +230,19 @@ function Zeile({
   const zeigtZwischenzeiten =
     zwischenzeit !== null && (zwischenzeit.gesamt === null || zwischenzeit.gesamt > 0)
   const zwischenzeitId = `zwischenzeiten-${basis.id}`
-  // Zeit, Runde und Länge als Vorlesetext. Die große Zahl liegt in einem
-  // `role="button"` und wäre dort für Screenreader nicht abrufbar.
-  const offeneLaengen = zeile.offen ? lengthCount(zeile.offen.lauf.konfiguration) : null
+  // Zeit, Runde und Zwischenzeit als Vorlesetext. Die große Zahl liegt in
+  // einem `role="button"` und wäre dort für Screenreader nicht abrufbar.
+  const offeneZwischenzeiten = zeile.offen
+    ? zwischenzeitenGesamt(zeile.offen.lauf.konfiguration)
+    : null
+  const offeneEigeneZahl = zeile.offen
+    ? eingestellteZwischenzeiten(zeile.offen.lauf.konfiguration) !== null
+    : false
+  const offeneLaengen =
+    offeneZwischenzeiten === null ? null : offeneZwischenzeiten + 1
   const offeneAnschlaege = zeile.offen?.bahn.anschlaege.length ?? 0
+  const offeneNaechsterIstZiel =
+    offeneZwischenzeiten !== null && offeneAnschlaege + 1 > offeneZwischenzeiten
   const beschreibungId = `zeitbeschreibung-${basis.id}`
   const zeitbeschreibung =
     zeile.status === 'bereit'
@@ -240,9 +255,13 @@ function Zeile({
               `Zeit ${formatTime(ansageZeit)}.`,
               `Runde ${angezeigteRunde} von ${gesamt}.`,
               zeile.offen
-                ? offeneLaengen
-                  ? `Länge ${Math.min(offeneAnschlaege + 1, offeneLaengen)} von ${offeneLaengen}.`
-                  : `Länge ${offeneAnschlaege + 1}.`
+                ? offeneEigeneZahl
+                  ? offeneNaechsterIstZiel
+                    ? 'Nächster Anschlag ist das Ziel.'
+                    : `Zwischenzeit ${Math.min(offeneAnschlaege + 1, offeneZwischenzeiten ?? 0)} von ${offeneZwischenzeiten}.`
+                  : offeneLaengen
+                    ? `Länge ${Math.min(offeneAnschlaege + 1, offeneLaengen)} von ${offeneLaengen}.`
+                    : `Länge ${offeneAnschlaege + 1}.`
                 : null,
             ]
               .filter((teil): teil is string => teil !== null)
@@ -329,7 +348,9 @@ function Zeile({
             <span className="rounded-md bg-surface2 px-1.5 py-0.5 text-[11px] font-bold tracking-wide text-muted">
               {basis.nummer}
             </span>
-            <span className="truncate text-sm font-semibold">{name ?? 'Ohne Namen'}</span>
+            <span className="truncate text-sm font-semibold">
+              {name && name.trim() !== '' ? name : `Bahn ${basis.nummer}`}
+            </span>
             <span className="ml-auto shrink-0 rounded-md bg-surface2 px-1.5 py-0.5 text-[10px] font-bold text-muted">
               R{angezeigteRunde}/{gesamt}
             </span>
@@ -456,7 +477,7 @@ export function SerieAnsicht({
   const erste = runden[0]
   // Die Streckenart ist für alle Runden gleich; sie entscheidet, ob die Zeile
   // einen Zielknopf braucht.
-  const offeneStrecke = erste ? lengthCount(erste.konfiguration) === null : false
+  const offeneStrecke = erste ? zwischenzeitenGesamt(erste.konfiguration) === null : false
   // Fortschrittsleiste und „R x/y“ richten sich nach dem Plan. Fehlen Runden
   // (etwa nach einem Reload), bleibt die geplante Gesamtzahl maßgeblich.
   const gesamt = Math.max(runden.length, plan.wiederholungen)

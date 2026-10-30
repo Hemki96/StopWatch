@@ -5,8 +5,8 @@ Zeitmessung für Schwimmtrainer am Beckenrand. Eine Messung besteht aus mehreren
 ## Sprache
 
 **Lauf**:
-Eine einzelne Messung über eine definierte Strecke, bestehend aus einer oder mehreren Bahnen. Die Bahnen starten gemeinsam oder mit Startversatz; jede Bahn wird einzeln gestoppt. Im Wettkampf ist ein Lauf ein Heat innerhalb einer Disziplin.
-_Avoid_: Session, Durchgang, Heat, Run
+Eine einzelne Messung über eine definierte Strecke, bestehend aus einer oder mehreren Bahnen. Die Bahnen starten gemeinsam oder mit Startversatz; jede Bahn wird einzeln gestoppt.
+_Avoid_: Session, Durchgang, Run
 
 **Satz**:
 Eine Trainingsserie aus mehreren Läufen, z. B. 8×100 m. Ein Satz mit Plan ist eine **Serie** mit festem Takt.
@@ -21,12 +21,16 @@ Ein einzelner Lauf innerhalb einer Serie, z. B. die dritte 100 m einer 5×100-Se
 _Avoid_: Durchgang, Rep
 
 **Training**:
-Die Vorbereitung einer Einheit: feste **Aktive** und mehrere **Trainingssätze** in fester Reihenfolge. Der Plan wird vor dem Training angelegt und dann am Beckenrand Satz für Satz abgearbeitet.
+Die Vorbereitung einer Einheit: feste **Aktive** und mehrere **Trainingssätze** in fester Reihenfolge. Der Plan wird vor dem Training angelegt und dann am Beckenrand Satz für Satz abgearbeitet. Optional startet der nächste Satz nach dem letzten Ziel automatisch.
 _Avoid_: Einheit, Session, Workout
 
 **Trainingssatz**:
-Ein geplanter Satz innerhalb eines Trainings, z. B. „4×100 m Freistil im 2:00-Takt“. Erst beim Start entstehen daraus ein **Satz** und seine **Läufe**; vorher ist nur der Plan gespeichert.
+Ein geplanter Satz innerhalb eines Trainings, z. B. „4×100 m im 2:00-Takt“. Erst beim Start entstehen daraus ein **Satz** und seine **Läufe**; vorher ist nur der Plan gespeichert.
 _Avoid_: Vorlage, Satz (sobald gemessen)
+
+**Tagesbezeichnung**:
+Ein Name für einen Trainingstag im Verlauf, z. B. „Kader A“. Er gilt für alle **Sätze** desselben Datums und wird an der Tagesüberschrift gepflegt. In der Datenhaltung ist er kein eigenes Objekt, sondern ein optionales Feld an jedem Satz des Tages.
+_Avoid_: Tagesnotiz, eigener Tag-Datensatz
 
 **Aktive**:
 Die Schwimmer, die an einem Training teilnehmen, je **Bahn** und **Reihe** zugeordnet. Die Zuordnung gilt für alle noch nicht gestarteten Sätze.
@@ -38,7 +42,7 @@ _Avoid_: Verzögerung, Offset, Abstand, Bahnversatz
 
 **Reihe**:
 Eine Startgruppe innerhalb eines Laufs oder einer Wiederholung. Alle Bahnen einer Reihe starten gemeinsam; die nächste Reihe folgt um den Startversatz. Mehrere Reihen erlauben mehr Schwimmer als Bahnen, z. B. 3 Personen sofort und 3 weitere nach 10 s.
-_Avoid_: Welle, Runde, Durchgang, Heat
+_Avoid_: Welle, Runde, Durchgang
 
 **Takt**:
 Die Zeit von einem Start einer Wiederholung bis zum Start der nächsten, z. B. 2:00 bei 5×100. Der Takt ist unabhängig davon, wann die Schwimmer tatsächlich im Ziel sind.
@@ -57,8 +61,13 @@ Eine zurückgelegte Beckenlänge (25 m oder 50 m). Die Strecke eines Laufs ist e
 _Avoid_: Lap, Runde, Bahn
 
 **Split**:
-Die vom Start der Bahn kumulierte Zeit an einer Länge.
-_Avoid_: Zwischenzeit, Lap Time, Runde
+Die vom Start der Bahn kumulierte Zeit an einer Länge oder an einer eingestellten Zwischenzeit.
+_Avoid_: Lap Time, Runde
+
+**Zwischenzeit**:
+Ein Anschlag vor dem Ziel. Wie viele davon erfasst werden, stellt der Trainer ein oder leitet die
+App aus Strecke und Beckenlänge ab; der nächste Anschlag nach der letzten Zwischenzeit ist das Ziel.
+_Avoid_: Lap, Abschnitt
 
 **Längenzeit**:
 Die Zeit einer einzelnen Länge: die Differenz zwischen ihrem Split und dem Split der Länge davor.
@@ -74,38 +83,22 @@ _Avoid_: Anschlag, Klick, Press
 
 **Strecke**:
 Die zu schwimmende Distanz eines Laufs, angegeben in Metern (z. B. 100 m).
-_Avoid_: Distanz, Event, Wettkampf
+_Avoid_: Distanz, Event
 
 **Offene Strecke**:
 Ein Lauf ohne festgelegte Distanz. Jeder Anschlag ist ein Split, das Ziel wird ausdrücklich gesetzt.
 _Avoid_: Freies Training, Endlos, Open
-
-**Wettkampf**:
-Ein Wettkampftag mit Name, Datum und Beckenlänge, der mehrere Disziplinen bündelt. Der Wettkampf ist der Rahmen; gemessen wird in seinen Läufen.
-_Avoid_: Meet, Event, Competition
-
-**Disziplin**:
-Eine Strecke mit Schwimmart innerhalb eines Wettkampfs, z. B. 100 m Freistil. In der Datenhaltung ist die Disziplin ein `Satz` mit `wettkampfId`; ihre Läufe sind die Heats.
-_Avoid_: Event, Wettkampf, Bewerb
-
-**Meldeliste**:
-Die Startliste eines Wettkampfs: pro Lauf die Bahnen und Namen. Sie wird als CSV importiert und legt Disziplinen, Läufe und Bahnen an.
-_Avoid_: Startliste, Entry List, Meldung
 
 **Import-Konflikt**:
 Ein Datensatz in einem Backup mit derselben ID wie ein lokaler Datensatz, aber abweichendem Inhalt. Standardmäßig bleibt der lokale Stand; erst eine ausdrückliche Entscheidung ersetzt ihn durch das Backup.
 _Avoid_: Duplikat, Merge-Konflikt, Überschreiben
 
 **Zielzeit**:
-Die Zeit vom Start einer Bahn bis zu ihrem letzten Anschlag. Im Wettkampfmodus genügt dafür ein Tap pro Bahn; Splits werden nicht erfasst.
+Die Zeit vom Start einer Bahn bis zu ihrem letzten Anschlag.
 _Avoid_: Endzeit, Finish Time
 
-**DNS / DNF**:
-Endgültiger Wettkampf-Status einer Bahn ohne Zielzeit: **DNS** (did not start) heißt „nicht gestartet“, **DNF** (did not finish) „nicht beendet“. Markierte Bahnen fehlen in Platzierung und Rückstand, beenden den Heat aber mit. Im Training kommt der Status nicht vor.
-_Avoid_: Ausfall, Disqualifikation, DSQ
-
 **Bestzeit (PB)**:
-Die schnellste gültige Zielzeit eines Schwimmers für eine Kombination aus Strecke, Schwimmart und Beckenlänge.
+Die schnellste gültige Zielzeit eines Schwimmers für eine Kombination aus Strecke und Beckenlänge.
 _Avoid_: Rekord, Bestwert, PR
 
 **Abweichung**:

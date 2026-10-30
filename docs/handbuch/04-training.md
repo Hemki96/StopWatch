@@ -5,12 +5,16 @@ Ein **Training** ist die Vorbereitung einer ganzen Einheit. Vorab werden die **A
 Satz für Satz gestartet. Noch offene Sätze — also solche, aus denen noch keine Läufe entstanden sind —
 lassen sich während des Trainings ändern, ergänzen, löschen oder verschieben.
 
+Optional kann das Training die Sätze **automatisch nacheinander starten**: Nach dem letzten Ziel
+beginnt der nächste Satz direkt, ohne Rückkehr in diesen Tab. Der Schalter steht über der Satzliste
+und lässt sich jederzeit umstellen.
+
 Das Training ist damit mehr als eine Serie: Es bündelt mehrere Sätze, eine gemeinsame Aktivenliste
 und den Fortschritt über die gesamte Einheit.
 
 ## Trainingsplan und Messung sind getrennt
 
-Ein Trainingssatz ist zunächst **nur ein Plan**. Er enthält Bezeichnung, Strecke, Schwimmart,
+Ein Trainingssatz ist zunächst **nur ein Plan**. Er enthält Bezeichnung, Strecke, Zwischenzeiten,
 Wiederholungen, Takt und Startversatz — aber keine Zeiten.
 
 Erst beim Start entstehen aus einem Trainingssatz:
@@ -29,7 +33,7 @@ lange Planung als viele unvollständige Läufe erscheint.
 3. Die App legt ein Training für heute an. Es übernimmt aus den aktuellen Einstellungen:
    - die Anzahl der Bahnen je Reihe und die Reihenzahl,
    - die Schwimmerzuordnung,
-   - den ersten Satz mit Strecke, Schwimmart, Wiederholungen, Takt und Startversatz.
+   - den ersten Satz mit Strecke, Zwischenzeiten, Wiederholungen, Takt und Startversatz.
 4. Das Training öffnet sich direkt. Name, Aktive und Sätze lassen sich jetzt anpassen.
 
 Ein neu angelegtes Training heißt zunächst **„Training“**. Der Name lässt sich über einen Tipp auf
@@ -61,7 +65,6 @@ Sheet:
 | **Bahnen pro Reihe** | 1 bis 10. Gilt für alle noch nicht gestarteten Sätze. |
 | **Reihen** | 1 bis 5 Startgruppen; jede startet gemeinsam, die nächste nach dem Reihenversatz. |
 | **Wer schwimmt mit?** | Ein Schwimmer pro Person aus dem Tab **Schwimmer**; leer bedeutet ohne Zuordnung. |
-| **Einheit** | Meter oder Yards; gilt für Strecke, Becken und Pace dieses Satzes. |
 
 Die Aktiven gelten für alle Sätze, die noch **nicht angelegt** sind. Ein Satz wird beim ersten Start
 angelegt. Bereits angelegte Sätze — auch solche, die nach einem Reload nur „bereit“ sind — behalten
@@ -71,14 +74,15 @@ Plätze; eine Person bleibt dabei in ihrer Reihe und an ihrer Bahn. Wird eine Re
 ihre Plätze weg.
 
 Wer noch keine Schwimmer angelegt hat, kann das im Tab **Schwimmer** tun. Namen sind optional; die
-Messung funktioniert auch mit „Ohne Namen“.
+Messung funktioniert auch ohne Namen. Bleibt ein Platz leer, zeigt die Bahnkachel statt eines Namens
+Lauf und Bahn an, zum Beispiel `Lauf 1, Bahn 2`; in der Serienansicht und der Analyse steht `Bahn 2`.
 
 ## Sätze planen
 
 Die Liste **Sätze** zeigt jeden Trainingssatz mit:
 
 - laufender Nummer,
-- Titel (eigene Bezeichnung oder automatisch z. B. `4×100 m · Freistil`),
+- Titel (eigene Bezeichnung oder automatisch z. B. `4×100 m`),
 - Metazeile: Beckenlänge, ggf. Takt, ggf. Startversatz,
 - Status: `offen`, `bereit`, `läuft` oder `fertig`,
 - bei laufenden Sätzen: `x von y Runden vollständig · antippen zum Weiterarbeiten`.
@@ -104,10 +108,10 @@ Ein Tipp auf einen **offenen** Satz öffnet „Satz N bearbeiten“:
 
 | Feld | Werte |
 | --- | --- |
-| **Bezeichnung** | frei, z. B. „Einschwimmen“; leer = automatisch aus Strecke und Schwimmart |
+| **Bezeichnung** | frei, z. B. „Einschwimmen“; leer = automatisch aus der Strecke |
 | **Beckenlänge** | 25 m oder 50 m |
 | **Strecke** | 50, 100, 200, 400, 800, 1.500 m oder **offen** |
-| **Schwimmart** | Freistil, Brust, Rücken, Schmetterling, Lagen, Beliebig |
+| **Zwischenzeiten** | automatisch aus Strecke und Becken oder eine eigene Zahl; danach folgt das Ziel |
 | **Wiederholungen** | 1 bis 20; 1 = einzelner Lauf |
 | **Takt** | nur bei mehreren Wiederholungen; Start zu Start |
 | **Startversatz** | 0 bis 120 s zwischen den Reihen |
@@ -129,6 +133,25 @@ angelegten Sätze.
 
 Das ist bewusst streng: Eine nachträgliche Änderung würde sonst gespeicherte Zeiten, Bestzeiten und
 den Verlauf umschreiben.
+
+## Automatischer Satzwechsel
+
+Der Schalter **Sätze automatisch starten** über der Satzliste steuert, was nach dem letzten Ziel
+passiert:
+
+| Zustand | Verhalten |
+| --- | --- |
+| **an** | Sobald der aktuelle Satz vollständig im Ziel ist, beginnt der nächste noch offene Satz direkt. |
+| **aus** | Der Trainer startet den nächsten Satz wie bisher bewusst im Training-Tab. |
+
+Der automatische Wechsel greift nur beim Übergang von „läuft“ nach „fertig“. Ein bereits fertiger
+Satz, den du später im Timer öffnest, startet nichts. Ist der nächste Satz schon einmal angelegt,
+aber noch nicht gestartet, holt die App seine fehlenden Starts nach; ein bereits laufender Satz wird
+nur ausgewählt.
+
+Der vorige Satz bleibt in der Laufleiste und im Verlauf erreichbar. Sein Ergebnis geht durch den
+Wechsel nicht verloren. Neue Trainings haben den Schalter standardmäßig an; bei älteren Trainings
+bleibt er aus, bis du ihn einschaltest.
 
 ## Einen Satz starten
 
@@ -177,11 +200,13 @@ Das Training ist ein Plan, kein starres Formular. Während der Einheit gilt:
 - Die Aktiven, die Aufteilung in Reihen und die Bahnenzahl lassen sich für kommende Sätze anpassen.
 - Gestartete und bereits angelegte Sätze bleiben unverändert und werden im Timer bedient.
 - Der Fortschritt oben zählt nur **vollständig** beendete Sätze.
-- Nach jedem Satz zurück zum Tab **Training** wechseln und den nächsten starten.
+- Ist der automatische Wechsel aus, nach jedem Satz zurück zum Tab **Training** wechseln und den
+  nächsten starten. Ist er an, beginnt der nächste Satz direkt im Timer.
 
-Die Pause zwischen zwei Sätzen wird nicht automatisch überbrückt. Die App startet den nächsten Satz
-erst auf ausdrücklichen Tipp. Ein Timer im Hintergrund wäre im gedrosselten Browser unzuverlässig
-und würde die Kontrolle über die Pause nehmen.
+Die Pause zwischen zwei Sätzen wird bei ausgeschaltetem automatischem Wechsel nicht überbrückt. Die
+App startet den nächsten Satz erst auf ausdrücklichen Tipp. Ein Timer im Hintergrund wäre im
+gedrosselten Browser unzuverlässig und würde die Kontrolle über die Pause nehmen. Bei eingeschaltetem
+Wechsel beginnt der nächste Satz ohne Pause; für längere Pausen den Schalter vorher ausschalten.
 
 ## Fortschritt
 
@@ -214,6 +239,7 @@ Messdaten zu verlieren. Zum Löschen von Messdaten den Verlauf verwenden.
 | Takt | 1 s bis 60 min (gängige Werte als Chip, jeder andere über Minuten und Sekunden) |
 | Startversatz | 0 bis 120 s zwischen zwei Reihen |
 | Strecke | Vielfaches der Beckenlänge oder offen |
+| Automatischer Wechsel | pro Training an oder aus; neue Trainings standardmäßig an |
 | Bearbeitbar | nur Sätze im Status `offen` (noch kein Satz/Läufe angelegt) |
 
 ## Empfohlener Ablauf am Beckenrand
@@ -223,27 +249,28 @@ Messdaten zu verlieren. Zum Löschen von Messdaten den Verlauf verwenden.
 1. Training anlegen, Namen vergeben.
 2. Aktive und Bahnen prüfen.
 3. Sätze in die gewünschte Reihenfolge bringen.
-4. Bei jedem Satz Strecke, Schwimmart, Wiederholungen und Takt kontrollieren.
+4. Bei jedem Satz Strecke, Zwischenzeiten, Wiederholungen und Takt kontrollieren.
 
 **Am Becken:**
 
 1. Training öffnen.
 2. **Satz 1 starten**, in der Startübersicht Aktive und Reihenfolge prüfen, dann **Jetzt starten**.
 3. Im Timer messen, wie gewohnt.
-4. Zurück zum Training, Fortschritt prüfen.
-5. **Satz 2 starten** — oder den Plan für die nächsten Sätze anpassen.
+4. Ist der automatische Wechsel aus: zurück zum Training, Fortschritt prüfen und **Satz 2 starten**.
+   Ist er an: Der nächste Satz beginnt nach dem letzten Ziel von selbst; der vorige bleibt in der
+   Leiste erreichbar.
+5. Den Plan für die nächsten Sätze bei Bedarf anpassen.
 6. Am Ende steht **Training abgeschlossen**.
 
-## Abgrenzung zu Serie und Wettkampf
+## Abgrenzung zur Serie
 
-| Frage | Training | Serie | Wettkampf |
-| --- | --- | --- | --- |
-| Mehrere Sätze in einer Einheit | Ja | Nein | Nein (Disziplinen) |
-| Feste Aktive über Sätze hinweg | Ja | Nein | Nein |
-| Pausen zwischen Sätzen | Manuell | Im Takt | Zwischen Heats |
-| Splits pro Länge | Ja | Ja | Nein |
-| Startliste als CSV | Nein | Nein | Ja |
-| Plan vor der Einheit | Ja | Teilweise (Einstellungen) | Ja |
+| Frage | Training | Serie |
+| --- | --- | --- |
+| Mehrere Sätze in einer Einheit | Ja | Nein |
+| Feste Aktive über Sätze hinweg | Ja | Nein |
+| Pausen zwischen Sätzen | Manuell oder automatisch (Schalter) | Im Takt |
+| Splits pro Länge | Ja | Ja |
+| Plan vor der Einheit | Ja | Teilweise (Einstellungen) |
 
 ## Verwandte Seiten
 

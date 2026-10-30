@@ -13,7 +13,6 @@
 
 import { finishMs } from './lauf'
 import { einheitVon, pacePro100Einheit } from './einheit'
-import { istWettkampfSatz } from './wettkampf'
 import type { Bahn, Einheit, Lauf, LaufKonfiguration, Satz } from './types'
 
 /**
@@ -220,9 +219,7 @@ export function analyseRunden(satz: Satz, laeufe: Lauf[]): Lauf[] {
 
 /** Wahr, wenn ein einzelner Lauf auswertbare Zwischenzeiten beisteuert. */
 function istAnalyseLauf(lauf: Lauf): boolean {
-  return (
-    lauf.modus !== 'wettkampf' && lauf.bahnen.some((bahn) => bahn.anschlaege.length > 0)
-  )
+  return lauf.bahnen.some((bahn) => bahn.anschlaege.length > 0)
 }
 
 /**
@@ -230,18 +227,12 @@ function istAnalyseLauf(lauf: Lauf): boolean {
  * Eine Liste kann so den Bestand einmal nach Satz gruppieren, statt für jeden
  * Satz alle Läufe zu filtern.
  */
-export function istAnalyseSatzAusRunden(satz: Satz, runden: Lauf[]): boolean {
-  if (istWettkampfSatz(satz)) return false
+export function istAnalyseSatzAusRunden(_satz: Satz, runden: Lauf[]): boolean {
   return runden.some(istAnalyseLauf)
 }
 
-/**
- * True, wenn ein Satz in der Analyse erscheint: mindestens ein Split, kein
- * Wettkampf. Wettkampf-Heats haben keine Zwischenzeiten (ADR 0006) und lassen
- * sich deshalb nicht vergleichen.
- */
+/** True, wenn ein Satz mindestens einen Lauf mit Zwischenzeiten hat. */
 export function istAnalyseSatz(satz: Satz, laeufe: Lauf[]): boolean {
-  if (istWettkampfSatz(satz)) return false
   return laeufe.some((lauf) => lauf.satzId === satz.id && istAnalyseLauf(lauf))
 }
 

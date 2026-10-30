@@ -7,7 +7,6 @@
  * kommen aus domain/analyse. Es gibt keine neue Speicherung — alles leitet sich
  * aus den Splits der Läufe ab.
  *
- * Wettkampf-Läufe erscheinen nicht, weil sie keine Splits haben (ADR 0006).
  * Offene Strecken erscheinen in der Matrix und im Drill-down, aber nicht als
  * Referenz für einen anderen Satz: Dort fehlt die feste Strecke.
  */
@@ -16,7 +15,8 @@ import { useApp } from '../app/AppProvider'
 import { istAnalyseSatzAusRunden } from '../domain/analyse'
 import { formatDelta, formatStrecke, formatTakt, formatTime } from '../domain/format'
 import { einheitVon, formatBeckenlaenge } from '../domain/einheit'
-import { SCHWIMMARTEN, type Satz } from '../domain/types'
+import { tagesnamen } from '../domain/tag'
+import { type Satz } from '../domain/types'
 import {
   kennzahlenFuerSatz,
   laeufeNachSatz,
@@ -49,14 +49,10 @@ function kurzDatum(datum: string): string {
   return Number.isNaN(parsed.getTime()) ? datum : datumKurzFormat.format(parsed)
 }
 
-function artLabel(schwimmart: string): string {
-  return SCHWIMMARTEN.find((art) => art.wert === schwimmart)?.label ?? ''
-}
-
-/** Titel eines Satzes: eigene Bezeichnung oder Strecke und Schwimmart. */
+/** Titel eines Satzes: eigene Bezeichnung oder Strecke. */
 function satzTitel(satz: Satz): string {
   if (satz.bezeichnung) return satz.bezeichnung
-  return `${formatStrecke(satz.konfiguration.streckeM, einheitVon(satz.konfiguration))} · ${artLabel(satz.konfiguration.schwimmart)}`
+  return formatStrecke(satz.konfiguration.streckeM, einheitVon(satz.konfiguration))
 }
 
 /** Kurzbeschreibung der Konfiguration für die Satzzeile. */
@@ -66,7 +62,6 @@ function satzMeta(satz: Satz, runden: number): string {
     `${formatBeckenlaenge(satz.konfiguration.beckenlaengeM, einheit)}-Becken`,
     satz.plan ? `${satz.plan.wiederholungen}×` : `${runden}×`,
     formatStrecke(satz.konfiguration.streckeM, einheit),
-    artLabel(satz.konfiguration.schwimmart),
   ].join(' · ')
 }
 
@@ -93,8 +88,7 @@ function Abweichung({ ms }: { ms: number | null }) {
 function Leer() {
   return (
     <p className="mt-16 px-4 text-center text-sm leading-relaxed text-muted">
-      Noch keine auswertbaren Sätze. Splits entstehen im Training bei jedem Anschlag; Wettkampf-Läufe
-      haben keine Zwischenzeiten.
+      Noch keine auswertbaren Sätze. Splits entstehen im Training bei jedem Anschlag.
     </p>
   )
 }
@@ -145,6 +139,9 @@ function SatzListe({
     return [...gruppen.entries()]
   }, [sichtbareSaetze])
 
+  // Der im Verlauf vergebene Tagesname erscheint auch hier an der Überschrift.
+  const tagesNamen = useMemo(() => tagesnamen(app.satze), [app.satze])
+
   if (saetze.length === 0) return <Leer />
 
   return (
@@ -154,6 +151,7 @@ function SatzListe({
         <section key={datum}>
           <h2 className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-muted">
             {datumText(datum)}
+            {tagesNamen.get(datum) ? ` · ${tagesNamen.get(datum)}` : ''}
           </h2>
           <ul className="space-y-2">
       {tagesSaetze.map((satz) => {
@@ -286,7 +284,7 @@ function SatzMatrix({
           `${formatBeckenlaenge(satz.konfiguration.beckenlaengeM, einheitVon(satz.konfiguration))}-Becken · ${formatStrecke(
             satz.konfiguration.streckeM,
             einheitVon(satz.konfiguration),
-          )} · ${artLabel(satz.konfiguration.schwimmart)}`,
+          )}`,
           `${anzahlRunden} ${anzahlRunden === 1 ? 'Runde' : 'Runden'}`,
           satz.plan ? `Takt ${formatTakt(satz.plan.taktSek)}` : null,
         ]
@@ -354,14 +352,18 @@ function SatzMatrix({
                           data-person={zeile.index}
                           data-schwimmer={zeile.schwimmerId ?? undefined}
                           onClick={() => onPerson(zeile.index)}
-                          aria-label={`${personName ?? 'Ohne Namen'}, Bahn ${zeile.nummer}, Längenzeiten`}
+                          aria-label={
+                            personName
+                              ? `${personName}, Bahn ${zeile.nummer}, Längenzeiten`
+                              : `Bahn ${zeile.nummer}, Längenzeiten`
+                          }
                           className="flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-left"
                         >
                           <span className="tabular w-5 shrink-0 text-[10px] font-bold text-muted">
                             {zeile.nummer}
                           </span>
                           <span className="min-w-0 flex-1 truncate text-[11px] font-semibold">
-                            {personName ?? 'Ohne Namen'}
+                            {personName ?? `Bahn ${zeile.nummer}`}
                           </span>
                           <ChevronRightIcon className="h-3.5 w-3.5 shrink-0 text-muted" />
                         </button>
@@ -440,13 +442,16 @@ function PersonDrilldown({
   const name = basis?.schwimmerId
     ? (app.schwimmer.find((eintrag) => eintrag.id === basis.schwimmerId)?.name ?? null)
     : null
+  // Ohne Namen trägt schon der Titel die Bahn; die Untertitelzeile wiederholt
+  // sie dann nicht.
+  const bezeichnung = name ?? (basis ? `Bahn ${basis.nummer}` : 'Ohne Namen')
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <Kopf
-        titel={name ?? 'Ohne Namen'}
+        titel={bezeichnung}
         untertitel={[
-          `Bahn ${basis?.nummer ?? '—'}`,
+          name ? `Bahn ${basis?.nummer ?? '—'}` : null,
           `${runden.length} ${runden.length === 1 ? 'Runde' : 'Runden'}`,
           formatStrecke(satz.konfiguration.streckeM, einheitVon(satz.konfiguration)),
           live !== null ? `zuletzt ${formatDelta(live)}` : null,

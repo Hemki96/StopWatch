@@ -1,8 +1,8 @@
 /**
  * Erststart-Onboarding in drei Schritten.
  *
- * Schritt 1 erklärt Lauf, Bahn und Anschlag, Schritt 2 legt Beckenlänge,
- * Strecke und Schwimmart fest, Schritt 3 Bahnzahl und Namen. Der Abschluss
+ * Schritt 1 erklärt Lauf, Bahn und Anschlag, Schritt 2 legt Beckenlänge und
+ * Strecke fest, Schritt 3 Bahnzahl und Namen. Der Abschluss
  * schreibt Konfiguration, Bahnzahl und Schwimmerzuordnung über
  * `app/AppProvider` in die Einstellungen; „Überspringen“ setzt die
  * Standardwerte. Der Merker, dass das Onboarding erledigt ist, liegt in
@@ -11,11 +11,10 @@
 import { useState } from 'react'
 import { useApp } from '../app/AppProvider'
 import {
+  alsMeterKonfiguration,
   anzeigeZuMeter,
   beckenlaengenFuer,
-  einheitVon,
   formatBeckenlaenge,
-  standardBeckenlaenge,
   streckeAnzeige,
 } from '../domain/einheit'
 import {
@@ -24,12 +23,7 @@ import {
   lengthCount,
   validateKonfiguration,
 } from '../domain/lauf'
-import {
-  SCHWIMMARTEN,
-  type Beckenlaenge,
-  type Einheit,
-  type LaufKonfiguration,
-} from '../domain/types'
+import { type Beckenlaenge, type LaufKonfiguration } from '../domain/types'
 
 const STRECKEN = [50, 100, 200, 400, 800, 1500] as const
 
@@ -70,9 +64,9 @@ function Auswahl({
 export function Onboarding({ onFertig }: { onFertig: () => void }) {
   const app = useApp()
   const [schritt, setSchritt] = useState(0)
-  const [konfiguration, setKonfiguration] = useState<LaufKonfiguration>({
-    ...app.einstellungen.konfiguration,
-  })
+  const [konfiguration, setKonfiguration] = useState<LaufKonfiguration>(() =>
+    alsMeterKonfiguration(app.einstellungen.konfiguration),
+  )
   const [bahnen, setBahnen] = useState(app.einstellungen.bahnen)
   // Zehn Felder unabhängig von der Bahnzahl vorhalten: Wer die Bahnzahl erhöht,
   // findet bereits getippte Namen wieder vor. Startwerte kommen aus den
@@ -97,27 +91,6 @@ export function Onboarding({ onFertig }: { onFertig: () => void }) {
         strecke !== null && !istVielfacheDerBeckenlaenge(strecke, beckenlaengeM)
           ? beckenlaengeM * 2
           : strecke,
-    })
-  }
-
-  /**
-   * Wechselt Meter/Yards. Die angezeigte Streckenzahl bleibt erhalten; passt
-   * sie nicht zum neuen Becken, gelten zwei Beckenlängen.
-   */
-  const setzeEinheit = (einheit: Einheit) => {
-    if (einheit === einheitVon(konfiguration)) return
-    const anzeige = streckeAnzeige(konfiguration.streckeM, einheitVon(konfiguration))
-    const beckenlaengeM = standardBeckenlaenge(einheit)
-    setKonfiguration({
-      ...konfiguration,
-      einheit,
-      beckenlaengeM,
-      streckeM:
-        anzeige === null
-          ? null
-          : istVielfacheDerBeckenlaenge(anzeigeZuMeter(anzeige, einheit), beckenlaengeM)
-            ? anzeigeZuMeter(anzeige, einheit)
-            : beckenlaengeM * 2,
     })
   }
 
@@ -217,33 +190,16 @@ export function Onboarding({ onFertig }: { onFertig: () => void }) {
           <div className="space-y-6">
             <section>
               <h2 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted">
-                Einheit
-              </h2>
-              <div className="flex gap-2">
-                {(['m', 'yd'] as const).map((wert) => (
-                  <Auswahl
-                    key={wert}
-                    aktiv={einheitVon(konfiguration) === wert}
-                    onClick={() => setzeEinheit(wert)}
-                  >
-                    {wert === 'm' ? 'Meter' : 'Yards'}
-                  </Auswahl>
-                ))}
-              </div>
-            </section>
-
-            <section>
-              <h2 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted">
                 Beckenlänge
               </h2>
               <div className="flex flex-wrap gap-2">
-                {beckenlaengenFuer(einheitVon(konfiguration)).map((wert) => (
+                {beckenlaengenFuer('m').map((wert) => (
                   <Auswahl
                     key={wert}
                     aktiv={konfiguration.beckenlaengeM === wert}
                     onClick={() => setzeBeckenlaenge(wert)}
                   >
-                    {formatBeckenlaenge(wert, einheitVon(konfiguration))}
+                    {formatBeckenlaenge(wert, 'm')}
                   </Auswahl>
                 ))}
               </div>
@@ -258,16 +214,16 @@ export function Onboarding({ onFertig }: { onFertig: () => void }) {
                   <Auswahl
                     key={wert}
                     aktiv={
-                      streckeAnzeige(konfiguration.streckeM, einheitVon(konfiguration)) === wert
+                      streckeAnzeige(konfiguration.streckeM, 'm') === wert
                     }
                     onClick={() =>
                       setKonfiguration({
                         ...konfiguration,
-                        streckeM: anzeigeZuMeter(wert, einheitVon(konfiguration)),
+                        streckeM: anzeigeZuMeter(wert, 'm'),
                       })
                     }
                   >
-                    {wert} {einheitVon(konfiguration)}
+                    {wert} m
                   </Auswahl>
                 ))}
                 <Auswahl
@@ -278,23 +234,6 @@ export function Onboarding({ onFertig }: { onFertig: () => void }) {
                 </Auswahl>
               </div>
               <p className="mt-2 text-xs text-muted">{gesamtLaengen}</p>
-            </section>
-
-            <section>
-              <h2 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted">
-                Schwimmart
-              </h2>
-              <div className="flex flex-wrap gap-2">
-                {SCHWIMMARTEN.map(({ wert, label }) => (
-                  <Auswahl
-                    key={wert}
-                    aktiv={konfiguration.schwimmart === wert}
-                    onClick={() => setKonfiguration({ ...konfiguration, schwimmart: wert })}
-                  >
-                    {label}
-                  </Auswahl>
-                ))}
-              </div>
             </section>
           </div>
         ) : null}

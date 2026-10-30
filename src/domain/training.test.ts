@@ -27,6 +27,7 @@ import {
   trainingsFortschritt,
   trainingsSatzMeta,
   trainingsSatzTitel,
+  trainingVonSatz,
   trainingZusammenfassung,
   verschiebeTrainingsSatz,
 } from './training'
@@ -115,6 +116,15 @@ describe('neuesTraining', () => {
     expect(neuesTraining({ datum: '2026-10-29', bahnen: 0 }).bahnen).toBe(1)
   })
 
+  // Neue Trainings starten ihre Sätze standardmäßig automatisch; die
+  // Einstellung lässt sich beim Anlegen ausdrücklich abschalten.
+  it('startet Sätze standardmäßig automatisch', () => {
+    expect(neuesTraining({ datum: '2026-10-29', bahnen: 1 }).autostart).toBe(true)
+    expect(
+      neuesTraining({ datum: '2026-10-29', bahnen: 1, autostart: false }).autostart,
+    ).toBe(false)
+  })
+
   // Reihen vervielfachen die Plätze: 3 Bahnen × 2 Reihen ergeben sechs
   // Aktive, Reihe für Reihe.
   it('legt je Reihe dieselbe Bahnzahl an', () => {
@@ -165,15 +175,15 @@ describe('ordneAktiveUm', () => {
   })
 })
 
-// Beschreibungstexte für die Satzliste: „n×Strecke · Schwimmart“ und die
-// Metazeile mit Takt und Versatz.
+// Beschreibungstexte für die Satzliste: „n×Strecke“ und die Metazeile mit
+// Takt und Versatz.
 describe('Satzbeschreibung', () => {
   // Eine eigene Bezeichnung ersetzt den automatischen Titel, die Kurzbeschreibung
   // bleibt unverändert.
-  it('zeigt Wiederholungen und Schwimmart', () => {
+  it('zeigt Wiederholungen', () => {
     const satz = neuerTrainingsSatz({ konfiguration: K100, wiederholungen: 5 })
-    expect(beschreibeTrainingsSatz(satz)).toBe('5×100 m · Freistil')
-    expect(trainingsSatzTitel(satz)).toBe('5×100 m · Freistil')
+    expect(beschreibeTrainingsSatz(satz)).toBe('5×100 m')
+    expect(trainingsSatzTitel(satz)).toBe('5×100 m')
     expect(trainingsSatzTitel({ ...satz, bezeichnung: 'Einschwimmen' })).toBe('Einschwimmen')
   })
 
@@ -251,6 +261,15 @@ describe('pruefeTraining', () => {
   it('verlangt mindestens einen Satz', () => {
     expect(pruefeTraining({ ...basisTraining(), saetze: [] })).toContain('mindestens einen Satz')
   })
+
+  // `autostart` ist optional (ältere Trainings), muss aber, wenn es gesetzt
+  // ist, ein Wahrheitswert sein.
+  it('prüft den automatischen Satzwechsel auf einen Wahrheitswert', () => {
+    expect(pruefeTraining(basisTraining())).toBeNull()
+    expect(
+      pruefeTraining({ ...basisTraining(), autostart: 'ja' } as unknown as Training),
+    ).toContain('automatische')
+  })
 })
 
 // Bearbeiten der festen Reihenfolge: Ersetzen behält die Position, Entfernen
@@ -327,6 +346,18 @@ describe('trainingsFortschritt', () => {
     const fortschritt = trainingsFortschritt(training, [], [])
     expect(fortschritt[0]?.status).toBe('offen')
     expect(fortschritt[0]?.satz).toBeNull()
+  })
+})
+
+// Rückweg vom gemessenen Satz zum Plan: Der automatische Wechsel braucht das
+// Training, aus dem der sichtbare Satz entstanden ist.
+describe('trainingVonSatz', () => {
+  it('findet das Training über die gestartete Zuordnung', () => {
+    const training = basisTraining()
+    training.gestartet = { ts1: 'satz1' }
+    expect(trainingVonSatz([training], 'satz1')?.id).toBe(training.id)
+    expect(trainingVonSatz([training], 'unbekannt')).toBeNull()
+    expect(trainingVonSatz([training], null)).toBeNull()
   })
 })
 

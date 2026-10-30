@@ -27,7 +27,6 @@ const leeresBackup = {
   schwimmer: [],
   satze: [],
   laeufe: [],
-  wettkampfe: [],
   trainings: [],
 }
 
@@ -48,7 +47,7 @@ describe('pruefeBackupFuerImport', () => {
     expect(ergebnis.ok).toBe(true)
     if (!ergebnis.ok) return
     expect(ergebnis.backup.format).toBe(BACKUP_FORMAT)
-    expect(ergebnis.text).toBe('0 Schwimmer, 0 Wettkämpfe, 0 Trainings, 0 Sätze, 0 Läufe')
+    expect(ergebnis.text).toBe('0 Schwimmer, 0 Trainings, 0 Sätze, 0 Läufe')
   })
 
   // Fehler werden unverändert durchgereicht, damit die Meldung den Pfad des
@@ -76,7 +75,6 @@ describe('erzeugeBackup', () => {
       schwimmer: [],
       satze: [],
       laeufe: [],
-      wettkampfe: [],
       trainings: [],
     })
     expect(Number.isNaN(Date.parse(backup.exportiertAm))).toBe(false)
@@ -106,7 +104,6 @@ describe('ermittleImportKonflikte', () => {
       startWallMs: 1_700_000_000_000,
       startversatzMs: 0,
       wiederholung: null,
-      modus: 'training',
       bahnen: [
         {
           id: `${id}-bahn-1`,
@@ -135,7 +132,6 @@ describe('ermittleImportKonflikte', () => {
       schwimmer: [],
       satze: [],
       laeufe: [laufMitAnschlaegen('l1', 1), laufMitAnschlaegen('l2', 1)],
-      wettkampfe: [],
       trainings: [],
     })
 
@@ -154,7 +150,6 @@ describe('ermittleImportKonflikte', () => {
       schwimmer: [],
       satze: [],
       laeufe: [laufMitAnschlaegen('l1', 1)],
-      wettkampfe: [],
       trainings: [],
     })
 

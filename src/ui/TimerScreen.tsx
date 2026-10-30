@@ -9,7 +9,7 @@
  * der aktive Zustand kommen aus app/AppProvider. `useNow` liefert die monotone
  * Zeit, `useWakeLock` hält den Bildschirm an, solange etwas läuft.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApp, type AktiverEintrag, type Einstellungen } from '../app/AppProvider'
 import { useNow } from '../app/useNow'
 import { useWakeLock } from '../app/useWakeLock'
@@ -22,8 +22,8 @@ import {
   isFinished,
   laneStatusAt,
   laufzeitMs,
-  lengthCount,
   reihenVon,
+  zwischenzeitenGesamt,
 } from '../domain/lauf'
 import {
   bahnZeile,
@@ -34,7 +34,12 @@ import {
   serieFortschritt,
 } from '../domain/serie'
 import {
-  SCHWIMMARTEN,
+  naechsterSatz,
+  trainingVonSatz,
+  trainingsFortschritt,
+  trainingsSatzTitel,
+} from '../domain/training'
+import {
   type Bahn,
   type Lauf,
   type LaufKonfiguration,
@@ -51,21 +56,15 @@ import { SerieAnsicht } from './SerieAnsicht'
 import { Startuebersicht, StartuebersichtLauf } from './Startuebersicht'
 import { TrashIcon, XIcon } from './icons'
 
-/** Deutsches Label zur Schwimmart; unbekannte Werte bleiben leer. */
-function artLabel(schwimmart: string): string {
-  return SCHWIMMARTEN.find((s) => s.wert === schwimmart)?.label ?? ''
-}
-
 /**
  * Einzeilige Beschreibung eines Laufs für Kopfzeile und Vorschau:
- * Beckenlänge, Strecke (bei Serien mit Wiederholungszahl), Schwimmart,
- * Personenzahl samt Reihen und – falls gesetzt – Reihenversatz und Takt.
+ * Beckenlänge, Strecke (bei Serien mit Wiederholungszahl), Personenzahl samt
+ * Reihen und – falls gesetzt – Reihenversatz und Takt.
  */
 function beschriftung(
   konfiguration: {
     beckenlaengeM: number
     streckeM: number | null
-    schwimmart: string
     einheit?: 'm' | 'yd'
   },
   personen: number,
@@ -78,7 +77,6 @@ function beschriftung(
   const teile = [
     formatBeckenlaenge(konfiguration.beckenlaengeM as 25 | 50 | 22.86, einheit),
     plan && plan.wiederholungen > 1 ? `${plan.wiederholungen}×${strecke}` : strecke,
-    artLabel(konfiguration.schwimmart),
     reihen > 1
       ? `${personen} Personen in ${reihen} Reihen`
       : `${personen} ${personen === 1 ? 'Bahn' : 'Bahnen'}`,
@@ -95,11 +93,10 @@ function beschriftung(
 /** Kurztitel für die Laufleiste; Serien nennen die Wiederholungszahl mit. */
 function kurzTitel(lauf: Lauf, satz: Satz | null): string {
   const strecke = formatStrecke(lauf.konfiguration.streckeM, einheitVon(lauf.konfiguration))
-  const art = artLabel(lauf.konfiguration.schwimmart)
   if (istSerie(satz) && satz?.plan) {
-    return `${satz.plan.wiederholungen}×${strecke} · ${art}`
+    return `${satz.plan.wiederholungen}×${strecke}`
   }
-  return `${strecke} · ${art}`
+  return strecke
 }
 
 /**
@@ -134,11 +131,11 @@ function eintragStatus(eintrag: AktiverEintrag, laeufe: Lauf[]): 'bereit' | 'lae
 }
 
 /**
- * Etwas ist an einer Bahn zurückzunehmen, wenn ein Status, ein Anschlag oder
- * ein Start gesetzt ist. `undoLane` nimmt in genau dieser Reihenfolge zurück.
+ * Etwas ist an einer Bahn zurückzunehmen, wenn ein Anschlag oder ein Start
+ * gesetzt ist. `undoLane` nimmt in genau dieser Reihenfolge zurück.
  */
 function kannBahnZuruecknehmen(bahn: Bahn): boolean {
-  return bahn.status !== undefined || bahn.anschlaege.length > 0 || bahn.startMs !== null
+  return bahn.anschlaege.length > 0 || bahn.startMs !== null
 }
 
 /**
@@ -217,25 +214,30 @@ function tapAnsage(
   runde: number | null = null,
 ): string | null {
   const ort = `Bahn ${bahn.nummer}${runde !== null ? `, Runde ${runde}` : ''}`
-  if (bahn.status) return null
   if (bahn.startMs === null) {
     // Eine unterbrochene Bahn mit Anschlägen nimmt keinen neuen Tap an.
     if (bahn.anschlaege.length > 0) return null
     return `${ort} gestartet`
   }
   if (tapNow < bahn.startMs || isFinished(bahn)) return null
-  const gesamt = lengthCount(konfiguration)
+  const gesamt = zwischenzeitenGesamt(konfiguration)
   const laengeNr = bahn.anschlaege.length + 1
   const split = Math.max(0, tapNow - bahn.startMs)
-  return gesamt !== null && laengeNr >= gesamt
-    ? `${ort} im Ziel, ${formatTime(split)}`
+  if (gesamt !== null && laengeNr > gesamt) {
+    return `${ort} im Ziel, ${formatTime(split)}`
+  }
+  // Bei einer eigenen Zahl nennt die Ansage die Zwischenzeit; automatisch
+  // bleibt es bei der gewohnten Längenbezeichnung.
+  const eigeneZahl = typeof konfiguration.zwischenzeiten === 'number'
+  return eigeneZahl
+    ? `${ort}, Zwischenzeit ${laengeNr}/${gesamt}, ${formatTime(split)}`
     : `${ort}, Länge ${laengeNr}, ${formatTime(split)}`
 }
 
 /** Ansage für den „Ziel“-Knopf beziehungsweise „Alle beenden“. */
 function zielAnsage(bahn: Bahn, tapNow: number, runde: number | null = null): string | null {
   const ort = `Bahn ${bahn.nummer}${runde !== null ? `, Runde ${runde}` : ''}`
-  if (bahn.status || bahn.startMs === null || isFinished(bahn) || tapNow < bahn.startMs) {
+  if (bahn.startMs === null || isFinished(bahn) || tapNow < bahn.startMs) {
     return null
   }
   return `${ort} im Ziel, ${formatTime(Math.max(0, tapNow - bahn.startMs))}`
@@ -394,6 +396,19 @@ export function TimerScreen() {
       ? runden.every(isComplete)
       : lauf.bahnen.every(isFinished)
     : false
+
+  // Gehört der sichtbare Satz zu einem Training mit automatischem Wechsel?
+  // Der nächste Eintrag wird erst beim Übergang „fertig“ benötigt; `useMemo`
+  // hält die Suche aus dem 30-fps-Render der laufenden Messung heraus.
+  const autoTraining = useMemo(
+    () => trainingVonSatz(app.trainings, satz?.id ?? null),
+    [app.trainings, satz?.id],
+  )
+  const autoNaechster = useMemo(() => {
+    if (!beendetJetzt || autoTraining?.autostart !== true) return null
+    return naechsterSatz(trainingsFortschritt(autoTraining, app.satze, app.laeufe))
+  }, [beendetJetzt, autoTraining, app.satze, app.laeufe])
+
   // Ein Wechsel des aktiven Laufs oder das Schließen darf keine alte Ansage
   // stehen lassen; sonst würde ein späteres Ziel an den vorigen Text anhängen.
   // Der Wechsel von „kein Lauf“ zu einem neuen Lauf behält dagegen die gerade
@@ -419,6 +434,41 @@ export function TimerScreen() {
     }
     vorherFertig.current = { fertig: beendetJetzt, laufId }
   }, [beendetJetzt, laufId, serie])
+
+  // Automatischer Satzwechsel: Nur der Übergang von „läuft“ nach „fertig“
+  // zählt. Ein bereits fertiger Satz beim Öffnen des Tabs startet nichts, und
+  // nach dem Wechsel verhindert die neue Lauf-ID einen zweiten Start.
+  const vorherAuto = useRef({ fertig: beendetJetzt, laufId })
+  const { startAlle, starteTrainingsSatz, zeigeToast } = app
+  useEffect(() => {
+    const vorher = vorherAuto.current
+    vorherAuto.current = { fertig: beendetJetzt, laufId }
+    if (!beendetJetzt || vorher.fertig || vorher.laufId !== laufId) return
+    if (!autoTraining || autoTraining.autostart !== true || !autoNaechster) return
+
+    const neuerLaufId = starteTrainingsSatz(
+      autoTraining.id,
+      autoNaechster.eintrag.id,
+      performance.now(),
+      Date.now(),
+    )
+    if (!neuerLaufId) return
+    // Ein „bereiter“ Satz wurde schon einmal angelegt, aber noch nicht
+    // gestartet. `starteTrainingsSatz` wählt ihn nur aus; die fehlenden Starts
+    // holt `startAlle` nach. Ein laufender Satz wird dagegen nicht angefasst.
+    if (autoNaechster.status === 'bereit') startAlle(performance.now(), Date.now())
+    zeigeToast(
+      `Satz ${autoNaechster.index + 1} gestartet: ${trainingsSatzTitel(autoNaechster.eintrag)}`,
+    )
+  }, [
+    autoNaechster,
+    autoTraining,
+    beendetJetzt,
+    laufId,
+    startAlle,
+    starteTrainingsSatz,
+    zeigeToast,
+  ])
 
   // Die Zeit läuft nur, solange irgendwo etwas plant oder läuft; sonst bliebe
   // ein Render-Loop ohne sichtbaren Nutzen. Der Wake-Lock hält den Bildschirm
@@ -625,9 +675,10 @@ export function TimerScreen() {
   // Bereits oben für die Ansage „Lauf beendet“ berechnet; hier nur benannt.
   const alleBeendet = beendetJetzt
   const imZiel = lauf.bahnen.filter(isFinished).length
-  // Eine offene Strecke braucht den Zielknopf; bei fester Strecke ist der
-  // letzte Anschlag automatisch das Ziel.
-  const offeneStrecke = lengthCount(lauf.konfiguration) === null
+  // Nur eine offene Strecke ohne eigene Zwischenzeiten braucht den Zielknopf;
+  // mit fester Zahl schließt der nächste Anschlag nach der letzten
+  // Zwischenzeit automatisch ab.
+  const offeneStrecke = zwischenzeitenGesamt(lauf.konfiguration) === null
   // Fortschritt einer Serie zählt vollständige Runden, nicht einzelne Bahnen.
   const fortschritt = serie ? serieFortschritt(runden) : null
   // Laufzeit eines einzelnen Laufs ab dem ersten Start; bei einer Serie
@@ -662,6 +713,13 @@ export function TimerScreen() {
               : bahnProReihe <= 8
                 ? 'grid-cols-2 min-[560px]:grid-cols-3 lg:grid-cols-4'
                 : 'grid-cols-2 min-[560px]:grid-cols-3 lg:grid-cols-5'
+
+  // Position des sichtbaren Laufs in der aktiven Leiste. Die Bahnkachel nutzt
+  // sie als Ersatz, wenn keine Schwimmer:in ausgewählt ist („Lauf 1, Bahn 2“).
+  const laufNummer = Math.max(
+    1,
+    app.aktiveEintraege.findIndex((eintrag) => eintrag.id === lauf.id) + 1,
+  )
 
   /**
    * Die sichtbare Rücknahme merkt sich die zuletzt bediente Bahn, bevor sie
@@ -799,11 +857,7 @@ export function TimerScreen() {
   // nur über langes Drücken schrittweise zurücksetzen; der Hinweis macht das
   // sichtbar, statt einen wirkungslosen Tap zu erwarten.
   const hatUnterbrochene = (serie ? runden.flatMap((runde) => runde.bahnen) : lauf.bahnen).some(
-    (bahn) =>
-      bahn.startMs === null &&
-      bahn.anschlaege.length > 0 &&
-      !isFinished(bahn) &&
-      !bahn.status,
+    (bahn) => bahn.startMs === null && bahn.anschlaege.length > 0 && !isFinished(bahn),
   )
 
   return (
@@ -919,6 +973,11 @@ export function TimerScreen() {
                     bahn={bahn}
                     konfiguration={lauf.konfiguration}
                     now={now}
+                    ersatzName={
+                      mehrereReihen
+                        ? `Reihe ${bahn.reihe}, Bahn ${bahn.nummer}`
+                        : `Lauf ${laufNummer}, Bahn ${bahn.nummer}`
+                    }
                     schwimmerName={schwimmerName(bahn.schwimmerId)}
                     onTap={tippeBahn}
                     onUndo={undoBahn}

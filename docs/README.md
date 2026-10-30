@@ -1,8 +1,7 @@
 # Dokumentation
 
 Beckenrand ist eine mobile-first PWA für Schwimmtrainer:innen am Beckenrand. Sie misst Zeiten,
-plant Serien und Trainings, führt durch einen Wettkampf und speichert alles ausschließlich auf dem
-eigenen Gerät.
+plant Serien und Trainings und speichert alles ausschließlich auf dem eigenen Gerät.
 
 Diese Dokumentation richtet sich an zwei Gruppen:
 
@@ -17,7 +16,6 @@ Diese Dokumentation richtet sich an zwei Gruppen:
 | einen einzelnen Lauf mit mehreren Bahnen stoppen | [Timer und Bahnen](handbuch/02-timer.md) |
 | eine Serie im festen Takt schwimmen | [Serien](handbuch/03-serien.md) |
 | eine Trainingseinheit vorbereiten und abarbeiten | [Training](handbuch/04-training.md) |
-| einen Wettkampf anlegen oder eine Meldeliste importieren | [Wettkampf](handbuch/05-wettkampf.md) |
 | Zeiten, Bestzeiten und Splits auswerten | [Verlauf und Auswertung](handbuch/06-verlauf-und-auswertung.md) |
 | Daten exportieren, sichern oder löschen | [Daten und Backup](handbuch/07-daten-und-backup.md) |
 | ein Problem lösen | [Probleme und FAQ](handbuch/08-probleme-und-faq.md) |
@@ -40,10 +38,9 @@ gibt, sondern auch, warum ein Ablauf so ist und wo die Grenzen liegen.
 2. [Timer und Bahnen](handbuch/02-timer.md) — einzelner Lauf, Startversatz, offene Strecke, Korrekturen
 3. [Serien](handbuch/03-serien.md) — mehrere Wiederholungen im festen Takt
 4. [Training](handbuch/04-training.md) — Aktive, Trainingssätze und Fortschritt
-5. [Wettkampf](handbuch/05-wettkampf.md) — Disziplinen, Heats, Meldeliste, Zielzeit
-6. [Verlauf und Auswertung](handbuch/06-verlauf-und-auswertung.md) — Splits, Bestzeiten, CSV
-7. [Daten und Backup](handbuch/07-daten-und-backup.md) — IndexedDB, Backup, Import, Löschen
-8. [Probleme und FAQ](handbuch/08-probleme-und-faq.md) — typische Fälle und ihre Lösung
+5. [Verlauf und Auswertung](handbuch/06-verlauf-und-auswertung.md) — Splits, Bestzeiten, CSV
+6. [Daten und Backup](handbuch/07-daten-und-backup.md) — IndexedDB, Backup, Import, Löschen
+7. [Probleme und FAQ](handbuch/08-probleme-und-faq.md) — typische Fälle und ihre Lösung
 
 Einstieg für Ungeduldige: [Erste Schritte → „Die erste Messung in fünf Minuten“](handbuch/01-erste-schritte.md#die-erste-messung-in-fünf-minuten).
 
@@ -65,7 +62,7 @@ Die Entwicklerdokumentation setzt TypeScript, React und Grundkenntnisse im Brows
 - [`design/redesign-referenz/`](../design/redesign-referenz/README.md) — Zielbild der Oberfläche:
   Informationsarchitektur, Screens, Raster, Tokens, Komponenten, Bewegung und Barrierefreiheit.
 - [`GLOSSARY.md`](../GLOSSARY.md) — die verbindlichen Begriffe: Lauf, Bahn, Satz, Serie, Training,
-  Aktive, Wettkampf, Disziplin, Meldeliste und weitere.
+  Aktive und weitere.
 - [`docs/adr/`](adr/) — Architekturentscheidungen mit Kontext, Alternativen und Folgen.
 - [`README.md`](../README.md) — Kurzüberblick, Schnellstart und Live-URL.
 

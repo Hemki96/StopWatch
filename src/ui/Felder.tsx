@@ -5,8 +5,9 @@
  * Strecke, Takt oder Versatz. Beide sind rein darstellend; Zustand und
  * Gültigkeit bleiben beim aufrufenden Sheet.
  */
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { formatTakt } from '../domain/format'
+import { MAX_ZWISCHENZEITEN } from '../domain/lauf'
 
 /**
  * Überschrift plus Inhalt eines Abschnitts in einem Sheet.
@@ -70,11 +71,58 @@ export function Chip({
   )
 }
 
+/**
+ * Ein-/Ausschalter für eine Einstellung mit Erklärung.
+ *
+ * Der ganze Block ist der Schalter, damit auch nasse Finger die Zeile treffen.
+ * `role="switch"` plus `aria-checked` macht den Zustand für Screenreader
+ * erkennbar; die Farbe allein wäre kein Zustand.
+ */
+export function Schalter({
+  an,
+  onAendern,
+  titel,
+  beschreibung,
+}: {
+  an: boolean
+  onAendern: (an: boolean) => void
+  titel: string
+  beschreibung?: string
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={an}
+      onClick={() => onAendern(!an)}
+      className="flex w-full items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-3 text-left"
+    >
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold">{titel}</span>
+        {beschreibung ? (
+          <span className="mt-0.5 block text-xs leading-relaxed text-muted">{beschreibung}</span>
+        ) : null}
+      </span>
+      <span
+        aria-hidden="true"
+        className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${
+          an ? 'bg-accent' : 'bg-line'
+        }`}
+      >
+        <span
+          className={`absolute left-1 top-1 h-5 w-5 rounded-full bg-surface shadow-sm transition-transform ${
+            an ? 'translate-x-5' : 'translate-x-0'
+          }`}
+        />
+      </span>
+    </button>
+  )
+}
+
 // Gängige Taktzeiten als Schnellauswahl. Der jeweils aktuelle Wert wird bei
 // Bedarf ergänzt, damit auch ein frei eingegebener Takt als Chip sichtbar
 // bleibt.
 const TAKTE = [60, 75, 90, 105, 120, 135, 150, 180, 240] as const
-
 /** Obergrenze aus der Domäne: ein Takt von höchstens 60 Minuten. */
 const MAX_TAKT_SEK = 3600
 
@@ -156,6 +204,110 @@ export function TaktWahl({
           className="tabular h-11 w-16 rounded-xl border border-line bg-surface2 px-2 text-center text-sm disabled:opacity-40"
         />
         <span className="text-xs text-muted">min:s</span>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Auswahl der Zwischenzeiten: Die Zahl lässt sich direkt eintippen oder über
+ * Plus/Minus ändern. „Automatisch“ leitet sie aus Strecke und Beckenlänge ab
+ * und bleibt als Rückweg sichtbar. Sobald der Trainer eine Zahl setzt, gilt sie
+ * fest; `null` steht für „automatisch“.
+ */
+export function ZwischenzeitenWahl({
+  wert,
+  automatisch,
+  onWert,
+  disabled = false,
+}: {
+  /** Eingestellte Zahl oder `null` für automatisch. */
+  wert: number | null
+  /** Zahl, die sich aus Strecke und Beckenlänge ergibt; `null` bei offener Strecke. */
+  automatisch: number | null
+  onWert: (wert: number | null) => void
+  disabled?: boolean
+}) {
+  // Die Anzeige folgt der eingestellten Zahl; bei „Automatisch“ zeigt sie den
+  // abgeleiteten Wert, damit die Wirkung vor dem Start sichtbar ist. Während
+  // des Tippens hält `eingabe` den rohen Text, damit ein kurzes Leeren nicht
+  // sofort wieder auf den abgeleiteten Wert springt.
+  const effektiv = wert ?? automatisch
+  const [eingabe, setEingabe] = useState<string | null>(null)
+  const angezeigt = eingabe ?? (effektiv === null ? '' : String(effektiv))
+
+  /** Setzt eine fertige Zahl und beendet den Tippzustand. */
+  const setze = (zahl: number | null) => {
+    setEingabe(null)
+    onWert(zahl)
+  }
+
+  /** Übernimmt die Eingabe; ein leeres Feld bedeutet „automatisch“. */
+  const uebernehmen = (text: string) => {
+    setEingabe(text)
+    if (text.trim() === '') {
+      onWert(null)
+      return
+    }
+    const zahl = Number(text)
+    if (!Number.isFinite(zahl)) return
+    onWert(Math.min(MAX_ZWISCHENZEITEN, Math.max(0, Math.round(zahl))))
+  }
+
+  const aendere = (delta: number) => {
+    if (effektiv === null && delta < 0) {
+      setze(0)
+      return
+    }
+    setze(Math.min(MAX_ZWISCHENZEITEN, Math.max(0, (effektiv ?? 0) + delta)))
+  }
+
+  return (
+    <div>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          aria-label="Weniger Zwischenzeiten"
+          disabled={disabled || effektiv === 0}
+          onClick={() => aendere(-1)}
+          className="h-12 w-12 rounded-xl border border-line bg-surface2 text-xl font-bold disabled:opacity-40"
+        >
+          −
+        </button>
+        <input
+          type="number"
+          inputMode="numeric"
+          min={0}
+          max={MAX_ZWISCHENZEITEN}
+          step={1}
+          value={angezeigt}
+          disabled={disabled}
+          onChange={(event) => uebernehmen(event.target.value)}
+          onBlur={() => setEingabe(null)}
+          aria-label="Anzahl Zwischenzeiten"
+          data-zwischenzeiten={effektiv === null ? 'offen' : effektiv}
+          className="tabular h-12 w-16 rounded-xl border border-line bg-surface2 px-2 text-center text-2xl font-semibold disabled:opacity-40"
+        />
+        <button
+          type="button"
+          aria-label="Mehr Zwischenzeiten"
+          disabled={disabled || (effektiv !== null && effektiv >= MAX_ZWISCHENZEITEN)}
+          onClick={() => aendere(1)}
+          className="h-12 w-12 rounded-xl border border-line bg-surface2 text-xl font-bold disabled:opacity-40"
+        >
+          +
+        </button>
+        <span className="text-xs text-muted">Zwischenzeiten, dann das Ziel</span>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <Chip aktiv={wert === null} disabled={disabled} onClick={() => setze(null)}>
+          Automatisch
+        </Chip>
+        <span className="text-xs text-muted">
+          {automatisch === null
+            ? 'offene Strecke'
+            : `Vorgabe aus Strecke und Becken: ${automatisch}`}
+        </span>
       </div>
     </div>
   )

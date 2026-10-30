@@ -9,12 +9,12 @@
  *
  * Vorbedingung: frischer Browser-Kontext je Test; `starteUndStoppe` erzeugt
  * den Lauf, den alle Tests brauchen. Standardkonfiguration: 50-m-Becken,
- * 100 m, Freistil, 6 Bahnen — daher die Beschriftung „6 Bahnen · 100 m“.
+ * 100 m, 6 Bahnen — daher die Beschriftung „6 Bahnen · 100 m“.
  */
 
 import { readFile } from 'node:fs/promises'
 import { expect, test } from '@playwright/test'
-import { oeffneApp, starteLauf, warteAufSatzbezeichnung } from './helfer'
+import { oeffneApp, starteLauf, warteAufSatzbezeichnung, warteAufTagesbezeichnung } from './helfer'
 
 /**
  * Legt einen vollständigen Lauf mit zwei Anschlägen an.
@@ -120,7 +120,7 @@ test('benennt einen Satz um und behält den Namen nach einem Reload', async ({ p
 
   // Der Satzname ist ein Knopf, der ein Eingabefeld einblendet.
   // `dispatchEvent('click')` wie oben: kein Halteverhalten, kein Delay.
-  await page.getByRole('button', { name: '100 m · Freistil', exact: true }).dispatchEvent('click')
+  await page.getByRole('button', { name: '100 m', exact: true }).dispatchEvent('click')
   await page.getByLabel('Satzbezeichnung').fill('Abschlussserie')
   // Enter speichert (Blur täte es auch) und schließt das Feld wieder.
   await page.getByLabel('Satzbezeichnung').press('Enter')
@@ -132,6 +132,23 @@ test('benennt einen Satz um und behält den Namen nach einem Reload', async ({ p
   await page.reload()
   await page.getByRole('button', { name: 'Verlauf' }).tap()
   await expect(page.getByText('Abschlussserie')).toBeVisible()
+})
+
+// Nutzerreise: Der Trainingstag bekommt einen Namen, damit im Verlauf nicht nur
+// das Datum steht, sondern auch die Einheit wiedererkennbar ist.
+test('benennt einen Tag und behält den Namen nach einem Reload', async ({ page }) => {
+  await starteUndStoppe(page)
+  await page.getByRole('button', { name: 'Verlauf' }).tap()
+
+  await page.getByRole('button', { name: 'Tag benennen' }).dispatchEvent('click')
+  await page.getByLabel('Tagesbezeichnung').fill('Kader A')
+  await page.getByLabel('Tagesbezeichnung').press('Enter')
+
+  await expect(page.getByText('Kader A')).toBeVisible()
+  await warteAufTagesbezeichnung(page, 'Kader A')
+  await page.reload()
+  await page.getByRole('button', { name: 'Verlauf' }).tap()
+  await expect(page.getByText('Kader A')).toBeVisible()
 })
 
 // Nutzerreise: Ein einzelner Lauf wird entfernt, ohne den ganzen Satz zu

@@ -84,17 +84,16 @@ Die App speichert lokal und synchronisiert nicht. Genau ein Tab darf schreiben. 
 `BroadcastChannel`-Protokoll in `src/app/tabKoordinator.ts` verhindert doppelte Anschläge aus zwei
 Tabs.
 
-### 4. Tolerante Eingabe, strenge Sicherung
+### 4. Strenge Sicherung
 
-Der Meldelisten-Import akzeptiert viele Formate und erklärt Fehler mit Zeilennummer. Das Backup
-wird dagegen vollständig validiert, bevor geschrieben wird. Ein ungültiges Backup darf den Bestand
-nie verändern.
+Das Backup wird vollständig validiert, bevor geschrieben wird. Ein ungültiges Backup darf den
+Bestand nie verändern.
 
 ### 5. Deutsche Domänensprache
 
 Bezeichner, Tests und Dokumentation verwenden die Begriffe aus [`GLOSSARY.md`](../../GLOSSARY.md):
-Lauf, Bahn, Anschlag, Split, Satz, Serie, Training, Aktive, Wettkampf, Disziplin, Meldeliste. Keine
-Synonyme wie „Session“, „Heat“ (außer als erklärte Übersetzung) oder „Event“ im Code.
+Lauf, Bahn, Anschlag, Split, Satz, Serie, Training, Aktive. Keine Synonyme wie „Session“,
+„Heat“ (außer als erklärte Übersetzung) oder „Event“ im Code.
 
 ### 6. Keine stillen Fehler
 
@@ -110,8 +109,6 @@ weißen Seite.
 | Start-, Anschlag- oder Finish-Logik | `src/domain/lauf.ts` + `lauf.test.ts` |
 | Serienplan oder Rundenzeile | `src/domain/serie.ts` + `serie.test.ts` |
 | Trainingsplan oder Fortschritt | `src/domain/training.ts` + `training.test.ts` |
-| Wettkampf, Platzierung, Heat | `src/domain/wettkampf.ts` + `wettkampf.test.ts` |
-| CSV-Import | `src/domain/meldeliste.ts` + `meldeliste.test.ts` |
 | Zeitformat, Parsen, Abschneiden | `src/domain/format.ts` + `format.test.ts` |
 | Bestzeiten, Pace | `src/domain/analyse.ts` + `analyse.test.ts` |
 | Datenbank, Backup | `src/storage/` |

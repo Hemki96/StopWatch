@@ -4,19 +4,19 @@
  * Prüft das Schema in Version 3, die Sortierung von `loadAll`, die
  * kaskadierenden Löschungen und den Backup-Roundtrip über die tatsächlichen
  * Transaktionen. Der Fokus liegt auf den Invarianten, die sich nur mit einer
- * Datenbank prüfen lassen: keine verwaisten Läufe nach dem Löschen eines Satzes
- * oder Wettkampfs, eine gemeinsame Verbindung pro Tab und ein Import, der bei
- * ungültiger Datei nichts schreibt.
+ * Datenbank prüfen lassen: keine verwaisten Läufe nach dem Löschen eines Satzes,
+ * eine gemeinsame Verbindung pro Tab und ein Import, der bei ungültiger Datei
+ * nichts schreibt.
  *
  * `fake-indexeddb/auto` ersetzt die globale IndexedDB-Implementierung, sodass
- * `getDb` unverändert läuft. `beforeEach` leert alle fünf Stores, damit die
+ * `getDb` unverändert läuft. `beforeEach` leert alle vier Stores, damit die
  * Fälle unabhängig bleiben. Die Fixtures tragen feste IDs und das Datum
  * 2026-10-29; `lauf` hat einen festen Wanduhr-Anker, weil die Sortierung der
  * Läufe nicht davon abhängt.
  */
 import 'fake-indexeddb/auto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Lauf, Satz, Schwimmer, Training, Wettkampf } from '../domain/types'
+import type { Lauf, Satz, Schwimmer, Training } from '../domain/types'
 import { getDb } from './db'
 import { DATENBANK_NAME } from './namensraum'
 import {
@@ -25,7 +25,6 @@ import {
   deleteSatzUndLaeufe,
   deleteSchwimmer,
   deleteTraining,
-  deleteWettkampfUndDaten,
   exportBackup,
   importBackup,
   loadAll,
@@ -34,7 +33,6 @@ import {
   saveSatz,
   saveSchwimmer,
   saveTraining,
-  saveWettkampf,
 } from './repository'
 
 // 100 m im 50-m-Becken für alle Fixtures; die Konfiguration wird pro Datensatz
@@ -47,16 +45,14 @@ function schwimmer(id: string, name: string): Schwimmer {
   return { id, name, jahrgang: 2010, notiz: '', erstelltAm: 1 }
 }
 
-// Ein Satz gehört optional zu einem Wettkampf; ohne Angabe bleibt die
-// Zuordnung null, wie bei einem Trainings- oder freien Satz.
-function satz(id: string, datum = '2026-10-29', wettkampfId?: string): Satz {
+// Ein Satz ist entweder ein freier Trainingssatz oder eine Serie.
+function satz(id: string, datum = '2026-10-29'): Satz {
   return {
     id,
     datum,
     bezeichnung: '',
     konfiguration: { ...KONFIGURATION },
     plan: null,
-    wettkampfId: wettkampfId ?? null,
     erstelltAm: 1,
   }
 }
@@ -72,7 +68,6 @@ function lauf(id: string, satzId: string | null = 's1', nummer = 1): Lauf {
     startWallMs: 1_700_000_000_000,
     startversatzMs: 0,
     wiederholung: null,
-    modus: 'training',
     bahnen: [
       {
         id: `${id}-bahn-1`,
@@ -108,14 +103,8 @@ function backupMit(laeufe: Lauf[]) {
     schwimmer: [],
     satze: [],
     laeufe,
-    wettkampfe: [],
     trainings: [],
   }
-}
-
-// Wettkampf mit festem Datum; die Beckenlänge 50 m ist die einzige gültige
-// neben 25 m.
-function wettkampf(id: string, name: string, datum = '2026-10-29'): Wettkampf {  return { id, name, datum, beckenlaengeM: 50, erstelltAm: 1 }
 }
 
 // Zwei Bahnen ohne Zuordnung und ein einzelner Satz; damit ist ein Training
@@ -155,7 +144,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-// Schema und Verbindung: Version 3 mit fünf Stores und den Indizes für
+// Schema und Verbindung: Version 3 mit vier Stores und den Indizes für
 // Abfragen.
 describe('getDb', () => {
   // `getDb` hält das Promise fest; zwei Aufrufe liefern dieselbe Verbindung,
@@ -169,38 +158,33 @@ describe('getDb', () => {
       'satz',
       'schwimmer',
       'training',
-      'wettkampf',
     ])
     expect(getDb()).toBe(getDb())
     await expect(db.count('lauf')).resolves.toBe(0)
   })
 
-  // Die Indizes tragen die Abfragen: Sätze nach Datum und Wettkampf, Läufe nach
-  // Satz (für das kaskadierte Löschen), Wettkämpfe und Trainings nach Datum,
-  // Schwimmer nach Name.
+  // Die Indizes tragen die Abfragen: Sätze nach Datum, Läufe nach Satz (für das
+  // kaskadierte Löschen), Trainings nach Datum, Schwimmer nach Name.
   it('kennt die Indizes für Abfragen', async () => {
     const db = await getDb()
-    const tx = db.transaction(['satz', 'lauf', 'wettkampf', 'training', 'schwimmer'])
-    expect([...tx.objectStore('satz').indexNames].sort()).toEqual(['by-datum', 'by-wettkampf'])
+    const tx = db.transaction(['satz', 'lauf', 'training', 'schwimmer'])
+    expect([...tx.objectStore('satz').indexNames]).toEqual(['by-datum'])
     expect([...tx.objectStore('lauf').indexNames]).toEqual(['by-satz'])
-    expect([...tx.objectStore('wettkampf').indexNames]).toEqual(['by-datum'])
     expect([...tx.objectStore('training').indexNames]).toEqual(['by-datum'])
     expect([...tx.objectStore('schwimmer').indexNames]).toEqual(['by-name'])
     await tx.done
   })
 })
 
-// `loadAll` liest alle fünf Stores und sortiert sie für die Anzeige.
+// `loadAll` liest alle vier Stores und sortiert sie für die Anzeige.
 describe('loadAll', () => {
   // Die Einfügereihenfolge ist absichtlich unsortiert: Schwimmer alphabetisch
-  // (Anna vor Zoe), Sätze, Wettkämpfe und Trainings nach Datum absteigend.
+  // (Anna vor Zoe), Sätze und Trainings nach Datum absteigend.
   it('liest alle Speicher und sortiert sie für die Anzeige', async () => {
     await saveSchwimmer(schwimmer('sw2', 'Zoe'))
     await saveSchwimmer(schwimmer('sw1', 'Anna'))
     await saveSatz(satz('s1', '2026-10-27'))
     await saveSatz(satz('s2', '2026-10-29'))
-    await saveWettkampf(wettkampf('w1', 'Alt', '2026-10-01'))
-    await saveWettkampf(wettkampf('w2', 'Neu', '2026-10-29'))
     await saveTraining(training('t1', '2026-10-01'))
     await saveTraining(training('t2', '2026-10-29'))
     await saveLauf(lauf('l1', 's1'))
@@ -209,15 +193,13 @@ describe('loadAll', () => {
 
     expect(daten.schwimmer.map((eintrag) => eintrag.name)).toEqual(['Anna', 'Zoe'])
     expect(daten.satze.map((eintrag) => eintrag.id)).toEqual(['s2', 's1'])
-    expect(daten.wettkampfe.map((eintrag) => eintrag.name)).toEqual(['Neu', 'Alt'])
     expect(daten.trainings.map((eintrag) => eintrag.id)).toEqual(['t2', 't1'])
     expect(daten.laeufe).toHaveLength(1)
   })
 
-  // Der gespeicherte Datensatz ist absichtlich alt: ohne Startversatz,
-  // Wiederholung und Modus, dafür mit laufender Bahn und einem Anschlag. Beim
-  // Laden muss der Start verschwinden, der Anschlag bleiben und die Felder
-  // ergänzt werden.
+  // Der gespeicherte Datensatz ist absichtlich alt: ohne Startversatz und
+  // Wiederholung, dafür mit laufender Bahn und einem Anschlag. Beim Laden muss
+  // der Start verschwinden, der Anschlag bleiben und die Felder ergänzt werden.
   it('normalisiert alte und unterbrochene Datensätze beim Laden', async () => {
     const alt = lauf('l1')
     alt.bahnen[0]!.startMs = 1000
@@ -227,7 +209,6 @@ describe('loadAll', () => {
     const ohneFelder = { ...alt, id: 'l2' } as Record<string, unknown>
     delete ohneFelder.startversatzMs
     delete ohneFelder.wiederholung
-    delete ohneFelder.modus
     await saveLauf(ohneFelder as unknown as Lauf)
 
     const [geladen] = (await loadAll()).laeufe
@@ -236,7 +217,6 @@ describe('loadAll', () => {
     expect(geladen?.bahnen[0]?.anschlaege).toHaveLength(1)
     expect(geladen?.startversatzMs).toBe(0)
     expect(geladen?.wiederholung).toBeNull()
-    expect(geladen?.modus).toBe('training')
   })
 
   // Bei einer Tab-Übergabe lebt die Messung weiter: Der Start darf nicht wie
@@ -255,23 +235,23 @@ describe('loadAll', () => {
     expect(nachUebergabe?.bahnen[0]?.startMs).toBe(100)
   })
 
-  // Akzeptanzkriterium: Alle fünf Stores stammen aus genau einer gemeinsamen
+  // Akzeptanzkriterium: Alle vier Stores stammen aus genau einer gemeinsamen
   // Read-Transaktion. Geprüft wird auf der rohen Verbindung, damit der Test
   // nicht von der idb-Hülle abhängt.
-  it('liest alle fünf Stores in genau einer Read-Transaktion', async () => {
+  it('liest alle vier Stores in genau einer Read-Transaktion', async () => {
     const transaktion = vi.spyOn(IDBDatabase.prototype, 'transaction')
 
     await loadAll()
 
     expect(transaktion).toHaveBeenCalledTimes(1)
     const aufruf = transaktion.mock.calls[0]
-    expect(aufruf?.[0]).toEqual(['schwimmer', 'satz', 'lauf', 'wettkampf', 'training'])
+    expect(aufruf?.[0]).toEqual(['schwimmer', 'satz', 'lauf', 'training'])
     expect(aufruf?.[1]).toBe('readonly')
   })
 
   // Ein Schreibvorgang, der während des Lesens angestoßen wird, darf nicht
   // zwischen zwei Stores sichtbar werden. Die gemeinsame Transaktion blockiert
-  // ihn, bis alle fünf Bestände gelesen sind; danach ist er vollständig da.
+  // ihn, bis alle vier Bestände gelesen sind; danach ist er vollständig da.
   it('sieht keinen halben Stand, wenn während des Lesens geschrieben wird', async () => {
     await saveMehrere({ satze: [satz('s1')], laeufe: [lauf('l1', 's1')] })
 
@@ -348,7 +328,6 @@ describe('loadAll', () => {
       schwimmer: [],
       satze: [],
       laeufe: [],
-      wettkampfe: [],
       trainings: [],
     })
   })
@@ -410,25 +389,6 @@ describe('Löschen', () => {
     expect(daten.laeufe.map((eintrag) => eintrag.id)).toEqual(['l3'])
   })
 
-  // Disziplinen sind Sätze mit `wettkampfId`; s3 gehört zu keinem Wettkampf und
-  // bleibt deshalb mit l3 erhalten.
-  it('entfernt einen Wettkampf samt Disziplinen und Läufen', async () => {
-    await saveWettkampf(wettkampf('w1', 'Wettkampf'))
-    await saveSatz(satz('s1', '2026-10-29', 'w1'))
-    await saveSatz(satz('s2', '2026-10-29', 'w1'))
-    await saveSatz(satz('s3'))
-    await saveLauf(lauf('l1', 's1'))
-    await saveLauf(lauf('l2', 's2'))
-    await saveLauf(lauf('l3', 's3'))
-
-    await deleteWettkampfUndDaten('w1')
-
-    const daten = await loadAll()
-    expect(daten.wettkampfe).toEqual([])
-    expect(daten.satze.map((eintrag) => eintrag.id)).toEqual(['s3'])
-    expect(daten.laeufe.map((eintrag) => eintrag.id)).toEqual(['l3'])
-  })
-
   // Ein Training ist nur der Plan; gemessene Sätze und Läufe bleiben im
   // Verlauf, auch wenn der Plan gelöscht wird.
   it('löscht ein Training nur als Plan und behält gemessene Läufe', async () => {
@@ -468,7 +428,6 @@ describe('Backup', () => {
     await saveSchwimmer(schwimmer('sw1', 'Anna'))
     await saveSatz(satz('s1'))
     await saveLauf(lauf('l1'))
-    await saveWettkampf(wettkampf('w1', 'Herbstpokal'))
     await saveTraining(training('t1'))
 
     const backup = await exportBackup()
@@ -479,7 +438,6 @@ describe('Backup', () => {
     expect(backup.schwimmer).toHaveLength(1)
     expect(backup.satze).toHaveLength(1)
     expect(backup.laeufe).toHaveLength(1)
-    expect(backup.wettkampfe).toHaveLength(1)
     expect(backup.trainings).toHaveLength(1)
   })
 
@@ -493,7 +451,6 @@ describe('Backup', () => {
       schwimmer: [schwimmer('sw1', 'Anna')],
       satze: [satz('s1')],
       laeufe: [lauf('l1')],
-      wettkampfe: [wettkampf('w1', 'Herbstpokal')],
       trainings: [training('t1')],
     }
 
@@ -503,7 +460,6 @@ describe('Backup', () => {
     expect(daten.schwimmer).toHaveLength(1)
     expect(daten.satze).toHaveLength(1)
     expect(daten.laeufe).toHaveLength(1)
-    expect(daten.wettkampfe).toHaveLength(1)
     expect(daten.trainings).toHaveLength(1)
   })
 
@@ -529,43 +485,38 @@ describe('Backup', () => {
   })
 
   // `undefined`-Felder aus einem älteren Export werden beim Schreiben
-  // normalisiert: Plan und Wettkampfzuordnung werden null, der Lauf bekommt
-  // Modus und Serienfelder.
+  // normalisiert: Plan und Serienfelder werden ergänzt, alte Wettkampf-Felder
+  // verworfen.
   it('normalisiert unvollständige Datensätze beim Import', async () => {
     const alt = lauf('l1')
     const ohneFelder = { ...alt } as Record<string, unknown>
     delete ohneFelder.startversatzMs
     delete ohneFelder.wiederholung
-    delete ohneFelder.modus
 
     await importBackup({
       format: 'beckenrand-backup',
       version: 3,
       exportiertAm: '2026-10-29T10:00:00.000Z',
       schwimmer: [],
-      satze: [{ ...satz('s1'), plan: undefined, wettkampfId: undefined }],
+      satze: [{ ...satz('s1'), plan: undefined }],
       laeufe: [ohneFelder],
-      wettkampfe: [],
       trainings: [],
     })
 
     const [geladenerSatz] = (await loadAll()).satze
     expect(geladenerSatz?.plan).toBeNull()
-    expect(geladenerSatz?.wettkampfId).toBeNull()
 
     const [geladenerLauf] = (await loadAll()).laeufe
     expect(geladenerLauf?.startversatzMs).toBe(0)
     expect(geladenerLauf?.wiederholung).toBeNull()
-    expect(geladenerLauf?.modus).toBe('training')
   })
 
-  // Nach `clearAll` liefert `loadAll` fünf leere Listen; der Zustand ist exakt
+  // Nach `clearAll` liefert `loadAll` vier leere Listen; der Zustand ist exakt
   // vergleichbar, weil die Rückgabe keine zusätzlichen Felder enthält.
   it('leert alle Speicher', async () => {
     await saveSchwimmer(schwimmer('sw1', 'Anna'))
     await saveSatz(satz('s1'))
     await saveLauf(lauf('l1'))
-    await saveWettkampf(wettkampf('w1', 'Herbstpokal'))
     await saveTraining(training('t1'))
 
     await clearAll()
@@ -574,7 +525,6 @@ describe('Backup', () => {
       schwimmer: [],
       satze: [],
       laeufe: [],
-      wettkampfe: [],
       trainings: [],
     })
   })

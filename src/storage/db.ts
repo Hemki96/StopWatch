@@ -3,11 +3,11 @@
  *
  * Öffnet die namensraumgebundene Datenbank (`beckenrand.v2`, siehe
  * `namensraum.ts`) genau einmal pro Tab und hält die Verbindung als Promise
- * fest. Das Schema besteht aus fünf Object Stores (Schwimmer, Satz, Lauf,
- * Wettkampf, Training), die über `id` adressiert und über Indizes für Datum,
- * Satzzuordnung und Wettkampfzuordnung erschlossen werden. Migrationen sind
- * rein additiv: Jede Schema-Version legt nur neue Stores und Indizes an,
- * bestehende Daten werden nie umgeschrieben.
+ * fest. Das Schema besteht aus vier Object Stores (Schwimmer, Satz, Lauf,
+ * Training), die über `id` adressiert und über Indizes für Datum und
+ * Satzzuordnung erschlossen werden. Migrationen sind rein additiv: Jede
+ * Schema-Version legt nur neue Stores und Indizes an, bestehende Daten werden
+ * nie umgeschrieben.
  *
  * GitHub Pages teilt sich eine Origin zwischen allen Projektseiten. Der
  * Namensraum verhindert versehentliche Kollisionen, ist aber keine
@@ -28,7 +28,7 @@
  * `terminated` das Zusammenspiel mehrerer Tabs bzw. App-Versionen.
  */
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
-import type { Lauf, Satz, Schwimmer, Training, Wettkampf } from '../domain/types'
+import type { Lauf, Satz, Schwimmer, Training } from '../domain/types'
 import { DATENBANK_NAME, LEGACY_DATENBANK_NAME, speicherSchluessel } from './namensraum'
 
 /**
@@ -48,9 +48,8 @@ export interface BeckenrandDB extends DBSchema {
   satz: {
     key: string
     value: Satz
-    // `by-datum` sortiert Sätze tagesweise; `by-wettkampf` findet die
-    // Disziplinen eines Wettkampfs für das kaskadierte Löschen.
-    indexes: { 'by-datum': string; 'by-wettkampf': string }
+    // `by-datum` sortiert Sätze tagesweise.
+    indexes: { 'by-datum': string }
   }
   lauf: {
     key: string
@@ -58,11 +57,6 @@ export interface BeckenrandDB extends DBSchema {
     // Läufe hängen über `satzId` an einem Satz. Der Index ersetzt eine
     // Fremdschlüsselbeziehung und wird beim Löschen eines Satzes benötigt.
     indexes: { 'by-satz': string }
-  }
-  wettkampf: {
-    key: string
-    value: Wettkampf
-    indexes: { 'by-datum': string }
   }
   training: {
     key: string
@@ -72,7 +66,7 @@ export interface BeckenrandDB extends DBSchema {
 }
 
 /** Alle Stores in Anlage-Reihenfolge; auch die Übernahme nutzt diese Liste. */
-const STORES = ['schwimmer', 'satz', 'lauf', 'wettkampf', 'training'] as const
+const STORES = ['schwimmer', 'satz', 'lauf', 'training'] as const
 type StoreName = (typeof STORES)[number]
 
 // Muss bei jeder Schemaänderung erhöht werden; der `upgrade`-Callback unten
@@ -119,7 +113,7 @@ function merkeMigration(): void {
  */
 function oeffne(name: string): Promise<IDBPDatabase<BeckenrandDB>> {
   return openDB<BeckenrandDB>(name, DB_VERSION, {
-    upgrade(db, alteVersion, _neueVersion, transaction) {
+    upgrade(db, alteVersion, _neueVersion, _transaction) {
       // Version 1: Grundschema aus Schwimmern, Sätzen und Läufen.
       if (alteVersion < 1) {
         const schwimmer = db.createObjectStore('schwimmer', { keyPath: 'id' })
@@ -132,15 +126,8 @@ function oeffne(name: string): Promise<IDBPDatabase<BeckenrandDB>> {
         lauf.createIndex('by-satz', 'satzId')
       }
 
-      // Version 2: Wettkämpfe als eigener Rahmen; der Satz bekommt zusätzlich
-      // einen Index auf die Wettkampfzuordnung.
-      if (alteVersion < 2) {
-        const wettkampf = db.createObjectStore('wettkampf', { keyPath: 'id' })
-        wettkampf.createIndex('by-datum', 'datum')
-        // Sätze aus Version 1 kennen die Spalte noch nicht; der Index bleibt
-        // für sie einfach leer.
-        transaction.objectStore('satz').createIndex('by-wettkampf', 'wettkampfId')
-      }
+      // Version 2 (Wettkämpfe) wird nicht mehr angelegt. Version 3 bleibt der
+      // aktuelle Stand; bestehende Datenbanken werden nicht umgeschrieben.
 
       // Version 3: Trainingspläne als eigener Store. Sie hängen nicht an
       // Sätzen; erst beim Start eines Trainingssatzes entstehen Satz und Läufe.

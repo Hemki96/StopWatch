@@ -34,7 +34,7 @@ Zwei eigene Varianten, die Geräteklassen beschreiben, nicht nur Breite. Sie ste
 | **Referenz Tablet** | 820 × 1180 | iPad Air | zwei Spalten für Listen, 5 Spalten für Bahnen |
 
 Die Höhenbedingung ist wichtig: Ein Handy im Querformat (844 × 390) darf **nicht** die seitliche
-Navigation bekommen, sonst quetschen sich sechs Einträge auf 390 px Höhe.
+Navigation bekommen, sonst quetschen sich fünf Einträge auf 390 px Höhe.
 
 ## Rahmen
 
@@ -99,7 +99,7 @@ Außenabstand, der nicht durch das Gerüst kommt.
 
 ### Tablet (`rail`)
 
-- Leiste links, 96 px breit, sechs Einträge untereinander, je 64 px hoch, 12 px Radius.
+- Leiste links, 96 px breit, fünf Einträge untereinander, je 64 px hoch, 12 px Radius.
 - Aktiver Eintrag: `bg-accent/10` plus Akzenttext, nicht die volle Akzentfüllung.
 - Die Leiste hat oben und unten 16 px Polster; sie scrollt nicht.
 
@@ -201,7 +201,7 @@ Jede Layoutänderung wird auf diesen vier Flächen geprüft:
 
 | Fläche | Größe | Prüfpunkt |
 | --- | --- | --- |
-| Kleines Handy | 320 × 667 | sechs Tabs, kein horizontales Scrollen, 10 Bahnen scrollen kontrolliert |
+| Kleines Handy | 320 × 667 | fünf Tabs, kein horizontales Scrollen, 10 Bahnen scrollen kontrolliert |
 | Referenz Handy | 390 × 844 | 10 Bahnen passen, Startknopf im Daumenbereich |
 | Handy quer | 844 × 390 | `short`-Leiste, 5 Spalten bei 10 Bahnen, kein Seiten-Scroll |
 | Tablet | 820 × 1180 | `rail`, zwei Listenspalten, Sheets als Fenster |
