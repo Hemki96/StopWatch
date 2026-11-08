@@ -89,6 +89,17 @@ _Avoid_: Distanz, Event
 Ein Lauf ohne festgelegte Distanz. Jeder Anschlag ist ein Split, das Ziel wird ausdrücklich gesetzt.
 _Avoid_: Freies Training, Endlos, Open
 
+**Sofortstart**:
+Ein Lauf, der ohne vorherige Konfiguration als **offene Strecke** mit einer **Bahn** beginnt. Weitere
+Personen lassen sich während der Messung hinzufügen; sie starten im Moment des Hinzufügens.
+_Avoid_: Schnellstart, Quick Start, Freilauf
+
+**Person hinzufügen**:
+Eine weitere **Bahn** an einen bereits angelegten Lauf hängen. Bei laufender Uhr startet sie sofort,
+vor dem Start bleibt sie bereit. Bei einer **Serie** oder einem **Trainingssatz** ist das
+ausgeschlossen, weil deren Plan feststeht.
+_Avoid_: Bahn anlegen, Teilnehmer nachtragen
+
 **Import-Konflikt**:
 Ein Datensatz in einem Backup mit derselben ID wie ein lokaler Datensatz, aber abweichendem Inhalt. Standardmäßig bleibt der lokale Stand; erst eine ausdrückliche Entscheidung ersetzt ihn durch das Backup.
 _Avoid_: Duplikat, Merge-Konflikt, Überschreiben

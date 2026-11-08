@@ -13,7 +13,7 @@ Datenbank im Netz und keine Anmeldung. Der gesamte Zustand liegt im Browser:
 │         │                       │                          │
 │         │                       ├──► domain/  (reine Logik)│
 │         │                       ├──► storage/ (IndexedDB)  │
-│         │                       └──► export/  (CSV, Datei) │
+│         │                       └──► export/  (CSV, PDF, MD) │
 │         │                                                  │
 │  Service Worker (Cache) ◄── statische Dateien von GitHub   │
 └────────────────────────────────────────────────────────────┘
@@ -27,7 +27,7 @@ Dateien für den Offline-Betrieb. Messdaten verlassen das Gerät nicht.
 ```
 src/
   domain/      reine Fachlogik          keine Imports aus app/, ui/, storage/, export/
-  export/      CSV und Dateiausgabe     nutzt domain/
+  export/      CSV, PDF, Markdown        nutzt domain/
   storage/     IndexedDB und Backup     nutzt domain/, kein React
   app/         React-Kontext, Fachmodule  nutzt domain/, storage/, export/
   ui/          Screens und Dialoge      nutzt app/, domain/, export/

@@ -12,11 +12,12 @@
  * liefert mit `trainingsFortschritt` die Grundlage, auf der die Oberfläche nur
  * noch offene Sätze zum Bearbeiten freigibt.
  *
- * Die Grenzen stehen hier, weil Domain, Backup-Prüfung und Oberfläche dieselben
- * Werte verwenden sollen.
+ * Die Grenzen für Bahnen und Reihen stehen in `domain/lauf`, weil sie dort
+ * auch für nachträglich hinzugefügte Bahnen gelten; dieses Modul reicht sie
+ * weiter, damit Domain, Backup-Prüfung und Oberfläche dieselben Werte nutzen.
  */
 
-import { isComplete, validateKonfiguration } from './lauf'
+import { MAX_BAHNEN, MAX_REIHEN, isComplete, validateKonfiguration } from './lauf'
 import { formatStrecke, formatTakt } from './format'
 import { einheitVon, formatBeckenlaenge } from './einheit'
 import { newId } from './id'
@@ -28,14 +29,12 @@ import {
   type TrainingsSatz,
 } from './types'
 
+export { MAX_BAHNEN, MAX_REIHEN } from './lauf'
+
 /** Höchstzahl der Sätze in einem Training (auch für die Backup-Prüfung). */
 export const MAX_TRAININGS_SAETZE = 20
 /** Höchstzahl der Wiederholungen eines Trainingssatzes. */
 export const MAX_WIEDERHOLUNGEN = 20
-/** Höchstzahl der Bahnen je Reihe in einem Lauf und in einem Training. */
-export const MAX_BAHNEN = 10
-/** Höchstzahl der Reihen (Startgruppen) in einem Lauf und in einem Training. */
-export const MAX_REIHEN = 5
 
 /** Alle Bahnen eines Trainings über alle Reihen hinweg. */
 export function bahnenGesamt(bahnen: number, reihen: number): number {
@@ -56,11 +55,18 @@ export function ordneAktiveUm(
   alt: { bahnen: number; reihen: number },
   neu: { bahnen: number; reihen: number },
 ): (string | null)[] {
-  return Array.from({ length: bahnenGesamt(neu.bahnen, neu.reihen) }, (_, index) => {
-    const reihe = Math.floor(index / neu.bahnen)
-    const bahn = index % neu.bahnen
-    if (reihe >= alt.reihen || bahn >= alt.bahnen) return null
-    return aktive[reihe * alt.bahnen + bahn] ?? null
+  // Null-Schutz: eine leere Aufteilung ist nicht gültig; auf mindestens
+  // eine Bahn je Reihe fallen zurück, statt NaN/Infinity zu erzeugen.
+  const neuBahnen = Math.max(1, neu.bahnen)
+  const neuReihen = Math.max(1, neu.reihen)
+  const altBahnen = Math.max(1, alt.bahnen)
+  const altReihen = Math.max(1, alt.reihen)
+  return Array.from({ length: bahnenGesamt(neuBahnen, neuReihen) }, (_, index) => {
+    const reihe = Math.floor(index / neuBahnen)
+    const bahn = index % neuBahnen
+    if (reihe >= altReihen || bahn >= altBahnen) return null
+    const wert = aktive[reihe * altBahnen + bahn]
+    return wert === undefined ? null : wert
   })
 }
 
@@ -124,7 +130,10 @@ export function neuesTraining(daten: {
     reihen,
     autostart: daten.autostart ?? true,
     // Zu lange Listen werden abgeschnitten, zu kurze mit `null` aufgefüllt.
-    aktive: Array.from({ length: personen }, (_, index) => daten.aktive?.[index] ?? null),
+    aktive: Array.from({ length: personen }, (_, index) => {
+      const wert = daten.aktive?.[index]
+      return wert === undefined ? null : wert
+    }),
     saetze: daten.saetze?.length ? daten.saetze : [neuerTrainingsSatz()],
     gestartet: {},
     erstelltAm: Date.now(),
@@ -317,7 +326,8 @@ export interface TrainingsSatzFortschritt {
  */
 function statusVon(laeufe: Lauf[]): TrainingsSatzStatus {
   if (laeufe.length === 0) return 'offen'
-  if (laeufe.every(isComplete)) return 'fertig'
+  // Leere Bahnen gelten nicht als beendet (siehe isComplete).
+  if (laeufe.length > 0 && laeufe.every(isComplete)) return 'fertig'
   const beruehrt = laeufe.some(
     (lauf) =>
       lauf.bahnen.some((bahn) => bahn.startMs !== null) ||

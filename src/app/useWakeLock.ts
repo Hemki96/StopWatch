@@ -59,8 +59,12 @@ export function useWakeLock(aktiv: boolean): boolean {
           return
         }
         sentinel = neu
-        // Der Browser kann die Sperre selbst lösen; dann ist sie nicht mehr aktiv.
-        neu.addEventListener('release', () => setAktiviert(false))
+        // Der Browser kann die Sperre selbst lösen; dann ist sie nicht mehr aktiv
+        // und der veraltete Sentinel darf nicht wiederverwendet werden.
+        neu.addEventListener('release', () => {
+          if (sentinel === neu) sentinel = null
+          setAktiviert(false)
+        })
         setAktiviert(true)
       } catch {
         if (!abgebrochen) setAktiviert(false)

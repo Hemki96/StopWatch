@@ -46,7 +46,7 @@ Navigation bekommen, sonst quetschen sich fünf Einträge auf 390 px Höhe.
 | Inhaltsbereich | flexibel | **einziger** scrollender Bereich |
 | Aktionsleiste | 80–104 px inkl. Safe-Area | fest, 1-px-Oberlinie, Polster 12/16 px |
 | Tab-Leiste | 56 px (48 px `short`, 96 px breit `rail`) | fest, 1-px-Oberlinie |
-| Toast | 36 px | schwebend, 96 px über dem unteren Rand |
+| Toast | 36 px | schwebend, 8 px unter der Oberkante des Inhalts |
 
 ### Höhenbudget (Handy 390 × 844)
 
@@ -189,11 +189,12 @@ Reihe ist eine Startgruppe; sie wird nie mit einer anderen gemischt.
 | Screen | 0 | Timer, Verlauf |
 | Vollbild-Detail | 30 | Lauf-Detail |
 | Dialog/Sheet | 40 + 10 × Tiefe | Sheet 40, Bestätigung darüber 50 |
-| Toast | 50 | schwebend |
+| Toast | 30 | schwebend, unter Sheets/Dialogen |
 | Banner | im Fluss | kein z-index |
 
 - Kein Screen legt eigene `fixed`-Elemente über die Navigation.
-- Der Toast liegt über der Aktionsleiste, aber unter einem offenen Dialog.
+- Der Toast liegt am oberen Rand des Inhalts, unter Bannern und unter einem offenen Dialog; er
+  überdeckt keine Aktionsleiste.
 
 ## Prüfmatrix
 

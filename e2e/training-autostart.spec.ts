@@ -61,7 +61,9 @@ test('startet den nächsten Trainingssatz nach dem letzten Ziel automatisch', as
 
   const bahn = page.getByRole('button', { name: /Bahn 1, läuft$/ })
   await bahn.tap()
-  await page.waitForTimeout(150)
+  await expect(bahn).toHaveAttribute('data-anschlaege', '1')
+  const laufzeitVorZweitemTraining = Number(await page.locator('[data-laufzeit]').getAttribute('data-laufzeit'))
+  await expect.poll(async () => Number(await page.locator('[data-laufzeit]').getAttribute('data-laufzeit'))).toBeGreaterThan(laufzeitVorZweitemTraining)
   await bahn.tap()
 
   // Der zweite Satz startet ohne Rückkehr in den Training-Tab. Der Hinweis
@@ -71,4 +73,36 @@ test('startet den nächsten Trainingssatz nach dem letzten Ziel automatisch', as
 
   // Der abgeschlossene Satz bleibt in der Laufleiste erreichbar.
   await expect(page.getByRole('button', { name: /100 m.*Ziel/ })).toBeVisible()
+})
+
+test('bietet ohne Automatik den nächsten Satz als Knopf im Timer an', async ({ page }) => {
+  await oeffneMitEinerBahn(page)
+  await page.getByRole('button', { name: 'Training' }).tap()
+  await page.getByRole('button', { name: 'Neues Training' }).tap()
+
+  // Automatik abschalten: Der Wechsel soll erst auf ausdrücklichen Tipp kommen.
+  const schalter = page.getByRole('switch', { name: /Sätze automatisch starten/ })
+  await schalter.tap()
+  await expect(schalter).toHaveAttribute('aria-checked', 'false')
+
+  await page.getByRole('button', { name: 'Satz hinzufügen' }).tap()
+  await page.getByRole('dialog').getByRole('button', { name: 'Satz hinzufügen' }).tap()
+  await page.getByRole('button', { name: 'Satz 1 starten' }).tap()
+  await page.getByRole('button', { name: 'Jetzt starten' }).tap()
+
+  const bahn = page.getByRole('button', { name: /Bahn 1, läuft$/ })
+  await bahn.tap()
+  await expect(bahn).toHaveAttribute('data-anschlaege', '1')
+  const laufzeitVorZweitemTraining = Number(await page.locator('[data-laufzeit]').getAttribute('data-laufzeit'))
+  await expect.poll(async () => Number(await page.locator('[data-laufzeit]').getAttribute('data-laufzeit'))).toBeGreaterThan(laufzeitVorZweitemTraining)
+  await bahn.tap()
+
+  // Ohne Automatik bleibt der zweite Satz offen; die Fußzeile bietet ihn an.
+  const naechster = page.getByRole('button', { name: /Nächster Satz/ })
+  await expect(naechster).toBeVisible()
+  await expect(page.getByText(/Satz 2 gestartet/)).toHaveCount(0)
+
+  await naechster.tap()
+  await expect(page.getByText(/Satz 2 gestartet/)).toBeVisible()
+  await expect(page.getByRole('button', { name: /Bahn 1, läuft$/ })).toBeVisible()
 })

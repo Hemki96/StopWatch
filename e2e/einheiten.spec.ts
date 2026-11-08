@@ -30,6 +30,11 @@ test('bietet im Onboarding und im Konfigurations-Sheet keine Einheitenwahl an', 
     .locator('section', { hasText: 'Strecke' })
     .getByRole('button', { name: '100 m' })
     .tap()
+  // 25 m ist die kürzeste angebotene Strecke; im 25-m-Becken ist sie genau
+  // eine Länge und wird mit einem Anschlag zum Ziel.
+  await expect(
+    page.locator('section', { hasText: 'Strecke' }).getByRole('button', { name: '25 m' }),
+  ).toBeVisible()
   await expect(page.getByText('4 Längen')).toBeVisible()
 
   await page.getByRole('button', { name: 'Weiter' }).tap()

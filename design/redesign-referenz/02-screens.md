@@ -30,7 +30,7 @@ A  [Überspringen]      [Weiter →]
   `--line`. Keine Punkte, keine Zahlenpyramide.
 - Schritt 1: drei Absätze — was ein Lauf ist, wie der Anschlag funktioniert, dass alles lokal
   bleibt.
-- Schritt 2: `Beckenlänge` (25/50 m), `Strecke` (50/100/200/400/800/1500 m).
+- Schritt 2: `Beckenlänge` (25/50 m), `Strecke` (25/50/100/200/400/800/1500 m).
   Chips 44 px, `aria-pressed`. Unter der Strecke steht die Folge: „4 Längen“ oder
   „offene Strecke“.
 - Schritt 3: Bahnenzahl 1–10 mit `−`/`+` (48 × 48 px), darunter ein Namensfeld je Bahn
@@ -447,7 +447,7 @@ Schwimmerzuordnung ändern. Gilt sofort, ohne Speichern-Knopf.
 │  BECKENLÄNGE                                 │
 │  [25 m] [50 m]                               │
 │  STRECKE                                     │
-│  [50] [100] [200] [400] [800] [1500]         │
+│  [25] [50] [100] [200] [400] [800] [1500]     │
 │  ZWISCHENZEITEN                              │
 │  [−] [ 1 ] [+]  [Automatisch]                │  48 × 48 px, Feld tippbar
 │  BAHNEN PRO REIHE / REIHEN                   │

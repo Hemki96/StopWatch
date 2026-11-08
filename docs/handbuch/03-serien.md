@@ -111,6 +111,17 @@ Ein Tipp auf eine Zeile schließt **immer die älteste offene Runde** dieser Sch
 zentrale Regel: Die App rät nicht anhand der Rundennummer, welche Runde gemeint ist, sondern geht
 nach der tatsächlichen Reihenfolge.
 
+### Kurze Strecken ohne Zwischenzeit
+
+Bei **25 m im 25-m-Becken** ist die Strecke genau eine Länge. Automatisch gibt es deshalb **0
+Zwischenzeiten**: Der erste Tap nach dem Start ist sofort das Ziel der Runde. Das gilt auch für eine
+Serie über mehrere 25-m-Runden; die Zeile zeigt dann keine Zwischenzeit an.
+
+Für einen Block wie **3× (4×25 m im 40-s-Takt und 4×25 m im 35-s-Takt)** wird ein **Training** mit
+sechs Sätzen angelegt: drei Sätze `4×25 m` mit Takt 40 s und drei Sätze `4×25 m` mit Takt 35 s, jeweils
+abwechselnd in der gewünschten Reihenfolge. Jeder Satz ist für sich eine Serie; das Training startet
+sie nacheinander. Siehe [Training](04-training.md).
+
 ### Überlappende Runden
 
 Überholungen sind ausdrücklich erlaubt. Beispiel mit 5×100 im 2:00-Takt:

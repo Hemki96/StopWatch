@@ -45,6 +45,8 @@ brauchen kein DOM. Das ist Absicht: Der Zeitkern soll ohne Browser beweisbar sei
 | Format | `domain/format.test.ts` | Abschneiden, Parsen, Takt, Countdown |
 | Analyse | `domain/analyse.test.ts` | Bestzeiten, Delta, Pace |
 | CSV | `export/csv.test.ts` | Spalten, Escaping, Formelschutz |
+| PDF | `export/pdf.test.ts` | Seiten, WinAnsi, xref-Tabelle |
+| Trainingsbericht | `export/training.test.ts` | Markdown/PDF, Aktive, Runden, Splits |
 | Backup | `storage/backup.test.ts` | Schema, Versionen, Fehlerpfade |
 | Repository | `storage/repository.test.ts`, `.integration.test.ts` | Normalisierung, Transaktionen, Import |
 

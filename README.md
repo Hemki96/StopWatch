@@ -12,18 +12,23 @@ Mehrere Läufe können **gleichzeitig aktiv** sein. Oben in der Leiste wird zwis
 
 Ein **Satz mit Plan** ist eine **Serie**: mehrere Wiederholungen im festen Takt, z. B. 5×100 m alle 2:00. Beim Start stehen alle Runden fest. Die Serien-Ansicht zeigt eine Zeile pro Schwimmer; ein Tap schließt die älteste offene Runde. Läuft die nächste Runde schon, während jemand noch unterwegs ist, bleibt die alte Runde sichtbar und wird als überfällig markiert.
 
-Ein **Training** ist die Vorbereitung einer Einheit: Vorab legst du die **Aktiven** je Bahn und mehrere **Trainingssätze** in fester Reihenfolge an. Im Training startest du Satz für Satz; vor jedem Start zeigt eine Übersicht Aktive und Reihenfolge. Optional startet der nächste Satz nach dem letzten Ziel automatisch, ohne Rückkehr in den Training-Tab. Noch nicht gestartete Sätze lassen sich währenddessen ändern, ergänzen, löschen oder verschieben. Erst beim Start entstehen aus einem Trainingssatz ein Satz und seine Läufe — gemessene Zeiten bleiben unangetastet.
+Ein **Training** ist die Vorbereitung einer Einheit: Vorab legst du die **Aktiven** je Bahn und mehrere **Trainingssätze** in fester Reihenfolge an. Im Training startest du Satz für Satz; vor jedem Start zeigt eine Übersicht Aktive und Reihenfolge. Optional startet der nächste Satz nach dem letzten Ziel automatisch, ohne Rückkehr in den Training-Tab; ist die Automatik aus, steht im Timer **Nächster Satz** als direkter Knopf bereit. Noch nicht gestartete Sätze lassen sich währenddessen ändern, ergänzen, löschen oder verschieben. Erst beim Start entstehen aus einem Trainingssatz ein Satz und seine Läufe — gemessene Zeiten bleiben unangetastet.
 
 - Zeiten auf Hundertstel, abgeschnitten statt gerundet
 - Messung aus Zeitstempeln (`performance.now()`), unabhängig von Rendering
 - **Startübersicht** vor jedem Start: Becken, Strecke, Bahnen, Schwimmer, Startzeiten, Takt und die
   Reihenfolge der Trainingssätze prüfen, dann erst startet die Uhr
+- **Sofortstart** ohne Konfiguration: offene Strecke, beliebig viele Zwischenzeiten und weitere
+  Personen direkt während der laufenden Uhr
 - Splits, frei einstellbare Zahl der Zwischenzeiten, Bestzeiten je Schwimmer/Strecke/Beckenlänge,
   Pace pro 100 m oder 100 yd
+- **Längenzeit** direkt auf der Kachel: Nach jedem Tap steht unter der kumulierten Zeit die Zeit
+  der gerade geschwommenen Länge
 - Meter als einzige Eingabe; alte Yard-Läufe bleiben lesbar und getrennt
 - Startversatz zwischen Reihen, mehrere aktive Läufe, Serien mit festem Takt
-- Trainingsplan mit Aktiven, mehreren Sätzen in fester Reihenfolge, optionalem automatischem Satzwechsel und Anpassung während des Trainings
+- Trainingsplan mit Aktiven, mehreren Sätzen in fester Reihenfolge, optionalem automatischem Satzwechsel, direktem Knopf **Nächster Satz** und Anpassung während des Trainings
 - Verlauf gruppiert nach **Satz**, CSV-Export (inkl. Runde, Takt, Versatz), JSON-Backup
+- **Trainingsbericht als PDF oder Markdown** mit Aktiven, allen Sätzen, Runden, Zeiten und Splits
 - **Analyse** im Verlauf: Matrix Person × Runde, Längenzeiten je Person, Abweichung zur Vorrunde
   und Vergleich mit dem letzten gleichen Satz — ohne zusätzliche Speicherung
 - Handy und Tablet: untere Leiste bzw. seitliche Navigation, Raster, Sheets und Listen passen sich an
@@ -61,7 +66,7 @@ src/
   storage/       IndexedDB (idb), Schema, Repositories und Backup-Prüfung
   app/           React-Kontext, Fachmodule (Lauf, Training), Tab-Abstimmung, Hooks
   ui/            Screens und Komponenten (Dialoge, Onboarding, Lauf-Detail)
-  export/        CSV und Datei-Ausgabe
+  export/        CSV, Markdown, PDF und Datei-Ausgabe
 ```
 
 Der Zeitkern ist frei von Seiteneffekten: `startAll(lauf, now, wallNow)` bekommt die Zeit übergeben und gibt einen neuen `Lauf` zurück. Nur deshalb sind Splits, Finish-Erkennung, Startversatz und Undo deterministisch testbar. Eine Serie plant alle Runden beim Start voraus; es gibt keinen Timer, der später eine Runde nachholt. Siehe `docs/adr/0005-serie-mit-festem-takt.md`.

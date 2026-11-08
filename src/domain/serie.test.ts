@@ -141,6 +141,20 @@ describe('bahnZeile', () => {
     expect(zeile.letzte?.lauf.wiederholung).toBe(2)
     expect(zeilenZeit(zeile, 300_000)).toBe(60_000)
   })
+
+  it('zeigt eine unterbrochene Bahn (Splits ohne Start) statt sie zu überspringen', () => {
+    const laeufe = serie(1).map((lauf) => ({
+      ...lauf,
+      bahnen: lauf.bahnen.map((bahn) => ({
+        ...bahn,
+        startMs: null,
+        anschlaege: [{ laengeNr: 1, splitMs: 30_000, erfasstAt: 1, istFinish: false }],
+      })),
+    }))
+    const zeile = bahnZeile(laeufe, 0, 0)
+    expect(zeile.offene).toHaveLength(1)
+    expect(zeile.status).toBe('laeuft')
+  })
 })
 
 // Undo in der Serie richtet sich nach der Wanduhr der letzten Bedienung, nicht

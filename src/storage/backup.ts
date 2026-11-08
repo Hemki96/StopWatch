@@ -30,10 +30,15 @@ import {
 import { MAX_ZWISCHENZEITEN, istVielfacheDerBeckenlaenge } from '../domain/lauf'
 import {
   SCHWIMMARTEN,
+  type Anschlag,
+  type Bahn,
   type Lauf,
+  type LaufKonfiguration,
   type Satz,
+  type SatzPlan,
   type Schwimmer,
   type Training,
+  type TrainingsSatz,
 } from '../domain/types'
 
 /**
@@ -49,6 +54,28 @@ const MAX_LAEUFE = 100_000
 const MAX_TRAININGS = 2_000
 const MAX_ANSCHLAEGE_PRO_BAHN = 1_000
 const MAX_TEXTLAENGE = 10_000
+const MAX_ID_LAENGE = 128
+const ID_CHARSET = /^[A-Za-z0-9_-]+$/
+
+/** Prüft, ob ein Text eine gültige ID ist (Länge und Charset). */
+function istGueltigeId(wert: string): boolean {
+  return wert.length > 0 && wert.length <= MAX_ID_LAENGE && ID_CHARSET.test(wert)
+}
+
+/** Prüft ein Kalenderdatum im Format JJJJ-MM-TT. */
+function istGueltigesDatum(wert: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(wert)) return false
+  const teile = wert.split('-')
+  const jahr = Number(teile[0]!)
+  const monat = Number(teile[1]!)
+  const tag = Number(teile[2]!)
+  const datum = new Date(Date.UTC(jahr, monat - 1, tag))
+  return (
+    datum.getUTCFullYear() === jahr &&
+    datum.getUTCMonth() === monat - 1 &&
+    datum.getUTCDate() === tag
+  )
+}
 
 /** Formatkennung im Feld `format`; grenzt Backups von fremden JSON-Dateien ab. */
 export const BACKUP_FORMAT = 'beckenrand-backup'
@@ -174,6 +201,18 @@ function pruefeKonfiguration(wert: unknown, pfad: string): string | null {
   if (wert.einheit !== undefined && wert.einheit !== 'm' && wert.einheit !== 'yd') {
     return `${pfad}: Feld "einheit" muss "m", "yd" oder leer sein.`
   }
+  // Konsistenz: 22,86 m gehört zu Yard, 25/50 m zu Meter. Eine Yard-Einheit
+  // mit Meter-Beckenlänge (oder umgekehrt) wäre widersprüchlich.
+  const istYard = wert.einheit === 'yd'
+  if (wert.beckenlaengeM === 22.86 && !istYard) {
+    return `${pfad}: Feld "beckenlaengeM" 22.86 erfordert Einheit "yd".`
+  }
+  if (istYard && wert.beckenlaengeM !== 22.86) {
+    return `${pfad}: Einheit "yd" erfordert Beckenlänge 22.86.`
+  }
+  if (wert.beckenlaengeM === 22.86 && wert.einheit === undefined) {
+    return `${pfad}: Feld "beckenlaengeM" 22.86 erfordert Einheit "yd".`
+  }
   if (wert.streckeM !== null && (!istZahl(wert.streckeM) || wert.streckeM <= 0)) {
     return `${pfad}: Feld "streckeM" muss eine positive Zahl oder null sein.`
   }
@@ -208,6 +247,9 @@ function pruefeSchwimmer(wert: unknown, index: number): string | null {
   const pfad = `Schwimmer ${index + 1}`
   if (!istObjekt(wert)) return `${pfad}: Eintrag ist kein Objekt.`
   if (!istText(wert.id) || wert.id.length === 0) return `${pfad}: Feld "id" fehlt.`
+  if (!istText(wert.id) || !istGueltigeId(wert.id)) {
+    return `${pfad}: Feld "id" hat ungültige Länge oder Zeichen.`
+  }
   if (!istText(wert.name) || wert.name.trim().length === 0) {
     return `${pfad}: Feld "name" fehlt oder ist leer.`
   }
@@ -216,6 +258,12 @@ function pruefeSchwimmer(wert: unknown, index: number): string | null {
   }
   if (wert.jahrgang !== null && !istZahl(wert.jahrgang)) {
     return `${pfad}: Feld "jahrgang" muss eine Zahl oder null sein.`
+  }
+  if (
+    wert.jahrgang !== null &&
+    (!Number.isInteger(wert.jahrgang) || wert.jahrgang < 1900 || wert.jahrgang > 2100)
+  ) {
+    return `${pfad}: Feld "jahrgang" muss zwischen 1900 und 2100 liegen.`
   }
   if (!istText(wert.notiz)) return `${pfad}: Feld "notiz" fehlt.`
   if (wert.notiz.length > MAX_TEXTLAENGE) {
@@ -234,7 +282,9 @@ function pruefeSchwimmer(wert: unknown, index: number): string | null {
 function pruefeTrainingsSatz(wert: unknown, pfad: string): string | null {
   if (!istObjekt(wert)) return `${pfad}: Eintrag ist kein Objekt.`
   if (!istText(wert.id) || wert.id.length === 0) return `${pfad}: Feld "id" fehlt.`
+  if (!istText(wert.id) || !istGueltigeId(wert.id)) return `${pfad}: Feld "id" hat ungültige Länge oder Zeichen.`
   if (!istText(wert.bezeichnung)) return `${pfad}: Feld "bezeichnung" fehlt.`
+  if (wert.bezeichnung.length > MAX_TEXTLAENGE) return `${pfad}: Feld "bezeichnung" ist länger als ${MAX_TEXTLAENGE} Zeichen.`
   const konfiguration = pruefeKonfiguration(wert.konfiguration, `${pfad}, Konfiguration`)
   if (konfiguration) return konfiguration
   if (
@@ -268,10 +318,13 @@ function pruefeTraining(wert: unknown, index: number): string | null {
   const pfad = `Training ${index + 1}`
   if (!istObjekt(wert)) return `${pfad}: Eintrag ist kein Objekt.`
   if (!istText(wert.id) || wert.id.length === 0) return `${pfad}: Feld "id" fehlt.`
+  if (!istText(wert.id) || !istGueltigeId(wert.id)) return `${pfad}: Feld "id" hat ungültige Länge oder Zeichen.`
   if (!istText(wert.datum) || !/^\d{4}-\d{2}-\d{2}$/.test(wert.datum)) {
     return `${pfad}: Feld "datum" muss ein Datum im Format JJJJ-MM-TT sein.`
   }
+  if (!istGueltigesDatum(wert.datum)) return `${pfad}: Feld "datum" ist kein gültiges Kalenderdatum.`
   if (!istText(wert.bezeichnung)) return `${pfad}: Feld "bezeichnung" fehlt.`
+  if (wert.bezeichnung.length > MAX_TEXTLAENGE) return `${pfad}: Feld "bezeichnung" ist länger als ${MAX_TEXTLAENGE} Zeichen.`
   if (!istIndex(wert.bahnen) || wert.bahnen < 1 || wert.bahnen > 10) {
     return `${pfad}: Feld "bahnen" muss eine ganze Zahl von 1 bis 10 sein.`
   }
@@ -287,6 +340,9 @@ function pruefeTraining(wert: unknown, index: number): string | null {
   }
   if (wert.aktive.some((eintrag) => eintrag !== null && !istText(eintrag))) {
     return `${pfad}: Feld "aktive" darf nur Text oder null enthalten.`
+  }
+  if (wert.aktive.some((eintrag) => istText(eintrag) && !istGueltigeId(eintrag))) {
+    return `${pfad}: Feld "aktive" enthält eine ungültige Schwimmer-ID.`
   }
   if (wert.autostart !== undefined && typeof wert.autostart !== 'boolean') {
     return `${pfad}: Feld "autostart" muss wahr oder falsch sein.`
@@ -304,8 +360,14 @@ function pruefeTraining(wert: unknown, index: number): string | null {
   if (!istObjekt(wert.gestartet)) {
     return `${pfad}: Feld "gestartet" muss ein Objekt sein.`
   }
+  if (!Object.keys(wert.gestartet).every((schluessel) => istGueltigeId(schluessel))) {
+    return `${pfad}: Feld "gestartet" enthält einen ungültigen Schlüssel.`
+  }
   if (!Object.values(wert.gestartet).every((eintrag) => istText(eintrag))) {
     return `${pfad}: Feld "gestartet" darf nur Satz-IDs enthalten.`
+  }
+  if (!Object.values(wert.gestartet).every((eintrag) => istText(eintrag) && istGueltigeId(eintrag))) {
+    return `${pfad}: Feld "gestartet" enthält eine ungültige Satz-ID.`
   }
   if (!istZahl(wert.erstelltAm)) return `${pfad}: Feld "erstelltAm" fehlt oder ist keine Zahl.`
   return null
@@ -345,10 +407,13 @@ function pruefeSatz(wert: unknown, index: number): string | null {
   const pfad = `Satz ${index + 1}`
   if (!istObjekt(wert)) return `${pfad}: Eintrag ist kein Objekt.`
   if (!istText(wert.id) || wert.id.length === 0) return `${pfad}: Feld "id" fehlt.`
+  if (!istText(wert.id) || !istGueltigeId(wert.id)) return `${pfad}: Feld "id" hat ungültige Länge oder Zeichen.`
   if (!istText(wert.datum) || !/^\d{4}-\d{2}-\d{2}$/.test(wert.datum)) {
     return `${pfad}: Feld "datum" muss ein Datum im Format JJJJ-MM-TT sein.`
   }
+  if (!istGueltigesDatum(wert.datum)) return `${pfad}: Feld "datum" ist kein gültiges Kalenderdatum.`
   if (!istText(wert.bezeichnung)) return `${pfad}: Feld "bezeichnung" fehlt.`
+  if (wert.bezeichnung.length > MAX_TEXTLAENGE) return `${pfad}: Feld "bezeichnung" ist länger als ${MAX_TEXTLAENGE} Zeichen.`
   if (
     wert.tagesbezeichnung !== undefined &&
     (!istText(wert.tagesbezeichnung) || wert.tagesbezeichnung.length > MAX_TEXTLAENGE)
@@ -397,6 +462,7 @@ function pruefeAnschlag(wert: unknown, pfad: string): string | null {
 function pruefeBahn(wert: unknown, pfad: string): string | null {
   if (!istObjekt(wert)) return `${pfad}: Eintrag ist kein Objekt.`
   if (!istText(wert.id) || wert.id.length === 0) return `${pfad}: Feld "id" fehlt.`
+  if (!istText(wert.id) || !istGueltigeId(wert.id)) return `${pfad}: Feld "id" hat ungültige Länge oder Zeichen.`
   if (!istIndex(wert.nummer) || wert.nummer < 1 || wert.nummer > MAX_BAHNEN) {
     return `${pfad}: Feld "nummer" muss eine ganze Zahl von 1 bis ${MAX_BAHNEN} sein.`
   }
@@ -408,6 +474,9 @@ function pruefeBahn(wert: unknown, pfad: string): string | null {
   }
   if (wert.schwimmerId !== null && !istText(wert.schwimmerId)) {
     return `${pfad}: Feld "schwimmerId" muss Text oder null sein.`
+  }
+  if (wert.schwimmerId !== null && !istGueltigeId(wert.schwimmerId)) {
+    return `${pfad}: Feld "schwimmerId" hat ungültige Länge oder Zeichen.`
   }
   if (wert.startMs !== null && !istZahl(wert.startMs)) {
     return `${pfad}: Feld "startMs" muss eine Zahl oder null sein.`
@@ -456,8 +525,12 @@ function pruefeLauf(wert: unknown, index: number): string | null {
   const pfad = `Lauf ${index + 1}`
   if (!istObjekt(wert)) return `${pfad}: Eintrag ist kein Objekt.`
   if (!istText(wert.id) || wert.id.length === 0) return `${pfad}: Feld "id" fehlt.`
+  if (!istText(wert.id) || !istGueltigeId(wert.id)) return `${pfad}: Feld "id" hat ungültige Länge oder Zeichen.`
   if (wert.satzId !== null && !istText(wert.satzId)) {
     return `${pfad}: Feld "satzId" muss Text oder null sein.`
+  }
+  if (wert.satzId !== null && !istGueltigeId(wert.satzId)) {
+    return `${pfad}: Feld "satzId" hat ungültige Länge oder Zeichen.`
   }
   const konfiguration = pruefeKonfiguration(wert.konfiguration, `${pfad}, Konfiguration`)
   if (konfiguration) return konfiguration
@@ -605,10 +678,126 @@ export function pruefeBackup(roh: unknown): BackupPruefung {
   }
 
   // Nach den Prüfungen sind alle gelesenen Felder typkorrekt; die fehlenden
-  // Sammlungen sind ergänzt. Der Cast dokumentiert nur, was bereits geprüft ist.
-  // Das frühere Feld `wettkampfe` wird beim Einlesen verworfen.
-  const { wettkampfe: _wettkampfe, ...ohneAltfelder } = roh
-  const backup = { ...ohneAltfelder, trainings } as unknown as Backup
+  // Sammlungen sind ergänzt. Das Backup wird aus einer expliziten Feld-Allowlist
+  // aufgebaut, damit unbekannte Eigenschaften nicht in den Rückgabewert gelangen.
+  const pickKonfiguration = (wert: unknown): LaufKonfiguration => {
+    const quelle = wert as Record<string, unknown>
+    const ziel: Record<string, unknown> = {
+      beckenlaengeM: quelle.beckenlaengeM,
+      streckeM: quelle.streckeM,
+      schwimmart: quelle.schwimmart,
+    }
+    if (quelle.einheit !== undefined) ziel.einheit = quelle.einheit
+    if (quelle.zwischenzeiten !== undefined) ziel.zwischenzeiten = quelle.zwischenzeiten
+    return ziel as unknown as LaufKonfiguration
+  }
+  const pickAnschlag = (wert: unknown): Anschlag => {
+    const quelle = wert as Record<string, unknown>
+    const ziel: Record<string, unknown> = {
+      laengeNr: quelle.laengeNr,
+      splitMs: quelle.splitMs,
+      erfasstAt: quelle.erfasstAt,
+      istFinish: quelle.istFinish,
+    }
+    if (quelle.manuell !== undefined) ziel.manuell = quelle.manuell
+    return ziel as unknown as Anschlag
+  }
+  const pickBahn = (wert: unknown): Bahn => {
+    const quelle = wert as Record<string, unknown>
+    const ziel: Record<string, unknown> = {
+      id: quelle.id,
+      nummer: quelle.nummer,
+      schwimmerId: quelle.schwimmerId,
+      startMs: quelle.startMs,
+      anschlaege: (quelle.anschlaege as unknown[]).map(pickAnschlag),
+    }
+    if (quelle.reihe !== undefined) ziel.reihe = quelle.reihe
+    return ziel as unknown as Bahn
+  }
+  const pickPlan = (wert: unknown): SatzPlan => {
+    const quelle = wert as Record<string, unknown>
+    return {
+      wiederholungen: quelle.wiederholungen as number,
+      taktSek: quelle.taktSek as number,
+      startversatzMs: quelle.startversatzMs as number,
+    }
+  }
+  const pickTrainingsSatz = (wert: unknown): TrainingsSatz => {
+    const quelle = wert as Record<string, unknown>
+    return {
+      id: quelle.id as string,
+      bezeichnung: quelle.bezeichnung as string,
+      konfiguration: pickKonfiguration(quelle.konfiguration),
+      wiederholungen: quelle.wiederholungen as number,
+      taktSek: quelle.taktSek as number,
+      startversatzMs: quelle.startversatzMs as number,
+    }
+  }
+  const schwimmerListe = (roh.schwimmer as unknown[]).map((eintrag) => {
+    const quelle = eintrag as Record<string, unknown>
+    return {
+      id: quelle.id as string,
+      name: quelle.name as string,
+      jahrgang: quelle.jahrgang as number | null,
+      notiz: quelle.notiz as string,
+      erstelltAm: quelle.erstelltAm as number,
+    }
+  })
+  const satzListe = (roh.satze as unknown[]).map((eintrag) => {
+    const quelle = eintrag as Record<string, unknown>
+    const ziel: Record<string, unknown> = {
+      id: quelle.id,
+      datum: quelle.datum,
+      bezeichnung: quelle.bezeichnung,
+      konfiguration: pickKonfiguration(quelle.konfiguration),
+      plan: quelle.plan === undefined ? undefined : quelle.plan === null ? null : pickPlan(quelle.plan),
+      erstelltAm: quelle.erstelltAm,
+    }
+    if (quelle.tagesbezeichnung !== undefined) ziel.tagesbezeichnung = quelle.tagesbezeichnung
+    // Entferne ein eventuell undefined gebliebenes plan-Feld nicht nötig; toEqual verträgt es.
+    if (quelle.plan === undefined) delete ziel.plan
+    return ziel
+  }) as unknown as Satz[]
+  const laufListe = (roh.laeufe as unknown[]).map((eintrag) => {
+    const quelle = eintrag as Record<string, unknown>
+    const ziel: Record<string, unknown> = {
+      id: quelle.id,
+      satzId: quelle.satzId,
+      konfiguration: pickKonfiguration(quelle.konfiguration),
+      startWallMs: quelle.startWallMs,
+      bahnen: (quelle.bahnen as unknown[]).map(pickBahn),
+    }
+    if (quelle.startversatzMs !== undefined) ziel.startversatzMs = quelle.startversatzMs
+    if (quelle.wiederholung !== undefined) ziel.wiederholung = quelle.wiederholung
+    return ziel
+  }) as unknown as Lauf[]
+  const trainingListe = trainings.map((eintrag) => {
+    const quelle = eintrag as unknown as Record<string, unknown>
+    const ziel: Record<string, unknown> = {
+      id: quelle.id,
+      datum: quelle.datum,
+      bezeichnung: quelle.bezeichnung,
+      bahnen: quelle.bahnen,
+      aktive: [...(quelle.aktive as unknown[])],
+      saetze: (quelle.saetze as unknown[]).map(pickTrainingsSatz),
+      gestartet: Object.fromEntries(
+        Object.entries(quelle.gestartet as Record<string, unknown>).map(([k, v]) => [k, v]),
+      ),
+      erstelltAm: quelle.erstelltAm,
+    }
+    if (quelle.reihen !== undefined) ziel.reihen = quelle.reihen
+    if (quelle.autostart !== undefined) ziel.autostart = quelle.autostart
+    return ziel
+  }) as unknown as Training[]
+  const backup: Backup = {
+    format: BACKUP_FORMAT,
+    version: roh.version as BackupVersion,
+    exportiertAm: roh.exportiertAm as string,
+    schwimmer: schwimmerListe as Schwimmer[],
+    satze: satzListe,
+    laeufe: laufListe,
+    trainings: trainingListe,
+  }
   return {
     ok: true,
     backup,

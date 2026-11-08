@@ -33,7 +33,7 @@ import { Sheet } from './Sheet'
 
 // Feste Chip-Werte wie im Konfigurationssheet; der jeweilige Ist-Wert wird
 // bei Bedarf ergänzt, damit importierte Pläne editierbar bleiben.
-const STRECKEN = [50, 100, 200, 400, 800, 1500] as const
+const STRECKEN = [25, 50, 100, 200, 400, 800, 1500] as const
 const VERSATZE = [0, 5_000, 10_000, 15_000, 20_000, 30_000] as const
 
 interface TrainingsSatzSheetProps {
@@ -123,6 +123,29 @@ export function TrainingsSatzSheet({
       open
       onClose={onClose}
       titel={istNeu ? 'Satz hinzufügen' : `Satz ${index + 1} bearbeiten`}
+      fuss={
+        <>
+          {/* Der Grund für einen gesperrten Speichern-Knopf steht direkt über
+              der Aktion, nicht am Ende des scrollenden Formulars. */}
+          {fehler ? (
+            <p role="alert" className="mb-2 text-sm text-danger">
+              {fehler}
+            </p>
+          ) : null}
+          <button
+            type="button"
+            disabled={fehler !== null}
+            onClick={() =>
+              // Bezeichnung trimmen; der Trainingsscreen ersetzt den Satz anhand
+              // seiner ID und schließt das Sheet.
+              onSpeichern({ ...entwurf, bezeichnung: entwurf.bezeichnung.trim() })
+            }
+            className="h-14 w-full rounded-xl bg-accent text-base font-bold text-accent-fg disabled:opacity-40"
+          >
+            {istNeu ? 'Satz hinzufügen' : 'Satz speichern'}
+          </button>
+        </>
+      }
     >
       <Feld
         label="Bezeichnung"
@@ -250,25 +273,10 @@ export function TrainingsSatzSheet({
         </div>
       </Feld>
 
-      {fehler ? <p className="mb-3 text-sm text-danger">{fehler}</p> : null}
-
-      <button
-        type="button"
-        disabled={fehler !== null}
-        onClick={() =>
-          // Bezeichnung trimmen; der Trainingsscreen ersetzt den Satz anhand
-          // seiner ID und schließt das Sheet.
-          onSpeichern({ ...entwurf, bezeichnung: entwurf.bezeichnung.trim() })
-        }
-        className="h-14 w-full rounded-xl bg-accent text-base font-bold text-accent-fg disabled:opacity-40"
-      >
-        {istNeu ? 'Satz hinzufügen' : 'Satz speichern'}
-      </button>
-
       {/* Verschieben und Löschen gibt es nur für bereits gespeicherte Sätze;
           die Grenzen kommen als `kannNachOben`/`kannNachUnten` vom Screen. */}
       {istNeu ? null : (
-        <div className="mt-4 space-y-2">
+        <div className="mt-2 space-y-2">
           <div className="flex gap-2">
             <button
               type="button"

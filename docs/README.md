@@ -55,6 +55,8 @@ Die Entwicklerdokumentation setzt TypeScript, React und Grundkenntnisse im Brows
 5. [Testen](entwicklung/testen.md) — Unit-Tests, Playwright, Teststrategie
 6. [Bauen und Veröffentlichen](entwicklung/bauen-und-veroeffentlichen.md) — Vite, PWA, CI, GitHub Pages
 7. [Beitragen](entwicklung/beitragen.md) — Arbeitsweise, Konventionen, Checkliste für Änderungen
+8. [UX-Analyse 2026-10-30](entwicklung/ux-audit-2026-10-30.md) — Nutzerreisen, priorisierte
+   Befunde und umgesetzte Optimierungen
 
 ## Referenz und Entscheidungen
 

@@ -39,7 +39,8 @@ async function starteUndStoppe(page: import('@playwright/test').Page) {
   await expect(bahn()).toBeVisible()
   await bahn().dispatchEvent('click')
   await expect(bahn()).toHaveAttribute('data-anschlaege', '1')
-  await page.waitForTimeout(120)
+  const laufzeitVorZweitem = Number(await page.locator('[data-laufzeit]').getAttribute('data-laufzeit'))
+  await expect.poll(async () => Number(await page.locator('[data-laufzeit]').getAttribute('data-laufzeit'))).toBeGreaterThan(laufzeitVorZweitem)
   await bahn().dispatchEvent('click')
   await expect(page.getByRole('button', { name: /Bahn 1, im Ziel$/ })).toBeVisible()
 }
@@ -61,14 +62,14 @@ test('korrigiert eine Zielzeit im Verlauf und behält sie nach einem Reload', as
 
   // `span.tabular` schränkt auf die Zeitdarstellung ein; ein reiner Texttest
   // würde auch Eingabefelder oder Hinweise treffen.
-  await expect(page.locator('span.tabular', { hasText: '00:59,00' }).first()).toBeVisible()
+  await expect(page.locator('span.tabular', { hasText: '00:59,00' })).toBeVisible()
   await expect(page.getByText('manuell', { exact: true })).toBeVisible()
 
   // Eine Korrektur, die vor dem vorherigen Anschlag liegt, wird abgelehnt:
   // sonst wäre die Längenzeit negativ. Der Fehler bleibt im Dialog,
   // „Abbrechen“ verwirft die Eingabe ohne Änderung.
   await page.getByRole('button', { name: 'Anschlag 2 korrigieren' }).tap()
-  await page.getByLabel('Zeit für Länge 2').fill('00:00,00')
+  await page.getByLabel('Zeit für Länge 2').fill('00:00,01')
   await page.getByRole('button', { name: 'OK', exact: true }).tap()
   await expect(page.getByRole('alert')).toContainText('nach dem vorherigen Anschlag')
   await page.getByRole('button', { name: 'Abbrechen', exact: true }).tap()
@@ -77,7 +78,7 @@ test('korrigiert eine Zielzeit im Verlauf und behält sie nach einem Reload', as
   await page.reload()
   await page.getByRole('button', { name: 'Verlauf' }).tap()
   await page.getByRole('button', { name: /6 Bahnen · 100 m/ }).tap()
-  await expect(page.locator('span.tabular', { hasText: '00:59,00' }).first()).toBeVisible()
+  await expect(page.locator('span.tabular', { hasText: '00:59,00' })).toBeVisible()
   await expect(page.getByText('manuell', { exact: true })).toBeVisible()
 })
 
@@ -91,11 +92,13 @@ test('exportiert einen Lauf als CSV mit der korrigierten Zeit', async ({ page })
   await page.getByLabel('Zeit für Länge 2').fill('00:59,00')
   await page.getByRole('button', { name: 'OK', exact: true }).tap()
 
-  // Download-Ereignis vor dem Klick abonnieren, sonst ist es vorbei, bevor der
-  // Listener existiert.
+  // Der Export läuft über die Format-Auswahl: erst öffnen, dann das Format
+  // wählen. Das Download-Ereignis muss vor dem Klick abonniert sein, sonst ist
+  // es vorbei, bevor der Listener existiert.
+  await page.getByRole('button', { name: 'Exportieren' }).click()
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    page.getByRole('button', { name: 'Als CSV exportieren' }).click(),
+    page.getByRole('button', { name: 'Lauf als CSV' }).click(),
   ])
   // Der Dateiname trägt das Exportdatum; das Muster prüft die Form, nicht den
   // konkreten Tag.
@@ -166,4 +169,65 @@ test('löscht einen einzelnen Lauf nach Rückfrage', async ({ page }) => {
 
   // Ohne Läufe bleibt kein Satz übrig; der Verlauf zeigt den leeren Zustand.
   await expect(page.getByText('Noch keine Messungen.')).toBeVisible()
+})
+
+// Nutzerreise: Der leere Verlauf nennt nicht nur den Timer, sondern führt mit
+// einem Tipp dorthin — ohne Tab-Wechsel und ohne Suchschritt.
+test('führt aus dem leeren Verlauf direkt zum Timer', async ({ page }) => {
+  await oeffneApp(page)
+  await page.getByRole('button', { name: 'Verlauf' }).tap()
+  await expect(page.getByText('Noch keine Messungen.')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Zum Timer' }).tap()
+
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeVisible()
+})
+
+// Nutzerreise: Auch die leere Analyse ist kein Sackgassen-Text, sondern führt
+// zum Ort, an dem Splits entstehen.
+test('führt aus der leeren Analyse direkt zum Timer', async ({ page }) => {
+  await oeffneApp(page)
+  await page.getByRole('button', { name: 'Verlauf' }).tap()
+  await page.getByRole('button', { name: 'Analyse' }).tap()
+
+  await expect(page.getByText('Noch keine auswertbaren Sätze.')).toBeVisible()
+  await page.getByRole('button', { name: 'Zum Timer' }).tap()
+
+  await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeVisible()
+})
+
+// Nutzerreise: Nach dem letzten Ziel will der Trainer die Splits sehen. Der
+// Ergebnis-Screen führt direkt in das Lauf-Detail, ohne den Lauf im Verlauf zu
+// suchen.
+test('öffnet aus dem Ergebnis das Lauf-Detail im Verlauf', async ({ page }) => {
+  // Einzelne Bahn, damit der Lauf mit zwei Anschlägen vollständig ist.
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      'beckenrand.v2.einstellungen',
+      JSON.stringify({
+        konfiguration: { beckenlaengeM: 50, streckeM: 100, schwimmart: 'freistil' },
+        bahnen: 1,
+        reihen: 1,
+        schwimmerProBahn: [],
+        startversatzMs: 0,
+        wiederholungen: 1,
+        taktSek: 120,
+      }),
+    )
+  })
+  await oeffneApp(page)
+  await starteLauf(page)
+
+  const bahn = page.getByRole('button', { name: /Bahn 1, läuft$/ })
+  await bahn.tap()
+  await bahn.tap()
+  await expect(page.getByText('Ergebnis')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Im Verlauf ansehen' }).tap()
+
+  await expect(page.getByRole('button', { name: 'Zurück zum Verlauf' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '1 Bahn · 100 m' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Zurück zum Verlauf' }).tap()
+  await expect(page.getByRole('button', { name: /1 Bahn · 100 m/ })).toBeVisible()
 })

@@ -199,10 +199,12 @@ export class TabKoordinator {
    */
   uebernehmen(): void {
     if (this.rolle !== 'gesperrt' || !this.kanal) return
+    if (this.takeoverTimer !== null) globalThis.clearTimeout(this.takeoverTimer)
     this.kanal.postMessage({ typ: 'takeover', tabId: this.tabId })
     this.takeoverTimer = globalThis.setTimeout(() => {
       // Der andere Tab antwortet nicht — dann selbst übernehmen.
       if (this.rolle !== 'aktiv') this.werbe()
+      this.takeoverTimer = null
     }, 600)
   }
 

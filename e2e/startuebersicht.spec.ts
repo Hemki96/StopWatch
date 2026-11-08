@@ -13,6 +13,29 @@
 import { expect, test } from '@playwright/test'
 import { oeffneApp } from './helfer'
 
+// Nutzerreise: Auf einem kleinen Handy und im Querformat muss die Bestätigung
+// ohne Scrollen erreichbar sein. Vorher lag „Jetzt starten“ unterhalb des
+// sichtbaren Bereichs; der Start wirkte wie eine Sackgasse.
+for (const groesse of [
+  { width: 375, height: 667 },
+  { width: 844, height: 390 },
+]) {
+  test(`hält „Jetzt starten“ bei ${groesse.width}×${groesse.height} im Sichtfeld`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(groesse)
+    await oeffneApp(page)
+    await page.getByRole('button', { name: 'Start', exact: true }).tap()
+
+    const starten = page.getByRole('button', { name: 'Jetzt starten', exact: true })
+    await expect(starten).toBeVisible()
+    const box = await starten.boundingBox()
+    expect(box).not.toBeNull()
+    expect(box!.y).toBeGreaterThanOrEqual(0)
+    expect(box!.y + box!.height).toBeLessThanOrEqual(groesse.height)
+  })
+}
+
 test('zeigt die Einstellungen des nächsten Laufs und startet erst auf Bestätigung', async ({
   page,
 }) => {

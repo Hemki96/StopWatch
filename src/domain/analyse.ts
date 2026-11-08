@@ -315,9 +315,18 @@ export function analyseMatrix(runden: Lauf[], referenzRunden: Lauf[] = []): Anal
     }
   }
 
-  const basis = runden[0]
-  const positionen = (basis?.bahnen ?? [])
-    .map((bahn, index) => ({ bahn, index }))
+  // Union der Bahnpositionen über alle Runden: Eine Bahn, die erst in einer
+  // späteren Runde vorkommt, darf nicht fehlen.
+  const indexSet = new Set<number>()
+  for (const lauf of runden) {
+    lauf.bahnen.forEach((_, index) => indexSet.add(index))
+  }
+  const positionen = [...indexSet]
+    .map((index) => {
+      const basisBahn = runden.map((lauf) => lauf.bahnen[index]).find((bahn) => bahn !== undefined)
+      return basisBahn ? { bahn: basisBahn, index } : null
+    })
+    .filter((eintrag): eintrag is { bahn: Bahn; index: number } => eintrag !== null)
     .sort((a, b) => a.bahn.nummer - b.bahn.nummer)
 
   // Schnellste Zeit je Runde vorab bestimmen; nur echte Zielzeiten zählen.
@@ -412,7 +421,10 @@ export function laengenMatrix(runden: Lauf[], index: number): LaengenMatrix {
         kumuliertMs: aktuell.kumuliertMs,
         abweichungMs: vorher ? aktuell.zeitMs - vorher.zeitMs : null,
         manuell: aktuell.manuell,
-        istFinish: bahnen[rundeIndex]?.anschlaege[laengenIndex]?.istFinish ?? false,
+        istFinish:
+          bahnen[rundeIndex]?.anschlaege.find(
+            (anschlag) => anschlag.laengeNr === laengeNr,
+          )?.istFinish ?? false,
       }
     })
     return {
@@ -457,8 +469,12 @@ export interface RundenAbweichung {
 
 export function mittlereAbweichungen(runden: Lauf[]): RundenAbweichung[] {
   return runden.map((lauf, rundeIndex) => {
-    const anzahl = Math.min(...runden.map((eintrag) => eintrag.bahnen.length), lauf.bahnen.length)
-    if (rundeIndex === 0 || anzahl === 0) {
+    if (rundeIndex === 0) {
+      return { runde: lauf.wiederholung ?? rundeIndex + 1, mittelMs: null, anzahl: 0 }
+    }
+    const vorher = runden[rundeIndex - 1]
+    const anzahl = Math.min(lauf.bahnen.length, vorher?.bahnen.length ?? 0)
+    if (anzahl === 0) {
       return { runde: lauf.wiederholung ?? rundeIndex + 1, mittelMs: null, anzahl: 0 }
     }
     const werte: number[] = []

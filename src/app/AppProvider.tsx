@@ -195,6 +195,12 @@ export interface AppContextValue {
   setzeSchwimmer: (bahnId: string, schwimmerId: string | null) => void
   setzeSchwimmerSerie: (bahnIndex: number, schwimmerId: string | null) => void
   setzeSchwimmerImLauf: (laufId: string, bahnId: string, schwimmerId: string | null) => void
+  /** Hängt dem sichtbaren Lauf eine weitere Person an und liefert die Bahn-ID. */
+  fuegePersonHinzu: (
+    now: number,
+    wallNow: number,
+    schwimmerId?: string | null,
+  ) => string | null
   korrigiereAnschlag: (
     laufId: string,
     bahnId: string,
@@ -308,6 +314,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // geladener Tab, der zum ersten Mal aktiv wird, ist dagegen ein Reload und
   // normalisiert wie bisher.
   const warAktivRef = useRef(false)
+  const toastTimerRef = useRef<number | null>(null)
   const warGesperrtRef = useRef(false)
   // Einstellungen für Aktionen, die zwischen zwei Renders laufen. Der State
   // bleibt die Anzeige; die Ref hält die Vorbelegung für `neuerLauf` aktuell.
@@ -368,8 +375,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
    * Aktion die alte Meldung, statt von ihr gelöscht zu werden.
    */
   const zeigeToast = useCallback((nachricht: string) => {
+    if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current)
     setToast(nachricht)
-    window.setTimeout(() => setToast((aktuell) => (aktuell === nachricht ? null : aktuell)), 3200)
+    toastTimerRef.current = window.setTimeout(() => {
+      setToast((aktuell) => (aktuell === nachricht ? null : aktuell))
+      toastTimerRef.current = null
+    }, 3200)
   }, [])
 
   /**
@@ -383,6 +394,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         verfolge,
         laeufeRef,
         satzeRef,
+        trainingsRef,
         aktiveIdsRef,
         aktiverLaufIdRef,
         setLaeufe: setLaeufeSafe,
@@ -414,6 +426,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setzeSchwimmer,
     setzeSchwimmerSerie,
     setzeSchwimmerImLauf,
+    fuegePersonHinzu,
     korrigiereAnschlag,
     setzeKonfiguration,
     neuerLauf,
@@ -822,6 +835,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setzeSchwimmer,
       setzeSchwimmerSerie,
       setzeSchwimmerImLauf,
+      fuegePersonHinzu,
       korrigiereAnschlag,
       setzeKonfiguration,
       verwerfeAktivenLauf,
@@ -876,6 +890,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setzeSchwimmer,
       setzeSchwimmerSerie,
       setzeSchwimmerImLauf,
+      fuegePersonHinzu,
       korrigiereAnschlag,
       setzeKonfiguration,
       verwerfeAktivenLauf,

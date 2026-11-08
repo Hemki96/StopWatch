@@ -71,12 +71,10 @@ export function streckeAnzeige(streckeM: number | null, einheit: Einheit): numbe
 export function alsMeterKonfiguration(
   konfiguration: LaufKonfiguration,
 ): LaufKonfiguration {
-  if (einheitVon(konfiguration) === 'm') {
-    if (konfiguration.einheit === undefined) return konfiguration
-    const { einheit: _einheit, ...ohneEinheit } = konfiguration
-    return ohneEinheit
-  }
   const { einheit: _einheit, ...ohneEinheit } = konfiguration
+  if (einheitVon(konfiguration) === 'm') {
+    return { ...ohneEinheit }
+  }
   return {
     ...ohneEinheit,
     beckenlaengeM: 25,

@@ -392,3 +392,14 @@ describe('naechsterSatz', () => {
     expect(naechsterSatz(fortschritt)).toBeNull()
   })
 })
+
+describe('trainingsFortschritt: leere Bahnen', () => {
+  it('wertet einen Lauf ohne Bahnen nicht als fertig', () => {
+    const training = basisTraining()
+    training.gestartet = { ts1: 'satz1' }
+    const leererLauf = createLauf(K100, [], 'satz1')
+    const fortschritt = trainingsFortschritt(training, [satz('satz1')], [leererLauf])
+    expect(fortschritt[0]?.status).not.toBe('fertig')
+    expect(fortschritt[0]?.fertigeRunden).toBe(0)
+  })
+})

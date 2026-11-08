@@ -194,4 +194,14 @@ describe('HistoryScreen', () => {
 
     ergebnis.unmount()
   })
+
+  it('führt aus dem leeren Zustand direkt zum Timer', () => {
+    const zumTimer = vi.fn()
+    const ergebnis = render(<HistoryScreen onZumTimer={zumTimer} />)
+
+    act(() => knopf(ergebnis.container, 'Zum Timer').click())
+
+    expect(zumTimer).toHaveBeenCalledOnce()
+    ergebnis.unmount()
+  })
 })

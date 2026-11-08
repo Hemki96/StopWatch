@@ -166,3 +166,16 @@ describe('SettingsScreen Import-Konflikte', () => {
     ergebnis.unmount()
   })
 })
+
+describe('SettingsScreen Vorschau des nächsten Laufs', () => {
+  it('nennt Becken und Strecke links, die Bahnzahl nur einmal', () => {
+    const ergebnis = render(<SettingsScreen />)
+    const text = ergebnis.container.textContent ?? ''
+
+    expect(text).toContain('50 m-Becken · 100 m')
+    // Vorher stand „6 Bahnen“ auf beiden Seiten der Zeile.
+    expect(text.match(/6 Bahnen/g) ?? []).toHaveLength(1)
+
+    ergebnis.unmount()
+  })
+})

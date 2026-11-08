@@ -16,11 +16,18 @@ interface SheetProps {
   titel: string
   /** Schließen per Knopf, Hintergrund, Escape oder Zug. */
   onClose: () => void
+  /**
+   * Aktionen, die immer sichtbar bleiben („Jetzt starten“, „Speichern“).
+   * Der Inhalt scrollt darüber, die Leiste bleibt am unteren Rand. Auf hohen
+   * Geräten ist das nur Komfort; auf kleinen Handys und im Querformat ist es
+   * der Unterschied zwischen „Aktion erreichbar“ und „Aktion versteckt“.
+   */
+  fuss?: ReactNode
   children: ReactNode
 }
 
 /** Sheet mit Titelzeile; Schließen per Knopf, Hintergrund, Escape oder Zug. */
-export function Sheet({ open, titel, onClose, children }: SheetProps) {
+export function Sheet({ open, titel, onClose, fuss, children }: SheetProps) {
   const titelId = useId()
   // `zug` treibt die Darstellung, `zugRef` liefert den aktuellen Wert in den
   // Pointer-Handlern, ohne auf ein erneutes Rendern zu warten.
@@ -57,7 +64,7 @@ export function Sheet({ open, titel, onClose, children }: SheetProps) {
       // Handy: von unten. Tablet: zentriertes Fenster mit fester Lesebreite,
       // damit Formulare nicht über die ganze Gerätebreite laufen.
       layerClassName="justify-end rail:items-center rail:justify-center rail:p-6"
-      panelClassName="max-h-[88dvh] overflow-y-auto overscroll-contain rounded-t-3xl border-t border-line bg-surface pb-[max(env(safe-area-inset-bottom),1rem)] shadow-2xl rail:max-h-[85dvh] rail:w-full rail:max-w-xl rail:rounded-3xl rail:border"
+      panelClassName="flex max-h-[88dvh] flex-col overflow-hidden rounded-t-3xl border-t border-line bg-surface shadow-2xl rail:max-h-[85dvh] rail:w-full rail:max-w-xl rail:rounded-3xl rail:border"
       panelStyle={{
         // Nur während der Geste ohne Übergang, damit der Finger direkt führt;
         // beim Zurückfedern entsteht so eine kurze Animation.
@@ -67,9 +74,10 @@ export function Sheet({ open, titel, onClose, children }: SheetProps) {
     >
       {/* Kopfzeile mit Griff, Titel und Schließen-Knopf. Sie ist die einzige
           Ziehfläche; `touchAction: none` verhindert, dass das Scrollen des
-          Inhalts die Geste abfängt. */}
+          Inhalts die Geste abfängt. Als festes Kind des Panels bleibt sie
+          stehen, während nur der Inhalt darunter scrollt. */}
       <div
-        className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-line bg-surface py-3 pl-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] rail:px-6"
+        className="relative flex shrink-0 items-center justify-between gap-3 border-b border-line bg-surface py-3 pl-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] short:py-2 rail:px-6"
         style={{ touchAction: 'none' }}
         onPointerDown={(e) => {
           // Ein Zug, der auf dem Schließen-Knopf beginnt, ist ein Klick.
@@ -105,14 +113,23 @@ export function Sheet({ open, titel, onClose, children }: SheetProps) {
           type="button"
           onClick={onClose}
           aria-label="Schließen"
-          className="grid h-9 w-9 place-items-center rounded-full bg-surface2 text-muted"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-surface2 text-muted"
         >
           <XIcon className="h-5 w-5" />
         </button>
       </div>
-      <div className="py-4 pl-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] rail:px-6 rail:py-5">
+      <div
+        className={`min-h-0 flex-1 overflow-y-auto overscroll-contain pl-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] rail:px-6 ${
+          fuss ? 'py-4 rail:py-5' : 'pb-[max(env(safe-area-inset-bottom),1rem)] pt-4 rail:py-5'
+        }`}
+      >
         {children}
       </div>
+      {fuss ? (
+        <div className="shrink-0 border-t border-line bg-surface px-4 pb-[max(env(safe-area-inset-bottom),1rem)] pt-3 short:pt-2 rail:px-6">
+          {fuss}
+        </div>
+      ) : null}
     </Dialog>
   )
 }

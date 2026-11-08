@@ -151,7 +151,10 @@ export function normalizeTrainingOnLoad(training: Training): Training {
     // Genau ein Eintrag je Person; fehlende Zuordnungen werden null.
     aktive: Array.from(
       { length: bahnenGesamt(bahnen, reihen) },
-      (_, index) => training.aktive?.[index] ?? null,
+      (_, index) => {
+        const wert = training.aktive?.[index]
+        return wert === undefined ? null : wert
+      },
     ),
     saetze: Array.isArray(training.saetze) ? training.saetze : [],
     // `gestartet` ist die Zuordnung TrainingsSatz.id → Satz.id. Ein fehlender
@@ -268,13 +271,23 @@ export async function saveSatz(satz: Satz): Promise<void> {
 export async function deleteSatzUndLaeufe(id: string): Promise<void> {
   const db = await getDb()
   const tx = db.transaction(['satz', 'lauf'], 'readwrite')
-  const laufIds = await tx.objectStore('lauf').index('by-satz').getAllKeys(id)
-  for (const laufId of laufIds) {
-    await tx.objectStore('lauf').delete(laufId)
+  try {
+    const laufIds = await tx.objectStore('lauf').index('by-satz').getAllKeys(id)
+    for (const laufId of laufIds) {
+      await tx.objectStore('lauf').delete(laufId)
+    }
+    await tx.objectStore('satz').delete(id)
+    // Erst mit `tx.done` ist der Commit abgeschlossen; vorher ist nichts sichtbar.
+    await tx.done
+  } catch (fehler) {
+    try {
+      tx.abort()
+    } catch {
+      // Bereits abgebrochen oder committet.
+    }
+    await tx.done.catch(() => undefined)
+    throw fehler
   }
-  await tx.objectStore('satz').delete(id)
-  // Erst mit `tx.done` ist der Commit abgeschlossen; vorher ist nichts sichtbar.
-  await tx.done
 }
 
 /** Schreibt ein Training als Upsert (Schlüssel ist `training.id`). */
@@ -488,11 +501,21 @@ export async function importBackup(
 export async function clearAll(): Promise<void> {
   const db = await getDb()
   const tx = db.transaction(['schwimmer', 'satz', 'lauf', 'training'], 'readwrite')
-  await Promise.all([
-    tx.objectStore('schwimmer').clear(),
-    tx.objectStore('satz').clear(),
-    tx.objectStore('lauf').clear(),
-    tx.objectStore('training').clear(),
-    tx.done,
-  ])
+  try {
+    await Promise.all([
+      tx.objectStore('schwimmer').clear(),
+      tx.objectStore('satz').clear(),
+      tx.objectStore('lauf').clear(),
+      tx.objectStore('training').clear(),
+      tx.done,
+    ])
+  } catch (fehler) {
+    try {
+      tx.abort()
+    } catch {
+      // Bereits abgebrochen oder committet.
+    }
+    await tx.done.catch(() => undefined)
+    throw fehler
+  }
 }

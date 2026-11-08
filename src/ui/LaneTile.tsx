@@ -1,7 +1,9 @@
 /**
  * Kachel einer einzelnen Bahn im Timer.
  *
- * Zeigt Status, Zeit und Längenfortschritt genau einer Bahn. Ein kurzer Tap
+ * Zeigt Status, Zeit und Längenfortschritt genau einer Bahn. Unten rechts steht
+ * die Längenzeit der gerade abgeschlossenen Länge, also die Differenz zum
+ * vorherigen Anschlag. Ein kurzer Tap
  * setzt den Anschlag, langes Drücken nimmt die letzte Aktion zurück. Auf
  * offener Strecke beendet der „Ziel“-Knopf die Bahn; er ist eine eigene Fläche
  * unter der Messfläche, damit ein Fehltipp auf der Kachel nicht das Ziel
@@ -18,6 +20,7 @@ import {
   finishMs,
   laneStatusAt,
   lastSplit,
+  letzteLaengenzeit,
   zwischenzeiten,
   zwischenzeitenGesamt,
 } from '../domain/lauf'
@@ -77,6 +80,7 @@ export function LaneTile({
   // Klicks, die aus Pointer- oder Tastaturbedienung entstehen, sind bereits
   // verarbeitet. Ein Klick ohne vorherige Eingabe kommt von VoiceOver/TalkBack.
   const klickRef = useRef(false)
+  const klickTimerRef = useRef<number | null>(null)
 
   // Beim Unmount (Tab-Wechsel, Screen-Abbau) darf ein laufender Langdruck
   // keinen Anschlag mehr zurücknehmen. Ohne diesen Cleanup feuert der Timer
@@ -85,14 +89,17 @@ export function LaneTile({
     () => () => {
       const press = pressRef.current
       if (press) window.clearTimeout(press.timer)
+      if (klickTimerRef.current !== null) window.clearTimeout(klickTimerRef.current)
     },
     [],
   )
 
   const merkeKlick = () => {
     klickRef.current = true
-    window.setTimeout(() => {
+    if (klickTimerRef.current !== null) window.clearTimeout(klickTimerRef.current)
+    klickTimerRef.current = window.setTimeout(() => {
       klickRef.current = false
+      klickTimerRef.current = null
     }, 0)
   }
 
@@ -113,8 +120,12 @@ export function LaneTile({
   // Der nächste Tap schließt ab, sobald alle Zwischenzeiten erfasst sind.
   const naechsterIstZiel =
     zwischenzeitenBisZiel !== null && bahn.anschlaege.length + 1 > zwischenzeitenBisZiel
-  // Letzter Anschlag für die kleine Zeile unten rechts.
+  // Letzter Anschlag für den Vorlesetext und die unterbrochene Anzeige.
   const letzter = lastSplit(bahn)
+  // Kleine Zahl unten rechts: die gerade geschwommene Längenzeit. Sie ist die
+  // Differenz zum vorherigen Anschlag — beim ersten Tap also die Zeit ab Start.
+  // Ohne Anschlag bleibt die Stelle leer.
+  const laengenzeit = letzteLaengenzeit(bahn)
   // Ohne Schwimmerzuordnung bleibt die Kachel sonst namenlos. Statt einer
   // leeren Zeile nennt sie dann die vom Aufrufer gebildete Ersatzbezeichnung
   // („Lauf 1, Bahn 2“), damit beim Messen ohne Namen klar bleibt, welche Bahn
@@ -209,15 +220,10 @@ export function LaneTile({
           ? 'border-warn/60 bg-warn/10'
           : 'border-line bg-surface'
 
-  const zeitFarbe = unterbrochen
-    ? 'text-warn'
-    : status === 'laeuft'
-      ? 'text-accent'
-      : status === 'beendet'
-        ? 'text-ok'
-        : status === 'geplant'
-          ? 'text-warn'
-          : 'text-muted'
+  // Die Zeit bleibt rein (fg), der Status sitzt in Rahmen, Label und Fortschritt.
+  // Nur bei einer unterbrochenen Bahn bleibt die Warnfarbe, weil sie einen
+  // fehlenden Startzeitstempel markiert (#60-adjacent).
+  const zeitFarbe = unterbrochen ? 'text-warn' : 'text-fg'
 
   // Gefüllte Segmente der Fortschrittsleiste: eines pro erfasstem Anschlag.
   const abgeschlosseneLaengen = bahn.anschlaege.length
@@ -234,12 +240,17 @@ export function LaneTile({
   // abgeflacht und nicht abrufbar. Die Beschreibung wird nur vorgelesen, wenn
   // die Messfläche den Fokus hat — sie ist bewusst keine Live-Region.
   const beschreibungId = `zeitbeschreibung-${bahn.id}`
+  // Verbindet die nicht-leeren Teile einer Vorlesebeschreibung mit Leerzeichen.
+  const saetze = (...teile: (string | null)[]) =>
+    teile.filter((teil): teil is string => teil !== null).join(' ')
+  // Die kleine Zahl unten rechts ist die Längenzeit; der Vorlesetext nennt sie
+  // ausdrücklich, weil die nackte Zahl sonst wie eine kumulierte Zeit klingt.
+  const laengenzeitSatz =
+    laengenzeit !== null ? `Längenzeit ${formatTime(laengenzeit)}.` : null
   const zeitbeschreibung = unterbrochen
-    ? letzter
-      ? `Letzter Anschlag ${formatTime(letzter.splitMs)}.`
-      : null
+    ? saetze(letzter ? `Letzter Anschlag ${formatTime(letzter.splitMs)}.` : null, laengenzeitSatz)
     : status === 'laeuft'
-      ? [
+      ? saetze(
           `Zeit ${formatTime(ansageZeit)}.`,
           eigeneZahl
             ? naechsterIstZiel
@@ -249,11 +260,10 @@ export function LaneTile({
               ? `Länge ${Math.min(bahn.anschlaege.length + 1, gesamt)} von ${gesamt}.`
               : `Länge ${bahn.anschlaege.length + 1}.`,
           letzter ? `Letzter Anschlag ${formatTime(letzter.splitMs)}.` : null,
-        ]
-          .filter((teil): teil is string => teil !== null)
-          .join(' ')
+          laengenzeitSatz,
+        )
       : status === 'beendet'
-        ? `Zielzeit ${formatTime(zeit)}.`
+        ? saetze(`Zielzeit ${formatTime(zeit)}.`, laengenzeitSatz)
         : status === 'geplant'
           ? `Start in ${formatCountdown(ansageZeit)}.`
           : null
@@ -321,7 +331,7 @@ export function LaneTile({
             onUndo(bahn.id)
           }
         }}
-        className="relative flex min-h-[7.5rem] flex-1 select-none flex-col justify-between p-3 rail:p-4"
+        className="relative flex min-h-[7.5rem] flex-1 select-none flex-col justify-between p-3 short:min-h-[6.25rem] short:p-2 rail:p-4"
         // `pan-y` lässt die Seite scrollen, verhindert aber Doppeltipp-Zoom.
         // `none` würde auf kleinen Displays auch das Scrollen blockieren.
         // Die Container-Abfrage lässt die Zeit mit der Kachel statt mit dem
@@ -349,11 +359,11 @@ export function LaneTile({
           {status === 'geplant' ? formatCountdown(zeit) : formatTime(zeit)}
         </div>
 
-        {/* Unterer Block: links der Längenschritt, rechts die letzte
-            Zwischenzeit. Der Zielknopf sitzt nicht mehr hier, sondern als eigene
-            Fläche unter der Messfläche (#60). Darunter steht der Stand der
-            Zwischenzeiten über die volle Breite, damit er auf schmalen Kacheln
-            nicht mit der Zeit kollidiert. */}
+        {/* Unterer Block: links der Längenschritt, rechts die Längenzeit der
+            gerade abgeschlossenen Länge. Der Zielknopf sitzt nicht mehr hier,
+            sondern als eigene Fläche unter der Messfläche (#60). Darunter steht
+            der Stand der Zwischenzeiten über die volle Breite, damit er auf
+            schmalen Kacheln nicht mit der Zeit kollidiert. */}
         <div className="flex flex-col gap-0.5 text-[11px] text-muted">
           <div className="flex items-end justify-between gap-2">
             <span className="tabular">
@@ -374,8 +384,8 @@ export function LaneTile({
                       : 'Bereit'}
             </span>
 
-            <span className="tabular">
-              {status === 'geplant' ? 'wartet' : letzter ? formatTime(letzter.splitMs) : ''}
+            <span className="tabular" data-laengenzeit={laengenzeit ?? undefined}>
+              {status === 'geplant' ? 'wartet' : laengenzeit !== null ? formatTime(laengenzeit) : ''}
             </span>
           </div>
 
@@ -418,7 +428,7 @@ export function LaneTile({
         {kannRueckgaengig && gedrueckt ? (
           <span
             data-haltend="true"
-            className="pointer-events-none absolute inset-x-2 top-1/2 flex -translate-y-1/2 flex-col items-center gap-1 rounded-lg bg-warn px-2 py-1.5 text-center text-[10px] font-bold text-black"
+            className="pointer-events-none absolute inset-x-2 top-1/2 flex -translate-y-1/2 flex-col items-center gap-1 rounded-lg bg-warn px-2 py-1.5 text-center text-[10px] font-bold text-warn-fg"
           >
             {status === 'geplant' ? 'Halten: Start abbrechen' : 'Halten: Anschlag zurücknehmen'}
             {reduzierteBewegung ? null : (

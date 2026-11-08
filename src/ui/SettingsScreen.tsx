@@ -14,12 +14,20 @@ import { useApp, type Backup, type ImportKonflikte } from '../app/AppProvider'
 import { useInstallPrompt } from '../app/pwa'
 import { formatStrecke, formatTakt, lokalesDatum } from '../domain/format'
 import { einheitVon, formatBeckenlaenge } from '../domain/einheit'
+import { hatBegonnen } from '../domain/lauf'
 import { csvDateiname, laeufeAlsCsv } from '../export/csv'
 import { speichereDatei, waehleDatei } from '../export/datei'
 import { Bestaetigung } from './Bestaetigung'
 import { KonfigurationSheet } from './KonfigurationSheet'
 import { Sheet } from './Sheet'
-import { CheckIcon, DownloadIcon, MoonIcon, SunIcon, UploadIcon } from './icons'
+import {
+  CheckIcon,
+  ChevronRightIcon,
+  DownloadIcon,
+  MoonIcon,
+  SunIcon,
+  UploadIcon,
+} from './icons'
 
 /** Karte als optischer Rahmen für eine Gruppe von Einstellungszeilen. */
 function Karte({ children }: { children: React.ReactNode }) {
@@ -60,6 +68,9 @@ function Zeile({
         <span className={`block text-sm font-medium ${gefahr ? 'text-danger' : ''}`}>{label}</span>
         {wert ? <span className="block text-xs text-muted">{wert}</span> : null}
       </span>
+      {/* Die Zeile ist ein Knopf; der Pfeil macht das auch ohne Ausprobieren
+          erkennbar. */}
+      <ChevronRightIcon className="h-4 w-4 shrink-0 text-muted" />
     </button>
   )
 }
@@ -102,6 +113,8 @@ export function SettingsScreen() {
   const konfiguration = app.einstellungen.konfiguration
   const speicher = app.speicherSchutz
   const einheit = einheitVon(konfiguration)
+  // Nur begonnene Läufe zählen — dieselbe Zahl, die der Verlauf zeigt.
+  const begonneneLaeufe = app.laeufe.filter((lauf) => hatBegonnen(lauf)).length
   // Solange Konflikte lokal bleiben, wäre „übernommen“ für die Backup-Zahl
   // falsch: Ein Teil der Datensätze wird übersprungen.
   const importUmfangText = importVorschau
@@ -109,15 +122,17 @@ export function SettingsScreen() {
       ? `Übernommen werden: ${importVorschau.text}.`
       : `Im Backup enthalten: ${importVorschau.text}.`
     : ''
-  // Vorschau des nächsten Laufs: Serie nur mit Wiederholungszahl und Takt,
-  // Versatz nur wenn gesetzt. `null`-Teile werden vor dem Join entfernt.
-  const naechsterLauf = [
+  // Vorschau des nächsten Laufs: Becken und Strecke links, Bahnen, Reihen,
+  // Versatz und Takt rechts. Die Bahnzahl stand zuvor auf beiden Seiten und
+  // wirkte wie ein doppelter Eintrag.
+  const streckeText =
     app.einstellungen.wiederholungen > 1
       ? `${app.einstellungen.wiederholungen}×${formatStrecke(konfiguration.streckeM, einheit)}`
-      : formatStrecke(konfiguration.streckeM, einheit),
-    app.einstellungen.reihen > 1
-      ? `${app.einstellungen.bahnen * app.einstellungen.reihen} Personen in ${app.einstellungen.reihen} Reihen`
-      : `${app.einstellungen.bahnen} Bahnen`,
+      : formatStrecke(konfiguration.streckeM, einheit)
+  const naechsterLauf = [
+    `${app.einstellungen.bahnen} ${app.einstellungen.bahnen === 1 ? 'Bahn' : 'Bahnen'}${
+      app.einstellungen.reihen > 1 ? ` in ${app.einstellungen.reihen} Reihen` : ''
+    }`,
     app.einstellungen.startversatzMs > 0 && app.einstellungen.reihen > 1
       ? `${app.einstellungen.startversatzMs / 1000} s Reihenversatz`
       : null,
@@ -257,7 +272,7 @@ export function SettingsScreen() {
                   { wert: 'light', label: 'Hell', icon: <SunIcon className="h-4 w-4" /> },
                   { wert: 'dark', label: 'Dunkel', icon: <MoonIcon className="h-4 w-4" /> },
                 ] as const
-              ).map(({ wert, label, icon }) => {
+              ).map(({ wert, label, icon }, index, liste) => {
                 const aktiv = app.themeEinstellung === wert
                 return (
                   <button
@@ -265,7 +280,25 @@ export function SettingsScreen() {
                     type="button"
                     role="radio"
                     aria-checked={aktiv}
+                    tabIndex={aktiv ? 0 : -1}
                     onClick={() => app.setzeTheme(wert)}
+                    onKeyDown={(e) => {
+                      // Pfeiltasten wechseln den Fokus innerhalb der Gruppe,
+                      // wie ARIA es für Radiogruppen vorsieht.
+                      const ziel =
+                        e.key === 'ArrowRight' || e.key === 'ArrowDown'
+                          ? liste[(index + 1) % liste.length]?.wert
+                          : e.key === 'ArrowLeft' || e.key === 'ArrowUp'
+                            ? liste[(index - 1 + liste.length) % liste.length]?.wert
+                            : null
+                      if (!ziel) return
+                      e.preventDefault()
+                      app.setzeTheme(ziel)
+                      const knopf = e.currentTarget.parentElement?.querySelector(
+                        `button[aria-checked="true"]`,
+                      ) as HTMLButtonElement | null
+                      knopf?.focus()
+                    }}
                     className={`flex h-11 items-center justify-center gap-1.5 rounded-xl border text-sm font-semibold ${
                       aktiv
                         ? 'border-accent bg-accent text-accent-fg'
@@ -286,7 +319,7 @@ export function SettingsScreen() {
         </h2>
         <Karte>
           <Zeile
-            label={`${formatBeckenlaenge(konfiguration.beckenlaengeM, einheit)}-Becken · ${app.einstellungen.bahnen} Bahnen`}
+            label={`${formatBeckenlaenge(konfiguration.beckenlaengeM, einheit)}-Becken · ${streckeText}`}
             wert={naechsterLauf}
             onClick={() => setSheet(true)}
           />
@@ -298,7 +331,7 @@ export function SettingsScreen() {
         <Karte>
           <Zeile
             label="Ergebnisse als CSV"
-            wert={`${app.laeufe.length} Läufe`}
+            wert={`${begonneneLaeufe} ${begonneneLaeufe === 1 ? 'Lauf' : 'Läufe'}`}
             onClick={exportiereCsv}
             icon={<DownloadIcon className="h-5 w-5" />}
           />
@@ -449,7 +482,7 @@ export function SettingsScreen() {
       <Bestaetigung
         open={frageLoeschen}
         titel="Alle Daten löschen?"
-        text={`Schwimmer, Trainings, Wettkämpfe, Läufe und Sätze werden dauerhaft von diesem Gerät entfernt.${
+        text={`Schwimmer, Trainings, Sätze und Läufe werden dauerhaft von diesem Gerät entfernt.${
           app.brauchtTakt ? ' Eine laufende Messung wird dabei beendet.' : ''
         }`}
         bestaetigenLabel="Alles löschen"

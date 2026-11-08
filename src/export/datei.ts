@@ -16,8 +16,8 @@
  * Teilt oder lädt eine Datei. Auf iOS führt das über das Share-Sheet.
  *
  * @param dateiname Sichtbarer Dateiname inklusive Endung.
- * @param inhalt Vollständiger Dateiinhalt als Text (CSV oder JSON).
- * @param mime MIME-Typ, z. B. `text/csv;charset=utf-8`.
+ * @param inhalt Vollständiger Dateiinhalt als Text oder Bytes (CSV, JSON, PDF).
+ * @param mime MIME-Typ, z. B. `text/csv;charset=utf-8` oder `application/pdf`.
  *
  * Ablauf: Zuerst wird geprüft, ob der Browser genau diese Datei teilen kann.
  * Wenn ja, öffnet `navigator.share` das Share-Sheet. Ein Abbruch durch den
@@ -26,7 +26,7 @@
  */
 export async function speichereDatei(
   dateiname: string,
-  inhalt: string,
+  inhalt: BlobPart,
   mime: string,
 ): Promise<void> {
   // `File` trägt den Namen und wird von der Share-API verlangt; `Blob` dient

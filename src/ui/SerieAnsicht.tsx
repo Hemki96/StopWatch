@@ -96,6 +96,7 @@ function Zeile({
   // Siehe LaneTile: echter Pointer/Klick ist bereits verarbeitet, ein reiner
   // Klick ohne vorherige Eingabe kommt von VoiceOver/TalkBack.
   const klickRef = useRef(false)
+  const klickTimerRef = useRef<number | null>(null)
 
   // Ein laufender Langdruck darf nach dem Unmount keinen Anschlag mehr
   // zurücknehmen (Tab-Wechsel während des Haltens).
@@ -103,6 +104,7 @@ function Zeile({
     () => () => {
       const press = pressRef.current
       if (press) window.clearTimeout(press.timer)
+      if (klickTimerRef.current !== null) window.clearTimeout(klickTimerRef.current)
     },
     [],
   )
@@ -111,8 +113,10 @@ function Zeile({
 
   const merkeKlick = () => {
     klickRef.current = true
-    window.setTimeout(() => {
+    if (klickTimerRef.current !== null) window.clearTimeout(klickTimerRef.current)
+    klickTimerRef.current = window.setTimeout(() => {
       klickRef.current = false
+      klickTimerRef.current = null
     }, 0)
   }
 
@@ -417,7 +421,7 @@ function Zeile({
         {kannRueckgaengig && gedrueckt ? (
           <span
             data-haltend="true"
-            className="pointer-events-none absolute inset-x-3 top-1/2 flex -translate-y-1/2 flex-col items-center gap-1 rounded-lg bg-warn px-2 py-1.5 text-center text-[10px] font-bold text-black"
+            className="pointer-events-none absolute inset-x-3 top-1/2 flex -translate-y-1/2 flex-col items-center gap-1 rounded-lg bg-warn px-2 py-1.5 text-center text-[10px] font-bold text-warn-fg"
           >
             Halten: Anschlag zurücknehmen
             {reduzierteBewegung ? null : (
@@ -451,7 +455,7 @@ function Zeile({
             haptic(8)
             onFinish(zeile.index, performance.now(), Date.now())
           }}
-          className="mr-3 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center self-center rounded-lg bg-ok px-2.5 py-2 text-[10px] font-bold text-black rail:mr-4"
+          className="mr-3 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center self-center rounded-lg bg-ok px-2.5 py-2 text-[10px] font-bold text-ok-fg rail:mr-4"
         >
           Ziel
         </button>

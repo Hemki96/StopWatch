@@ -28,11 +28,12 @@ import { istSerie, warnungSeriePlan } from '../domain/serie'
 import { MAX_BAHNEN, MAX_REIHEN, bahnenGesamt, ordneAktiveUm } from '../domain/training'
 import { type Beckenlaenge, type LaufKonfiguration } from '../domain/types'
 import { Chip, Feld, TaktWahl, ZwischenzeitenWahl } from './Felder'
+import { SchwimmerSchnellwahl } from './SchwimmerSchnellwahl'
 import { Sheet } from './Sheet'
 
 // Feste Auswahlwerte der Chips. Ein bereits gesetzter, hier nicht enthaltener
 // Wert (z. B. aus einem Backup) wird später ergänzt, damit er sichtbar bleibt.
-const STRECKEN = [50, 100, 200, 400, 800, 1500] as const
+const STRECKEN = [25, 50, 100, 200, 400, 800, 1500] as const
 
 const VERSATZE = [0, 5_000, 10_000, 15_000, 20_000, 30_000] as const
 
@@ -101,6 +102,15 @@ export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetP
   ).join(' · ')
   const reihenGemeinsam =
     modus === 'einstellungen' && app.einstellungen.reihen > 1 && startversatzMs === 0
+
+  // Ohne angelegte Schwimmer gäbe es nur leere Auswahlfelder. Ein einzelner
+  // Hinweis nennt den nächsten Schritt, statt eine Sackgasse zu zeigen.
+  const keineSchwimmer = (
+    <p className="rounded-xl bg-surface2 px-3 py-3 text-xs leading-relaxed text-muted">
+      Noch keine Schwimmer angelegt. Lege sie im Tab „Schwimmer“ an; danach lassen sie sich hier
+      je Bahn zuordnen. Der Lauf startet auch ohne Namen.
+    </p>
+  )
 
   /** Übernimmt eine Änderung nur, wenn die Kombination gültig bleibt. */
   const aendere = (teil: Partial<LaufKonfiguration>) => {
@@ -360,95 +370,125 @@ export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetP
 
       {modus === 'lauf' && lauf ? (
         <Feld label="Schwimmer">
-          {/* Bei einer Serie gilt die Zuordnung zeilenweise für alle Runden;
-              darum schreibt die Auswahl über `setzeSchwimmerSerie`. */}
-          <div className="space-y-3">
-            {bahnenNachReihen(lauf.bahnen).map((gruppe) => (
-              <div key={gruppe.reihe} className="space-y-2">
-                {reihenVon(lauf) > 1 ? (
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-muted">
-                    Reihe {gruppe.reihe}
-                  </p>
-                ) : null}
-                {gruppe.bahnen.map((bahn) => {
-                  const index = lauf.bahnen.indexOf(bahn)
-                  return (
-                    <div key={bahn.id} className="flex items-center gap-3">
-                      <span className="tabular w-6 text-sm text-muted">{bahn.nummer}</span>
-                      <select
-                        value={bahn.schwimmerId ?? ''}
-                        onChange={(e) =>
-                          serie
-                            ? app.setzeSchwimmerSerie(index, e.target.value || null)
-                            : app.setzeSchwimmer(bahn.id, e.target.value || null)
-                        }
-                        aria-label={`Schwimmer für Reihe ${bahn.reihe}, Bahn ${bahn.nummer}`}
-                        className="h-11 flex-1 rounded-xl border border-line bg-surface2 px-3 text-sm"
-                      >
-                        <option value="">— kein Schwimmer —</option>
-                        {app.schwimmer.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )
-                })}
-              </div>
-            ))}
-          </div>
           {app.schwimmer.length === 0 ? (
-            <p className="mt-2 text-xs text-muted">
-              Noch keine Schwimmer angelegt. Das geht im Tab „Schwimmer“.
-            </p>
-          ) : null}
+            keineSchwimmer
+          ) : (
+            <>
+              <SchwimmerSchnellwahl
+                schwimmer={app.schwimmer}
+                zuordnung={lauf.bahnen.map((bahn) => bahn.schwimmerId)}
+                onAendern={(schwimmerId, platz) => {
+                  const bahn = lauf.bahnen[platz]
+                  if (!bahn) return
+                  // Bei einer Serie gilt die Zuordnung zeilenweise für alle
+                  // Runden; der Platz ist der Index in der Bahnliste.
+                  if (serie) app.setzeSchwimmerSerie(platz, schwimmerId)
+                  else app.setzeSchwimmer(bahn.id, schwimmerId)
+                }}
+              />
+              <div className="space-y-3">
+                {bahnenNachReihen(lauf.bahnen).map((gruppe) => (
+                  <div key={gruppe.reihe} className="space-y-2">
+                    {reihenVon(lauf) > 1 ? (
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-muted">
+                        Reihe {gruppe.reihe}
+                      </p>
+                    ) : null}
+                    {gruppe.bahnen.map((bahn) => {
+                      const index = lauf.bahnen.indexOf(bahn)
+                      return (
+                        <div key={bahn.id} className="flex items-center gap-3">
+                          <span className="tabular w-6 text-sm text-muted">{bahn.nummer}</span>
+                          <select
+                            value={bahn.schwimmerId ?? ''}
+                            onChange={(e) =>
+                              serie
+                                ? app.setzeSchwimmerSerie(index, e.target.value || null)
+                                : app.setzeSchwimmer(bahn.id, e.target.value || null)
+                            }
+                            aria-label={`Schwimmer für Reihe ${bahn.reihe}, Bahn ${bahn.nummer}`}
+                            className="h-11 flex-1 rounded-xl border border-line bg-surface2 px-3 text-sm"
+                          >
+                            <option value="">— kein Schwimmer —</option>
+                            {app.schwimmer.map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {s.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </Feld>
       ) : (
         <Feld label="Schwimmer für den nächsten Lauf">
-          {/* Die Vorgabenliste gehört zu den Einstellungen und wird in der
-              Länge von Bahnen × Reihen angezeigt, Reihe für Reihe. */}
-          <div className="space-y-3">
-            {Array.from({ length: app.einstellungen.reihen }, (_, reiheIndex) => (
-              <div key={reiheIndex} className="space-y-2">
-                {app.einstellungen.reihen > 1 ? (
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-muted">
-                    Reihe {reiheIndex + 1}
-                  </p>
-                ) : null}
-                {Array.from({ length: app.einstellungen.bahnen }, (_, bahnIndex) => {
-                  const index = reiheIndex * app.einstellungen.bahnen + bahnIndex
-                  return (
-                    <div key={index} className="flex items-center gap-3">
-                      <span className="tabular w-6 text-sm text-muted">{bahnIndex + 1}</span>
-                      <select
-                        value={app.einstellungen.schwimmerProBahn[index] ?? ''}
-                        onChange={(e) => {
-                          const liste = [...app.einstellungen.schwimmerProBahn]
-                          liste[index] = e.target.value || null
-                          app.setzeEinstellungen({ ...app.einstellungen, schwimmerProBahn: liste })
-                        }}
-                        aria-label={`Schwimmer für Reihe ${reiheIndex + 1}, Bahn ${bahnIndex + 1}`}
-                        className="h-11 flex-1 rounded-xl border border-line bg-surface2 px-3 text-sm"
-                      >
-                        <option value="">— kein Schwimmer —</option>
-                        {app.schwimmer.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )
-                })}
-              </div>
-            ))}
-          </div>
           {app.schwimmer.length === 0 ? (
-            <p className="mt-2 text-xs text-muted">
-              Noch keine Schwimmer angelegt. Das geht im Tab „Schwimmer“.
-            </p>
-          ) : null}
+            keineSchwimmer
+          ) : (
+            <>
+              <SchwimmerSchnellwahl
+                schwimmer={app.schwimmer}
+                // Auf die volle Platzanzahl auffüllen: Ein importierter oder
+                // älterer Bestand kann kürzer sein, ohne dass die Plätze fehlen.
+                zuordnung={Array.from(
+                  { length: app.einstellungen.bahnen * app.einstellungen.reihen },
+                  (_, index) => app.einstellungen.schwimmerProBahn[index] ?? null,
+                )}
+                onAendern={(schwimmerId, platz) => {
+                  const liste = Array.from(
+                    { length: app.einstellungen.bahnen * app.einstellungen.reihen },
+                    (_, index) => app.einstellungen.schwimmerProBahn[index] ?? null,
+                  )
+                  liste[platz] = schwimmerId
+                  app.setzeEinstellungen({ ...app.einstellungen, schwimmerProBahn: liste })
+                }}
+              />
+              <div className="space-y-3">
+                {Array.from({ length: app.einstellungen.reihen }, (_, reiheIndex) => (
+                  <div key={reiheIndex} className="space-y-2">
+                    {app.einstellungen.reihen > 1 ? (
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-muted">
+                        Reihe {reiheIndex + 1}
+                      </p>
+                    ) : null}
+                    {Array.from({ length: app.einstellungen.bahnen }, (_, bahnIndex) => {
+                      const index = reiheIndex * app.einstellungen.bahnen + bahnIndex
+                      return (
+                        <div key={index} className="flex items-center gap-3">
+                          <span className="tabular w-6 text-sm text-muted">{bahnIndex + 1}</span>
+                          <select
+                            value={app.einstellungen.schwimmerProBahn[index] ?? ''}
+                            onChange={(e) => {
+                              const liste = [...app.einstellungen.schwimmerProBahn]
+                              liste[index] = e.target.value || null
+                              app.setzeEinstellungen({
+                                ...app.einstellungen,
+                                schwimmerProBahn: liste,
+                              })
+                            }}
+                            aria-label={`Schwimmer für Reihe ${reiheIndex + 1}, Bahn ${bahnIndex + 1}`}
+                            className="h-11 flex-1 rounded-xl border border-line bg-surface2 px-3 text-sm"
+                          >
+                            <option value="">— kein Schwimmer —</option>
+                            {app.schwimmer.map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {s.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </Feld>
       )}
 

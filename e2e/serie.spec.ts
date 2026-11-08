@@ -35,6 +35,8 @@ async function oeffneMitEinstellungen(
   page: Page,
   einstellungen: {
     bahnen: number
+    /** Beckenlänge in Metern; fehlt sie, gilt ein 50-m-Becken. */
+    beckenlaengeM?: number
     /** Reihen; fehlt sie, startet alles in einer Reihe. */
     reihen?: number
     streckeM: number | null
@@ -49,7 +51,7 @@ async function oeffneMitEinstellungen(
         'beckenrand.v2.einstellungen',
         JSON.stringify({
           konfiguration: {
-            beckenlaengeM: 50,
+            beckenlaengeM: werte.beckenlaengeM ?? 50,
             streckeM: werte.streckeM,
             schwimmart: 'freistil',
           },
@@ -84,7 +86,7 @@ async function langdruck(page: Page, ziel: Locator): Promise<void> {
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
   await page.mouse.down()
   await expect(ziel.locator('[data-haltend="true"]')).toBeVisible()
-  await page.waitForTimeout(550)
+  await expect(ziel.locator('[data-haltend="true"]')).toHaveCount(0)
   await page.mouse.up()
 }
 
@@ -124,7 +126,7 @@ test('Startversatz hält spätere Reihen im Countdown und mehrere Läufe bleiben
   // Leiste stellt den zuletzt angelegten Lauf nach vorn, deshalb ist `nth(1)`
   // der zuvor gestartete Lauf — mit laufender Reihe 1 und geplanter Reihe 2.
   await expect(page.getByRole('button', { name: 'Start alle', exact: true })).toBeVisible()
-  await chips.nth(1).tap()
+  await chips.filter({ hasText: 'läuft' }).tap()
   await expect(
     page.getByRole('button', { name: /Reihe 1, Bahn 1, läuft$/ }),
   ).toHaveAttribute('data-status', 'laeuft')
@@ -166,6 +168,32 @@ test('nimmt nach einem Reload fehlende Starts einer angefangenen Runde wieder au
 
   await expect(
     page.getByRole('button', { name: /Bahn 2, Runde 1 von 2, läuft$/ }),
+  ).toBeVisible()
+})
+
+// Nutzerreise: 4×25 m im 25-m-Becken. Jede Runde ist genau eine Länge, also
+// gibt es keine Zwischenzeit: Ein Tap auf die Zeile ist sofort das Ziel.
+test('Serie über 25 m beendet jede Runde ohne Zwischenzeit mit einem Tap', async ({ page }) => {
+  await oeffneMitEinstellungen(page, {
+    bahnen: 1,
+    beckenlaengeM: 25,
+    streckeM: 25,
+    startversatzMs: 0,
+    wiederholungen: 4,
+    taktSek: 10,
+  })
+
+  await starteLauf(page)
+  await expect(page.getByText(/25 m · 4×25 m · 1 Bahn/)).toBeVisible()
+
+  const runde1 = page.getByRole('button', { name: /Bahn 1, Runde 1 von 4, läuft$/ })
+  await expect(runde1).toBeVisible()
+  // Ein einziger Tap schließt die 25-m-Runde ab; „1/1 Zwischenzeiten“ darf
+  // dabei nicht erscheinen.
+  await runde1.tap()
+  await expect(page.getByText('1 von 4 Runden vollständig')).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: /Bahn 1, Runde 2 von 4, wartet auf Start$/ }),
   ).toBeVisible()
 })
 

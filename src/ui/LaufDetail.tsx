@@ -26,10 +26,13 @@ import {
   pruefeAnschlagKorrektur,
   reihenVon,
 } from '../domain/lauf'
+import { trainingVonSatz, trainingsFortschritt } from '../domain/training'
 import { csvDateiname, laeufeAlsCsv } from '../export/csv'
 import { speichereDatei } from '../export/datei'
+import { trainingAlsMarkdown, trainingAlsPdf, trainingDateiname } from '../export/training'
 import { Bestaetigung } from './Bestaetigung'
 import { Dialog } from './Dialog'
+import { ExportSheet } from './ExportSheet'
 import { ChevronLeftIcon, DownloadIcon, PencilIcon, TrashIcon } from './icons'
 
 /** Tagesdatum des Laufs in der Kopfzeile, deutsch und kurz. */
@@ -62,6 +65,8 @@ export function LaufDetail({
   // Korrekturen sofort ankommen; fehlt er, wurde er inzwischen gelöscht.
   const lauf = app.laeufe.find((l) => l.id === laufId) ?? null
   const [frageLoeschen, setFrageLoeschen] = useState(false)
+  // Formatauswahl für den Export: Lauf als CSV, ganzes Training als PDF/MD.
+  const [exportOffen, setExportOffen] = useState(false)
   // Welcher Anschlag welcher Bahn gerade im Eingabefeld steht.
   const [bearbeitung, setBearbeitung] = useState<{
     bahnId: string
@@ -124,12 +129,35 @@ export function LaufDetail({
   const begonnen = hatBegonnen(lauf)
 
   // Ein einzelner Lauf als CSV, gleiche Spalten wie der Verlaufsexport.
-  const exportiere = () => {
+  const exportiereLauf = () => {
+    setExportOffen(false)
     const csv = laeufeAlsCsv([lauf], app.satze, app.schwimmer)
     // Ein fehlgeschlagener Export soll nicht stumm bleiben.
     void speichereDatei(csvDateiname(), csv, 'text/csv;charset=utf-8').catch(() =>
       app.zeigeToast('Export fehlgeschlagen.'),
     )
+  }
+
+  // Gehört der Lauf zu einem Training, lässt sich die ganze Einheit exportieren.
+  // Der Plan kann inzwischen gelöscht sein; dann bleibt nur der Lauf-Export.
+  const training = trainingVonSatz(app.trainings, lauf.satzId)
+  const trainingFortschritt = training
+    ? trainingsFortschritt(training, app.satze, app.laeufe)
+    : null
+
+  /** Schreibt alle Sätze und Runden des Trainings als PDF oder Markdown. */
+  const exportiereTraining = (format: 'pdf' | 'md') => {
+    if (!training || !trainingFortschritt) return
+    setExportOffen(false)
+    const inhalt =
+      format === 'pdf'
+        ? trainingAlsPdf(training, trainingFortschritt, app.schwimmer)
+        : trainingAlsMarkdown(training, trainingFortschritt, app.schwimmer)
+    void speichereDatei(
+      trainingDateiname(training, format),
+      inhalt,
+      format === 'pdf' ? 'application/pdf' : 'text/markdown;charset=utf-8',
+    ).catch(() => app.zeigeToast('Export fehlgeschlagen.'))
   }
 
   return (
@@ -144,7 +172,7 @@ export function LaufDetail({
     >
       <header className="shrink-0 border-b border-line">
         <div className="mx-auto flex w-full max-w-5xl items-center gap-1 px-2 py-2 rail:px-4">
-        {/* Kopfzeile: zurück zum Verlauf, CSV-Export und Löschen. Die
+        {/* Kopfzeile: zurück zum Verlauf, Export-Auswahl und Löschen. Die
             Icon-Knöpfe tragen ein aria-label, weil das Symbol allein nichts
             vorlesbares enthält. Der Rückweg bekommt beim Öffnen den Fokus. */}
         <button
@@ -152,7 +180,7 @@ export function LaufDetail({
           type="button"
           onClick={onClose}
           aria-label={zurueck.aria}
-          className="flex h-10 items-center gap-1 rounded-xl px-2 text-sm font-medium text-accent"
+          className="flex h-11 items-center gap-1 rounded-xl px-2 text-sm font-medium text-accent"
         >
           <ChevronLeftIcon className="h-5 w-5" />
           {zurueck.label}
@@ -160,9 +188,9 @@ export function LaufDetail({
         <div className="flex-1" />
         <button
           type="button"
-          onClick={exportiere}
-          aria-label="Als CSV exportieren"
-          className="grid h-10 w-10 place-items-center rounded-xl text-muted"
+          onClick={() => setExportOffen(true)}
+          aria-label="Exportieren"
+          className="grid h-11 w-11 place-items-center rounded-xl text-muted"
         >
           <DownloadIcon className="h-5 w-5" />
         </button>
@@ -170,7 +198,7 @@ export function LaufDetail({
           type="button"
           onClick={() => setFrageLoeschen(true)}
           aria-label="Lauf löschen"
-          className="grid h-10 w-10 place-items-center rounded-xl text-muted"
+          className="grid h-11 w-11 place-items-center rounded-xl text-muted"
         >
           <TrashIcon className="h-5 w-5" />
         </button>
@@ -185,7 +213,8 @@ export function LaufDetail({
           {lauf.startWallMs ? `${zeitFormat.format(lauf.startWallMs)} Uhr` : 'ohne Startzeit'}
         </p>
         <h1 id={titelId} className="mt-1 text-xl font-semibold">
-          {lauf.bahnen.length} {reihenVon(lauf) > 1 ? 'Personen' : 'Bahnen'} ·{' '}
+          {lauf.bahnen.length}{' '}
+          {reihenVon(lauf) > 1 ? 'Personen' : lauf.bahnen.length === 1 ? 'Bahn' : 'Bahnen'} ·{' '}
           {formatStrecke(lauf.konfiguration.streckeM, einheit)}
         </h1>
         <p className="text-sm text-muted">
@@ -347,11 +376,11 @@ export function LaufDetail({
                                     ? `Zeit für Zwischenzeit ${anschlag.laengeNr}`
                                     : `Zeit für Länge ${anschlag.laengeNr}`
                                 }
-                                className="tabular h-8 min-w-0 flex-1 rounded-md border border-line bg-surface2 px-2"
+                                className="tabular h-10 min-w-0 flex-1 rounded-md border border-line bg-surface2 px-2"
                               />
                               <button
                                 type="submit"
-                                className="h-8 rounded-md bg-accent px-2 font-bold text-accent-fg"
+                                className="h-10 rounded-md bg-accent px-3 font-bold text-accent-fg"
                               >
                                 OK
                               </button>
@@ -361,7 +390,7 @@ export function LaufDetail({
                                   setBearbeitung(null)
                                   setKorrekturFehler(null)
                                 }}
-                                className="h-8 rounded-md px-2 text-muted"
+                                className="h-10 rounded-md px-3 text-muted"
                               >
                                 Abbrechen
                               </button>
@@ -396,7 +425,7 @@ export function LaufDetail({
                                   })
                                   setKorrekturFehler(null)
                                 }}
-                                className="grid h-7 w-7 place-items-center rounded-md text-muted"
+                                className="grid h-11 w-11 place-items-center rounded-md text-muted"
                               >
                                 <PencilIcon className="h-3.5 w-3.5" />
                               </button>
@@ -430,6 +459,38 @@ export function LaufDetail({
           })}
         </ul>
       </div>
+
+      <ExportSheet
+        open={exportOffen}
+        titel="Exportieren"
+        text={
+          training
+            ? 'Der Lauf lässt sich einzeln sichern. Das ganze Training enthält zusätzlich alle anderen Sätze und Runden.'
+            : 'Der Lauf wird mit allen Bahnen und Anschlägen als Tabelle gesichert.'
+        }
+        onClose={() => setExportOffen(false)}
+        aktionen={[
+          {
+            label: 'Lauf als CSV',
+            beschreibung: 'Eine Zeile pro Anschlag, für Excel und andere Auswertungen.',
+            onWaehlen: exportiereLauf,
+          },
+          ...(training
+            ? [
+                {
+                  label: 'Ganzes Training als PDF',
+                  beschreibung: 'Alle Sätze mit Aktiven, Runden, Zeiten und Splits.',
+                  onWaehlen: () => exportiereTraining('pdf'),
+                },
+                {
+                  label: 'Ganzes Training als Markdown',
+                  beschreibung: 'Derselbe Bericht als lesbarer Text zum Weiterbearbeiten.',
+                  onWaehlen: () => exportiereTraining('md'),
+                },
+              ]
+            : []),
+        ]}
+      />
 
       {/* Löschen entfernt den Lauf endgültig; nach dem Bestätigen schließt die
           Detailansicht, weil ihr Lauf nicht mehr existiert. */}

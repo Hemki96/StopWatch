@@ -220,12 +220,13 @@ wenn sie zur selben Strecke und Beckenlänge gehören.
 
 ## CSV-Export
 
-Es gibt drei Wege:
+Es gibt diese Wege:
 
 | Ort | Umfang |
 | --- | --- |
 | **Mehr → Ergebnisse als CSV** | alle Läufe |
-| **Lauf-Detail → Download** | genau dieser Lauf |
+| **Lauf-Detail → Download → Lauf als CSV** | genau dieser Lauf |
+| **Lauf-Detail → Download → Ganzes Training** | PDF oder Markdown aller Sätze des Trainings |
 
 ### Trainings-CSV: eine Zeile pro Anschlag
 

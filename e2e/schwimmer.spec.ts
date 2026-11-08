@@ -33,7 +33,7 @@ async function legeSchwimmerAn(page: Page, name: string): Promise<void> {
  */
 async function ordneZuUndMesse(page: Page, name: string): Promise<void> {
   await page.getByRole('button', { name: 'Timer' }).tap()
-  await page.getByRole('button', { name: /m ·/ }).first().click()
+  await page.getByRole('button', { name: /50 m · 100 m · 6 Bahnen/ }).click()
   const dialog = page.getByRole('dialog')
   await dialog.getByLabel('Schwimmer für Reihe 1, Bahn 1').selectOption({ label: name })
   await dialog.getByRole('button', { name: 'Schließen', exact: true }).click()
@@ -42,7 +42,9 @@ async function ordneZuUndMesse(page: Page, name: string): Promise<void> {
   const bahn = page.getByRole('button', { name: new RegExp(`Bahn 1, ${name}, läuft$`) })
   await expect(bahn).toBeVisible()
   await bahn.dispatchEvent('click')
-  await page.waitForTimeout(120)
+  await expect(bahn).toHaveAttribute('data-anschlaege', '1')
+  const laufzeitVorZweitemSchwimmer = Number(await page.locator('[data-laufzeit]').getAttribute('data-laufzeit'))
+  await expect.poll(async () => Number(await page.locator('[data-laufzeit]').getAttribute('data-laufzeit'))).toBeGreaterThan(laufzeitVorZweitemSchwimmer)
   await bahn.dispatchEvent('click')
   await expect(
     page.getByRole('button', { name: new RegExp(`Bahn 1, ${name}, im Ziel$`) }),
@@ -105,4 +107,19 @@ test('öffnet aus einer Trainings-Bestzeit den Lauf und kehrt zum selben Schwimm
   await page.getByRole('button', { name: 'Zurück zu den Schwimmern' }).click()
   await expect(mia.getByRole('button', { expanded: true })).toBeVisible()
   await expect(bestzeit).toBeVisible()
+})
+
+// Nutzerreise: Ohne Einträge führt der Leerzustand direkt in das Formular,
+// statt den kleinen Plus-Knopf im Kopf suchen zu lassen.
+test('legt aus dem leeren Zustand direkt einen Schwimmer an', async ({ page }) => {
+  await oeffneApp(page)
+  await page.getByRole('button', { name: 'Schwimmer' }).tap()
+  await expect(page.getByText('Noch keine Schwimmer.')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Schwimmer anlegen' }).tap()
+  await expect(page.getByRole('dialog')).toContainText('Neuer Schwimmer')
+  await page.getByLabel('Name').fill('Mia')
+  await page.getByRole('button', { name: 'Speichern' }).tap()
+
+  await expect(page.getByText('Mia')).toBeVisible()
 })

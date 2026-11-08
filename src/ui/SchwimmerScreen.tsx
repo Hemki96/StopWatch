@@ -66,8 +66,11 @@ function beschreibeGruppe(lauf: Lauf): string {
  * Eine Zeit zählt nur, wenn die Bahn dem Schwimmer gehört und einen
  * Zielanschlag hat. Innerhalb einer Gruppe stehen die Zeiten chronologisch.
  */
-function bestzeitenFuer(schwimmerId: string, laeufe: Lauf[]): BestzeitenGruppe[] {
-  const pbs = berechnePbs(laeufe)
+function bestzeitenFuer(
+  schwimmerId: string,
+  laeufe: Lauf[],
+  pbs: ReturnType<typeof berechnePbs>,
+): BestzeitenGruppe[] {
   const gruppen = new Map<string, BestzeitenGruppe>()
 
   for (const lauf of laeufe) {
@@ -346,15 +349,14 @@ export function SchwimmerScreen() {
 
   // Anzeigezeilen in einem Durchlauf: Schwimmer, ob je einer Bahn zugeordnet
   // und die daraus berechneten Bestzeiten-Gruppen.
-  const eintraege = useMemo(
-    () =>
-      app.schwimmer.map((schwimmer) => ({
-        schwimmer,
-        hatBahn: zugeordnet.has(schwimmer.id),
-        gruppen: bestzeitenFuer(schwimmer.id, app.laeufe),
-      })),
-    [app.schwimmer, app.laeufe, zugeordnet],
-  )
+  const eintraege = useMemo(() => {
+    const pbs = berechnePbs(app.laeufe)
+    return app.schwimmer.map((schwimmer) => ({
+      schwimmer,
+      hatBahn: zugeordnet.has(schwimmer.id),
+      gruppen: bestzeitenFuer(schwimmer.id, app.laeufe, pbs),
+    }))
+  }, [app.schwimmer, app.laeufe, zugeordnet])
 
   return (
     <div className="flex h-full flex-col">
@@ -377,9 +379,20 @@ export function SchwimmerScreen() {
 
       <div className="flex-1 overflow-y-auto px-4 pb-8 pt-3 rail:px-6">
         {app.schwimmer.length === 0 ? (
-          <p className="mt-16 text-center text-sm text-muted">
-            Noch keine Schwimmer. Lege Namen an, um Bahnen zuzuordnen.
-          </p>
+          // Der leere Zustand führt direkt zur einzigen sinnvollen Aktion;
+          // der Plus-Knopf im Kopf bleibt als zweiter Weg erhalten.
+          <div className="mt-16 px-4 text-center">
+            <p className="text-sm text-muted">
+              Noch keine Schwimmer. Lege Namen an, um Bahnen zuzuordnen.
+            </p>
+            <button
+              type="button"
+              onClick={() => setBearbeitung({ modus: 'neu' })}
+              className="mt-4 h-12 rounded-xl bg-accent px-5 text-sm font-semibold text-accent-fg"
+            >
+              Schwimmer anlegen
+            </button>
+          </div>
         ) : null}
 
         <ul className="grid grid-cols-1 items-start gap-2 rail:grid-cols-2">
@@ -421,7 +434,7 @@ export function SchwimmerScreen() {
                     type="button"
                     onClick={() => setBearbeitung({ modus: 'bearbeiten', schwimmer })}
                     aria-label={`${schwimmer.name} bearbeiten`}
-                    className="mr-2 h-10 rounded-lg px-2 text-xs font-medium text-accent"
+                    className="mr-1 h-11 rounded-lg px-2 text-xs font-medium text-accent"
                   >
                     Bearbeiten
                   </button>

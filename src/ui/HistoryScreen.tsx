@@ -7,7 +7,7 @@
  * ganzen Satz samt Läufen. Die Daten kommen aus app/AppProvider, die
  * Zeit- und Vollständigkeitsprüfungen aus domain/lauf und domain/analyse.
  */
-import { lazy, Suspense, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../app/AppProvider'
 import { hatBegonnen, isComplete } from '../domain/lauf'
 import { istAnalyseSatzAusRunden, schnellsteZeit } from '../domain/analyse'
@@ -73,13 +73,39 @@ interface Gruppe {
  * Löschen je Satz. Die Ansicht selbst rechnet nicht; sie fasst nur zusammen,
  * was der App-Kontext bereits geladen hat.
  */
-export function HistoryScreen() {
+export function HistoryScreen({
+  onZumTimer,
+  initialLaufId,
+}: {
+  onZumTimer?: () => void
+  /** Lauf, der beim Öffnen des Verlaufs direkt im Detail erscheint. */
+  initialLaufId?: string | null
+}) {
   const app = useApp()
   // Umschalter zwischen Verlauf und Analyse. Bewusst nur lokal: Die Wahl ist
   // keine Messdaten-Entscheidung und muss einen Neustart nicht überleben.
   const [bereich, setBereich] = useState<'verlauf' | 'analyse'>('verlauf')
-  // Öffnet das Vollbild-Detail eines Laufs; `null` heißt geschlossen.
-  const [offenerLauf, setOffenerLauf] = useState<string | null>(null)
+  // Öffnet das Vollbild-Detail eines Laufs; `null` heißt geschlossen. Ein Lauf,
+  // der aus dem Timer kommt, wird beim ersten Rendern direkt geöffnet.
+  const [offenerLauf, setOffenerLauf] = useState<string | null>(initialLaufId ?? null)
+  // Merkt, welche Lauf-ID bereits als Auftrag verarbeitet wurde, damit ein
+  // geschlossenes Detail nicht durch denselben Wert erneut geöffnet wird.
+  const verarbeitetRef = useRef<string | null>(initialLaufId ?? null)
+
+  // Ein neuer Auftrag aus dem Timer öffnet das Detail auch dann, wenn der
+  // Verlauf bereits montiert ist. Der Wert bleibt stehen, bis der Trainer den
+  // Lauf schließt; ein erneutes Setzen derselben ID öffnet ihn nicht erneut.
+  useEffect(() => {
+    if (initialLaufId) {
+      if (initialLaufId !== verarbeitetRef.current) {
+        verarbeitetRef.current = initialLaufId
+        setOffenerLauf(initialLaufId)
+      }
+    } else {
+      verarbeitetRef.current = null
+      setOffenerLauf(null)
+    }
+  }, [initialLaufId])
   // Inline-Umbenennen einer Satzbezeichnung, inklusive aktuellem Eingabewert.
   const [satzEdit, setSatzEdit] = useState<{ id: string; wert: string } | null>(null)
   // Inline-Umbenennen der Tagesüberschrift; der Name gilt für alle Sätze des
@@ -158,7 +184,10 @@ export function HistoryScreen() {
   const tagesNamen = useMemo(() => tagesnamen(app.satze), [app.satze])
 
   // Kopfzeile zählt nur begonnene Läufe, nicht die geplanten Runden.
-  const begonneneLaeufe = app.laeufe.filter((lauf) => hatBegonnen(lauf)).length
+  const begonneneLaeufe = useMemo(
+    () => app.laeufe.filter((lauf) => hatBegonnen(lauf)).length,
+    [app.laeufe],
+  )
   // Einmal gruppieren statt je Satz alle Läufe zu filtern; der Kopf wird auch
   // beim Wechsel auf „Analyse“ neu gerendert (#68).
   const auswertbareSaetze = useMemo(() => {
@@ -197,9 +226,14 @@ export function HistoryScreen() {
             <button
               key={wert}
               type="button"
-              onClick={() => setBereich(wert)}
+              onClick={() => {
+                setBereich(wert)
+                // Der Analyse-Bereich schließt ein offenes Detail; sonst
+                // erschiene es beim Zurückwechseln unerwartet wieder.
+                if (wert === 'analyse') setOffenerLauf(null)
+              }}
               aria-pressed={bereich === wert}
-              className={`h-9 rounded-lg text-xs font-semibold transition-colors ${
+              className={`min-h-11 rounded-lg text-xs font-semibold transition-colors ${
                 bereich === wert ? 'bg-accent text-accent-fg' : 'text-muted'
               }`}
             >
@@ -211,14 +245,27 @@ export function HistoryScreen() {
 
       {bereich === 'analyse' ? (
         <Suspense fallback={<BereichLadezustand text="Analyse wird geladen …" />}>
-          <AnalyseScreen />
+          <AnalyseScreen onZumTimer={onZumTimer} />
         </Suspense>
       ) : (
       <div className="flex-1 overflow-y-auto px-4 pb-8 pt-3 rail:px-6">
         {gruppen.length === 0 ? (
-          <p className="mt-16 text-center text-sm text-muted">
-            Noch keine Messungen. Starte den ersten Lauf im Tab „Timer“.
-          </p>
+          // Der Leerzustand nennt nicht nur den Timer, sondern führt direkt
+          // dorthin: Ein Hinweis ohne Knopf wäre ein zusätzlicher Suchschritt.
+          <div className="mt-16 px-4 text-center">
+            <p className="text-sm text-muted">Noch keine Messungen.</p>
+            {onZumTimer ? (
+              <button
+                type="button"
+                onClick={onZumTimer}
+                className="mt-4 h-12 rounded-xl bg-accent px-5 text-sm font-semibold text-accent-fg"
+              >
+                Zum Timer
+              </button>
+            ) : (
+              <p className="mt-2 text-sm text-muted">Starte den ersten Lauf im Tab „Timer“.</p>
+            )}
+          </div>
         ) : null}
 
         <div className="grid grid-cols-1 items-start gap-6 rail:grid-cols-2">
@@ -263,7 +310,7 @@ export function HistoryScreen() {
                       ? `Tagesbezeichnung „${tagesNamen.get(gruppe.datum)}“ bearbeiten`
                       : 'Tag benennen'
                   }
-                  className="flex min-w-0 items-center gap-1 text-xs text-muted underline decoration-dotted underline-offset-2"
+                  className="flex min-h-11 min-w-0 items-center gap-1 text-xs text-muted underline decoration-dotted underline-offset-2"
                 >
                   <span className="truncate">
                     {tagesNamen.get(gruppe.datum)
@@ -296,9 +343,9 @@ export function HistoryScreen() {
                   type="button"
                   data-satzbezeichnung
                   onClick={() => setSatzEdit({ id: gruppe.id, wert: gruppe.titel })}
-                  className="min-w-0 truncate text-xs text-muted underline decoration-dotted underline-offset-2"
+                  className="flex min-h-11 min-w-0 items-center text-xs text-muted underline decoration-dotted underline-offset-2"
                 >
-                  {gruppe.titel}
+                  <span className="truncate">{gruppe.titel}</span>
                 </button>
               )}
               {/* Ein Takt weist den Satz als Serie aus. */}
@@ -314,8 +361,8 @@ export function HistoryScreen() {
                   onClick={() =>
                     setSatzLoeschen({ id: gruppe.id, anzahl: gruppe.laeufe.length })
                   }
-                  aria-label={`Satz löschen, ${gruppe.laeufe.length} Läufe`}
-                  className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-muted"
+                  aria-label={`Satz löschen, ${gruppe.laeufe.length} ${gruppe.laeufe.length === 1 ? 'Lauf' : 'Läufe'}`}
+                  className="grid h-11 w-11 shrink-0 place-items-center rounded-lg text-muted"
                 >
                   <TrashIcon className="h-4 w-4" />
                 </button>
@@ -339,7 +386,8 @@ export function HistoryScreen() {
                     >
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold">
-                          {lauf.bahnen.length} Bahnen ·{' '}
+                          {lauf.bahnen.length}{' '}
+                          {lauf.bahnen.length === 1 ? 'Bahn' : 'Bahnen'} ·{' '}
                           {formatStrecke(
                             lauf.konfiguration.streckeM,
                             einheitVon(lauf.konfiguration),

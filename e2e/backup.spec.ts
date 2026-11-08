@@ -110,7 +110,7 @@ test('Ungültiges Backup wird abgelehnt, ohne den Bestand zu ändern', async ({ 
   // Fußschließen; der letzte Treffer ist der sichtbare Abschlussknopf.
   await expect(page.getByText('Import nicht möglich')).toBeVisible()
   await expect(page.getByText(/Erwartet wird Version 3/)).toBeVisible()
-  await page.getByRole('button', { name: 'Schließen', exact: true }).last().click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Schließen', exact: true }).filter({ hasText: 'Schließen' }).click()
 
   // Gegenprobe: Der vor dem Import gemessene Lauf existiert weiter.
   await page.getByRole('button', { name: 'Verlauf' }).tap()

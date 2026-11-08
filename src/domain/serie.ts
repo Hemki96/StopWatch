@@ -98,7 +98,12 @@ export function bahnZeile(laeufe: Lauf[], index: number, now: number): BahnZeile
       letzte = { lauf, bahn }
       continue
     }
-    if (bahn.startMs === null) continue
+    if (bahn.startMs === null) {
+      // Unterbrochene Bahn (Splits ohne monotone Startzeit): Sie ist nicht
+      // fertig und bleibt sichtbar, statt übersprungen zu werden.
+      if (bahn.anschlaege.length > 0) offene.push({ lauf, bahn })
+      continue
+    }
     if (now < bahn.startMs) {
       // Nur die erste geplante Runde ist interessant; spätere liegen weiter
       // in der Zukunft und wären als Countdown irreführend.
@@ -180,13 +185,22 @@ export function aktuelleRunde(laeufe: Lauf[], now: number): number {
 export function letzterAnschlag(laeufe: Lauf[], index: number): BahnRunde | null {
   let treffer: BahnRunde | null = null
   let juengster = Number.NEGATIVE_INFINITY
+  let trefferRunde = Number.NEGATIVE_INFINITY
+  let trefferId = ''
   for (const lauf of laeufe) {
     const bahn = lauf.bahnen[index]
     const anschlag = bahn?.anschlaege.at(-1)
     if (!bahn || !anschlag) continue
-    // `>=` lässt bei identischem Zeitstempel die später iterierte Runde gewinnen.
-    if (anschlag.erfasstAt >= juengster) {
+    const rundeNr = lauf.wiederholung ?? 0
+    const istJuenger =
+      anschlag.erfasstAt > juengster ||
+      (anschlag.erfasstAt === juengster &&
+        (rundeNr > trefferRunde ||
+          (rundeNr === trefferRunde && lauf.id > trefferId)))
+    if (istJuenger) {
       juengster = anschlag.erfasstAt
+      trefferRunde = rundeNr
+      trefferId = lauf.id
       treffer = { lauf, bahn }
     }
   }

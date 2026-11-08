@@ -162,7 +162,7 @@ test('zeigt Satzliste, Matrix mit Referenz und Längenzeiten der Person', async 
   await expect(page.locator('[data-schnellste="true"]')).toHaveCount(2)
   await expect(page.locator('[data-abweichung="-2000"]')).toBeVisible()
   await expect(page.locator('[data-abweichung="3000"]')).toBeVisible()
-  await expect(page.getByText(/\+03,00/).first()).toBeVisible()
+  await expect(page.getByText(/\+03,00/)).toBeVisible()
 
   // Drill-down über die Personen-Zeile: Längenzeiten je Runde und Abweichung.
   await page.getByRole('button', { name: 'Anna, Bahn 1, Längenzeiten' }).tap()

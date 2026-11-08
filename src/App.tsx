@@ -110,10 +110,18 @@ export default function App() {
     brauchtTakt,
   } = useApp()
   const [tab, setTab] = useState<Tab>('timer')
+  // Lauf, der nach einem Wechsel in den Verlauf direkt geöffnet werden soll.
+  // Einmalig: Verlässt der Trainer den Verlauf, wird der Merker gelöscht,
+  // damit ein späterer Besuch wieder in der Liste beginnt.
+  const [verlaufLaufId, setVerlaufLaufId] = useState<string | null>(null)
   const [onboardingFertig, setOnboardingFertig] = useState(onboardingGemerkt)
   const [ladeHinweis, setLadeHinweis] = useState(false)
   const update = useServiceWorkerUpdate()
   const online = useOnlineStatus()
+
+  useEffect(() => {
+    if (tab !== 'verlauf') setVerlaufLaufId(null)
+  }, [tab])
 
   // Ein blockiertes IndexedDB-Upgrade (älterer Tab noch offen) würde sonst
   // dauerhaft bei „Wird geladen …“ stehen.
@@ -210,7 +218,7 @@ export default function App() {
             type="button"
             onClick={update.spaeter}
             aria-label="Hinweis ausblenden"
-            className="grid h-7 w-7 place-items-center rounded-full text-muted"
+            className="grid h-11 w-11 place-items-center rounded-full text-muted"
           >
             <XIcon className="h-4 w-4" />
           </button>
@@ -230,7 +238,7 @@ export default function App() {
           <button
             type="button"
             onClick={uebernehmen}
-            className="shrink-0 rounded-full bg-warn px-3 py-1 font-bold text-black"
+            className="shrink-0 rounded-full bg-warn px-3 py-1 font-bold text-warn-fg"
           >
             Hier weiterarbeiten
           </button>
@@ -250,7 +258,29 @@ export default function App() {
           überleben muss, liegt im Provider; lokale Formularstände gehen
           bewusst verloren. */}
       <div className="flex min-h-0 flex-1 flex-col rail:flex-row">
-        <main className="order-first min-h-0 flex-1 overflow-hidden rail:order-none">
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-accent focus:px-3 focus:py-2 focus:text-accent-fg"
+        >
+          Zum Inhalt springen
+        </a>
+        <main id="main-content" className="relative order-first min-h-0 flex-1 overflow-hidden rail:order-none">
+          {/* Der Toast lebt im Inhaltsbereich, nicht am Viewport-Rand. Dadurch
+              richtet er sich automatisch unter den Bannern aus und kann keine
+              untere Aktionsleiste überdecken. `z-30` hält ihn unter Dialogen
+              (ab z-40), aber über dem Screen. */}
+          <div
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            className="pointer-events-none absolute inset-x-0 top-2 z-30 flex justify-center px-4"
+          >
+            {toast ? (
+              <div className="max-w-full rounded-full bg-fg px-4 py-2 text-center text-sm font-medium text-bg shadow-xl">
+                {toast}
+              </div>
+            ) : null}
+          </div>
           {/* Auf dem Tablet wächst der Inhalt nicht über eine lesbare Breite
               hinaus; auf dem Handy bleibt die volle Breite. */}
           <div className="mx-auto h-full w-full max-w-5xl">
@@ -258,9 +288,21 @@ export default function App() {
                 Tab bleibt in `App` und die Navigation montiert, damit ein
                 Wechsel während des Ladens weder Zustand noch Fokus verliert. */}
             <Suspense fallback={<BereichLadezustand />}>
-              {tab === 'timer' && <TimerScreen />}
+              {tab === 'timer' && (
+                <TimerScreen
+                  onLaufImVerlauf={(laufId) => {
+                    setVerlaufLaufId(laufId)
+                    setTab('verlauf')
+                  }}
+                />
+              )}
               {tab === 'training' && <TrainingScreen onZumTimer={() => setTab('timer')} />}
-              {tab === 'verlauf' && <HistoryScreen />}
+              {tab === 'verlauf' && (
+                <HistoryScreen
+                  onZumTimer={() => setTab('timer')}
+                  initialLaufId={verlaufLaufId}
+                />
+              )}
               {tab === 'schwimmer' && <SchwimmerScreen />}
               {tab === 'einstellungen' && <SettingsScreen />}
             </Suspense>
@@ -298,22 +340,6 @@ export default function App() {
         </nav>
       </div>
 
-      {/* Bleibt dauerhaft im DOM, sonst kündigen Screenreader den Toast nicht an.
-          Der Abstand hält ihn über der unteren Aktionsleiste — auch auf dem
-          Tablet, wo es keine Tab-Leiste, aber weiterhin den festen Aktionsknopf
-          gibt. */}
-      <div
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-        className="pointer-events-none fixed inset-x-0 bottom-24 z-50 flex justify-center px-4 rail:bottom-32"
-      >
-        {toast ? (
-          <div className="rounded-full bg-fg px-4 py-2 text-sm font-medium text-bg shadow-xl">
-            {toast}
-          </div>
-        ) : null}
-      </div>
     </div>
   )
 }

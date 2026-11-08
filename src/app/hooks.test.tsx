@@ -196,7 +196,9 @@ describe('useWakeLock', () => {
     expect(aktiv.aktuell()).toBe(false)
 
     aktiv.unmount()
-    expect(wach.release).toHaveBeenCalled()
+    // Nach der vom Browser ausgelösten Freigabe ist der Sentinel bereits null;
+    // ein erneutes release beim Abbau ist dann nicht mehr nötig.
+    expect(wach.release).not.toHaveBeenCalled()
   })
 
   // Im Hintergrund löst der Browser die Sperre; beim Zurückkehren muss sie neu

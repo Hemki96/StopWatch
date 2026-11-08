@@ -8,7 +8,7 @@
  * kommen aus domain/training, die Schreibpfade aus app/AppProvider. Nur noch
  * nicht gestartete Sätze lassen sich ändern; gemessene Läufe bleiben erhalten.
  */
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useApp } from '../app/AppProvider'
 import { entferneText, leseText, schreibeText } from '../app/lokalSpeicher'
 import {
@@ -25,13 +25,16 @@ import {
   type TrainingsSatzStatus,
 } from '../domain/training'
 import type { Training, TrainingsSatz } from '../domain/types'
+import { trainingAlsMarkdown, trainingAlsPdf, trainingDateiname } from '../export/training'
+import { speichereDatei } from '../export/datei'
 import { AktiveSheet } from './AktiveSheet'
 import { Bestaetigung } from './Bestaetigung'
+import { ExportSheet } from './ExportSheet'
 import { Schalter } from './Felder'
 import { Sheet } from './Sheet'
 import { Startuebersicht, StartuebersichtTraining } from './Startuebersicht'
 import { TrainingsSatzSheet } from './TrainingsSatzSheet'
-import { ChevronLeftIcon, PlusIcon, TrashIcon } from './icons'
+import { ChevronLeftIcon, DownloadIcon, PencilIcon, PlusIcon, TrashIcon } from './icons'
 
 // Gemerkt wird nur die Auswahl (Training), nicht der Bearbeitungszustand:
 // Nach einem Neustart landet man wieder im zuletzt geöffneten Training. Der
@@ -109,6 +112,8 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
   const [aktiveOffen, setAktiveOffen] = useState(false)
   const [umbenennen, setUmbenennen] = useState(false)
   const [frageLoeschen, setFrageLoeschen] = useState(false)
+  // Exportformat wählen: Das Blatt bleibt offen, bis ein Format getippt wird.
+  const [exportOffen, setExportOffen] = useState(false)
   // Startübersicht: ID des Trainingssatzes, dessen Uhr als Nächstes beginnt.
   // `null` heißt geschlossen; erst „Jetzt starten“ ruft `starte` auf.
   const [startPruefen, setStartPruefen] = useState<string | null>(null)
@@ -116,22 +121,72 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
   // Eine gemerkte, inzwischen gelöschte ID fällt auf die Liste zurück.
   const training = app.trainings.find((eintrag) => eintrag.id === gewaehlt) ?? null
 
+  // Laufende Trainings zuerst, dann offene, dann abgeschlossene; innerhalb
+  // einer Gruppe das neueste Datum. Memoisiert, um bei jedem Render neu
+  // sortieren zu vermeiden.
+  const trainingsListe = useMemo(
+    () =>
+      app.trainings
+        .map((eintrag) => {
+          const fortschritt = trainingsFortschritt(eintrag, app.satze, app.laeufe)
+          const { fertig, gesamt } = trainingZusammenfassung(fortschritt)
+          const laeuft = fortschritt.some((e) => e.status === 'laeuft')
+          const abgeschlossen = gesamt > 0 && fertig === gesamt
+          return {
+            eintrag,
+            fertig,
+            gesamt,
+            laeuft,
+            abgeschlossen,
+            aktive: eintrag.aktive.filter(Boolean).length,
+            rang: laeuft ? 0 : abgeschlossen ? 2 : 1,
+          }
+        })
+        .sort(
+          (a, b) =>
+            a.rang - b.rang ||
+            b.eintrag.datum.localeCompare(a.eintrag.datum) ||
+            b.eintrag.erstelltAm - a.eintrag.erstelltAm,
+        ),
+    [app.trainings, app.satze, app.laeufe],
+  )
+
   /** Wechselt zwischen Liste und Detail und merkt die Wahl für den nächsten Start. */
   const waehle = (id: string | null) => {
     setGewaehlt(id)
     merkeAuswahl(id)
   }
 
+  /** Legt ein neues Training an und öffnet es direkt. */
+  const neuesTraining = () => {
+    const id = app.anlegeTraining()
+    if (id) waehle(id)
+  }
+
   if (!training) {
     return (
       <div className="flex h-full flex-col">
-        <header className="border-b border-line px-4 py-3 rail:px-6">
-          <h1 className="text-lg font-semibold">Training</h1>
-          <p className="text-xs text-muted">
-            {app.trainings.length === 1
-              ? '1 Training vorbereitet'
-              : `${app.trainings.length} Trainings vorbereitet`}
-          </p>
+        <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 rail:px-6">
+          <div className="min-w-0">
+            <h1 className="text-lg font-semibold">Training</h1>
+            <p className="text-xs text-muted">
+              {app.trainings.length === 1
+                ? '1 Training vorbereitet'
+                : `${app.trainings.length} Trainings vorbereitet`}
+            </p>
+          </div>
+          {/* Ab dem ersten Eintrag sitzt das Anlegen im Kopf und ist ohne
+              Scrollen erreichbar. Im Leerzustand bleibt die große Aktion. */}
+          {app.trainings.length > 0 ? (
+            <button
+              type="button"
+              onClick={neuesTraining}
+              aria-label="Neues Training anlegen"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-accent text-accent-fg"
+            >
+              <PlusIcon className="h-5 w-5" />
+            </button>
+          ) : null}
         </header>
 
         <div className="flex-1 overflow-y-auto px-4 pb-8 pt-3 rail:px-6">
@@ -142,16 +197,18 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
                 Lege vorab die Aktiven und die Sätze fest. Im Training startest du dann Satz für
                 Satz und kannst noch nicht gestartete Sätze jederzeit ändern.
               </p>
+              <button
+                type="button"
+                onClick={neuesTraining}
+                className="mt-4 h-14 w-full rounded-xl bg-accent text-base font-bold text-accent-fg"
+              >
+                Neues Training
+              </button>
             </div>
           ) : (
             <ul className="grid grid-cols-1 gap-2 rail:grid-cols-2">
-              {app.trainings.map((eintrag) => {
-                // Fortschritt je Training aus den bereits gestarteten Sätzen;
-                // `aktive` zählt nur tatsächlich besetzte Bahnen.
-                const fortschritt = trainingsFortschritt(eintrag, app.satze, app.laeufe)
-                const { fertig, gesamt } = trainingZusammenfassung(fortschritt)
-                const aktive = eintrag.aktive.filter(Boolean).length
-                return (
+              {trainingsListe.map(
+                ({ eintrag, fertig, gesamt, laeuft, abgeschlossen, aktive }) => (
                   <li key={eintrag.id}>
                     <button
                       type="button"
@@ -162,7 +219,11 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
                         <span className="text-[11px] font-bold uppercase tracking-wider text-muted">
                           {datumLabel(eintrag.datum)}
                         </span>
-                        {gesamt > 0 && fertig === gesamt ? (
+                        {laeuft ? (
+                          <span className="ml-auto rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-bold text-accent">
+                            läuft
+                          </span>
+                        ) : abgeschlossen ? (
                           // Ohne Sätze wäre `fertig === gesamt` ebenfalls wahr;
                           // die Längenprüfung verhindert die falsche Marke.
                           <span className="ml-auto rounded bg-ok/15 px-1.5 py-0.5 text-[10px] font-bold text-ok">
@@ -179,26 +240,17 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
                       </p>
                     </button>
                   </li>
-                )
-              })}
+                ),
+              )}
             </ul>
           )}
 
-          <button
-            type="button"
-            onClick={() => {
-              const id = app.anlegeTraining()
-              if (id) waehle(id)
-            }}
-            className="mt-4 h-14 w-full rounded-xl bg-accent text-base font-bold text-accent-fg"
-          >
-            Neues Training
-          </button>
-
-          <p className="mt-4 px-1 text-xs leading-relaxed text-muted">
-            Ein Training ist ein Plan für eine Einheit: Aktive je Bahn und mehrere Sätze in fester
-            Reihenfolge. Erst beim Start entstehen daraus messbare Läufe.
-          </p>
+          {app.trainings.length === 0 ? (
+            <p className="mt-4 px-1 text-xs leading-relaxed text-muted">
+              Ein Training ist ein Plan für eine Einheit: Aktive je Bahn und mehrere Sätze in
+              fester Reihenfolge. Erst beim Start entstehen daraus messbare Läufe.
+            </p>
+          ) : null}
         </div>
       </div>
     )
@@ -220,6 +272,24 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
   const bearbeiteterSatz = bearbeitet
     ? (training.saetze.find((eintrag) => eintrag.id === bearbeitet) ?? null)
     : null
+
+  /**
+   * Schreibt den ganzen Plan samt gemessenen Runden als PDF oder Markdown.
+   * Der Bericht wird auch für noch offene Sätze erzeugt; so lässt sich die
+   * Einheit vor dem Training weitergeben.
+   */
+  const exportiereTraining = (format: 'pdf' | 'md') => {
+    setExportOffen(false)
+    const inhalt =
+      format === 'pdf'
+        ? trainingAlsPdf(training, fortschritt, app.schwimmer)
+        : trainingAlsMarkdown(training, fortschritt, app.schwimmer)
+    void speichereDatei(
+      trainingDateiname(training, format),
+      inhalt,
+      format === 'pdf' ? 'application/pdf' : 'text/markdown;charset=utf-8',
+    ).catch(() => app.zeigeToast('Export fehlgeschlagen.'))
+  }
 
   /** Einheitlicher Schreibpfad: Das ganze Training wird ersetzt gespeichert. */
   const speichere = (naechstes: Training) => app.speichereTraining(naechstes)
@@ -294,7 +364,7 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
           type="button"
           onClick={() => waehle(null)}
           aria-label="Zurück zu den Trainings"
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-muted"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-muted"
         >
           <ChevronLeftIcon className="h-5 w-5" />
         </button>
@@ -305,16 +375,27 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
           <button
             type="button"
             onClick={() => setUmbenennen(true)}
-            className="block max-w-full truncate text-left text-base font-semibold"
+            className="flex max-w-full items-center gap-1 text-left text-base font-semibold"
           >
-            {training.bezeichnung || 'Training'}
+            <span className="truncate">{training.bezeichnung || 'Training'}</span>
+            {/* Der Titel ist antippbar; der Stift macht den Bearbeitungsweg
+                sichtbar, statt ihn nur zu vermuten. */}
+            <PencilIcon className="h-3.5 w-3.5 shrink-0 text-muted" />
           </button>
         </div>
         <button
           type="button"
+          onClick={() => setExportOffen(true)}
+          aria-label="Training exportieren"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-muted"
+        >
+          <DownloadIcon className="h-5 w-5" />
+        </button>
+        <button
+          type="button"
           onClick={() => setFrageLoeschen(true)}
           aria-label="Training löschen"
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-muted"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-muted"
         >
           <TrashIcon className="h-5 w-5" />
         </button>
@@ -485,7 +566,7 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
                 ? starte(naechster.eintrag.id)
                 : setStartPruefen(naechster.eintrag.id)
             }
-            className="h-16 w-full rounded-2xl bg-accent text-lg font-bold text-accent-fg shadow-lg active:scale-[0.99]"
+            className="h-16 w-full rounded-2xl bg-accent text-lg font-bold text-accent-fg shadow-lg active:opacity-90"
           >
             {naechster.status === 'offen'
               ? `Satz ${naechster.index + 1} starten`
@@ -563,6 +644,25 @@ export function TrainingScreen({ onZumTimer }: TrainingScreenProps) {
           }}
         />
       ) : null}
+
+      <ExportSheet
+        open={exportOffen}
+        titel="Training exportieren"
+        text="Der Bericht enthält alle Sätze mit Aktiven, Runden, Zeiten und Splits — auch noch nicht gestartete Sätze."
+        onClose={() => setExportOffen(false)}
+        aktionen={[
+          {
+            label: 'Als PDF',
+            beschreibung: 'Druckfertiger Bericht zum Teilen oder Ablegen.',
+            onWaehlen: () => exportiereTraining('pdf'),
+          },
+          {
+            label: 'Als Markdown',
+            beschreibung: 'Lesbarer Text zum Weiterbearbeiten, z. B. in Notizen.',
+            onWaehlen: () => exportiereTraining('md'),
+          },
+        ]}
+      />
 
       {startKandidat ? (
         <Startuebersicht

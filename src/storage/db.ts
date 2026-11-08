@@ -173,21 +173,26 @@ async function istLeer(db: IDBPDatabase<BeckenrandDB>): Promise<boolean> {
  * wird abgebrochen und die Anlage damit verworfen. Eine vorhandene Datenbank
  * wird ohne Schemaänderung geöffnet.
  */
-function oeffneNurWennVorhanden(): Promise<IDBDatabase | null> {
+interface LegacyOeffnung {
+  db: IDBDatabase | null
+  blockiert: boolean
+}
+
+function oeffneNurWennVorhanden(): Promise<LegacyOeffnung> {
   return new Promise((resolve) => {
     let anfrage: IDBOpenDBRequest
     try {
       anfrage = indexedDB.open(LEGACY_DATENBANK_NAME)
     } catch {
-      resolve(null)
+      resolve({ db: null, blockiert: false })
       return
     }
     anfrage.onupgradeneeded = () => {
       anfrage.transaction?.abort()
     }
-    anfrage.onsuccess = () => resolve(anfrage.result)
-    anfrage.onerror = () => resolve(null)
-    anfrage.onblocked = () => resolve(null)
+    anfrage.onsuccess = () => resolve({ db: anfrage.result, blockiert: false })
+    anfrage.onerror = () => resolve({ db: null, blockiert: false })
+    anfrage.onblocked = () => resolve({ db: null, blockiert: true })
   })
 }
 
@@ -213,19 +218,23 @@ function leseStore(db: IDBDatabase, store: StoreName): Promise<unknown[]> {
  * wird nichts überschrieben. Fehlt die alte Datenbank oder ist auch sie leer,
  * passiert nichts.
  */
-async function uebernimmAlteDatenbank(db: IDBPDatabase<BeckenrandDB>): Promise<void> {
-  if (!(await istLeer(db))) return
+async function uebernimmAlteDatenbank(db: IDBPDatabase<BeckenrandDB>): Promise<boolean> {
+  // Eine bereits gefüllte neue Datenbank braucht keine Übernahme; der Merker
+  // darf gesetzt werden, weil kein Wiederholungsversuch nötig ist.
+  if (!(await istLeer(db))) return true
 
-  const alt = await oeffneNurWennVorhanden()
-  if (!alt) return
+  const legacy = await oeffneNurWennVorhanden()
+  if (legacy.blockiert) return false
+  const alt = legacy.db
+  if (!alt) return true
   try {
     const vorhandene = STORES.filter((store) => alt.objectStoreNames.contains(store))
-    if (vorhandene.length === 0) return
+    if (vorhandene.length === 0) return true
 
     const inhalt = new Map<StoreName, unknown[]>()
     for (const store of vorhandene) inhalt.set(store, await leseStore(alt, store))
     // Eine leere Alt-Datenbank ist kein Grund für eine Schreibtransaktion.
-    if ([...inhalt.values()].every((liste) => liste.length === 0)) return
+    if ([...inhalt.values()].every((liste) => liste.length === 0)) return true
 
     const tx = db.transaction(vorhandene, 'readwrite')
     try {
@@ -258,6 +267,7 @@ async function uebernimmAlteDatenbank(db: IDBPDatabase<BeckenrandDB>): Promise<v
     console.info(
       `Bestand aus der bisherigen Datenbank "${LEGACY_DATENBANK_NAME}" übernommen; die alte Datenbank bleibt unverändert.`,
     )
+    return true
   } finally {
     alt.close()
   }
@@ -274,11 +284,16 @@ async function uebernimmAlteDatenbank(db: IDBPDatabase<BeckenrandDB>): Promise<v
 async function oeffneAktuelleDatenbank(): Promise<IDBPDatabase<BeckenrandDB>> {
   const db = await oeffne(DATENBANK_NAME)
   try {
-    // Nur einmal übernehmen. Der Merker wird auch bei leerer Alt-Datenbank
-    // gesetzt, damit ein späteres „Alle Daten löschen“ nichts zurückholt.
+    // Nur einmal übernehmen. Der Merker wird nur gesetzt, wenn die Übernahme
+    // lief oder die Alt-Datenbank bestätigt fehlt; bei blockierter Alt-Datenbank
+    // bleibt er unset, damit der nächste Start erneut versucht.
     if (!migrationIstAbgeschlossen()) {
-      await uebernimmAlteDatenbank(db)
-      merkeMigration()
+      const erfolg = await uebernimmAlteDatenbank(db)
+      if (erfolg) merkeMigration()
+      else {
+        // Blockierte Alt-Datenbank: in dieser Sitzung ohne Marker weiterarbeiten,
+        // damit ein späterer Start die Übernahme erneut versucht.
+      }
     }
     return db
   } catch (fehler) {
@@ -287,7 +302,9 @@ async function oeffneAktuelleDatenbank(): Promise<IDBPDatabase<BeckenrandDB>> {
       `Übernahme aus "${LEGACY_DATENBANK_NAME}" fehlgeschlagen; die App arbeitet vorerst mit der alten Datenbank weiter.`,
       fehler,
     )
-    return oeffne(LEGACY_DATENBANK_NAME)
+    // Die frühere Datenbank wird ohne Schema-Upgrade geöffnet, damit ihr
+    // bestehender Stand nicht verändert wird.
+    return openDB<BeckenrandDB>(LEGACY_DATENBANK_NAME)
   }
 }
 
@@ -301,5 +318,11 @@ async function oeffneAktuelleDatenbank(): Promise<IDBPDatabase<BeckenrandDB>> {
  */
 export function getDb(): Promise<IDBPDatabase<BeckenrandDB>> {
   dbPromise ??= oeffneAktuelleDatenbank()
-  return dbPromise
+  const promise = dbPromise
+  // Ein abgelehntes Öffnen darf nicht dauerhaft festgehalten werden; der
+  // nächste Aufruf versucht es erneut.
+  promise.catch(() => {
+    if (dbPromise === promise) dbPromise = null
+  })
+  return promise
 }

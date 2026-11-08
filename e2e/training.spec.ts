@@ -85,3 +85,82 @@ test('bereitet Sätze und Aktive vor, startet den ersten Satz und passt den Plan
   await aktive.getByRole('button', { name: 'Aktive übernehmen' }).tap()
   await expect(page.getByRole('button', { name: /^Aktive/ })).toContainText('4 Bahnen')
 })
+
+// Export: Der Download-Knopf bietet das ganze Training als PDF und Markdown an.
+// Beide Formate laufen über denselben Bericht; der Test prüft die Auswahl und
+// die vorgeschlagenen Dateinamen.
+test('exportiert das ganze Training als PDF und Markdown', async ({ page }) => {
+  await oeffneApp(page)
+  await page.getByRole('button', { name: 'Training' }).tap()
+  await page.getByRole('button', { name: 'Neues Training' }).tap()
+
+  const pdf = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Training exportieren' }).tap()
+  await page.getByRole('button', { name: /^Als PDF/ }).tap()
+  await expect((await pdf).suggestedFilename()).toMatch(
+    /^beckenrand-training-\d{4}-\d{2}-\d{2}\.pdf$/,
+  )
+
+  const markdown = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Training exportieren' }).tap()
+  await page.getByRole('button', { name: /^Als Markdown/ }).tap()
+  await expect((await markdown).suggestedFilename()).toMatch(
+    /^beckenrand-training-\d{4}-\d{2}-\d{2}\.md$/,
+  )
+})
+
+// Nutzerreise: Mit vorhandenen Trainings sitzt das Anlegen im Listenkopf und
+// ist ohne Scrollen erreichbar.
+test('legt aus dem Listenkopf ein weiteres Training an', async ({ page }) => {
+  await oeffneApp(page)
+  await page.getByRole('button', { name: 'Training' }).tap()
+  await page.getByRole('button', { name: 'Neues Training' }).tap()
+  await page.getByRole('button', { name: 'Zurück zu den Trainings' }).tap()
+
+  await expect(page.getByText('1 Training vorbereitet')).toBeVisible()
+  await page.getByRole('button', { name: 'Neues Training anlegen' }).tap()
+  await expect(page.getByRole('button', { name: 'Satz 1 starten' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Zurück zu den Trainings' }).tap()
+  await expect(page.getByText('2 Trainings vorbereitet')).toBeVisible()
+})
+
+// Nutzerreise: Vor dem Training stehen sechs Namen zur Auswahl. Statt sechs
+// Auswahlmenüs zu öffnen, tippt der Trainer die Personen einmal an.
+test('ordnet Aktive mit einem Tipp je Person zu', async ({ page }) => {
+  await oeffneApp(page)
+
+  // Zwei Schwimmer anlegen.
+  for (const name of ['Anna', 'Ben']) {
+    await page.getByRole('button', { name: 'Schwimmer', exact: true }).tap()
+    await page.getByRole('button', { name: 'Schwimmer hinzufügen' }).click()
+    await page.getByLabel('Name').fill(name)
+    await page.getByRole('button', { name: 'Speichern' }).click()
+  }
+
+  await page.getByRole('button', { name: 'Training' }).tap()
+  await page.getByRole('button', { name: 'Neues Training' }).tap()
+  await page.getByRole('button', { name: /^Aktive/ }).tap()
+
+  const aktive = page.getByRole('dialog')
+  await aktive.getByRole('button', { name: 'Anna', exact: true }).tap()
+  await aktive.getByRole('button', { name: 'Ben', exact: true }).tap()
+
+  // Die Schnellwahl schreibt in dieselbe Zuordnung wie die Auswahlfelder.
+  await expect(
+    aktive.getByLabel('Schwimmer für Reihe 1, Bahn 1').locator('option:checked'),
+  ).toHaveText('Anna')
+  await expect(
+    aktive.getByLabel('Schwimmer für Reihe 1, Bahn 2').locator('option:checked'),
+  ).toHaveText('Ben')
+
+  // Erneutes Tippen entfernt die Person wieder.
+  await aktive.getByRole('button', { name: 'Anna', exact: true }).tap()
+  await expect(
+    aktive.getByLabel('Schwimmer für Reihe 1, Bahn 1').locator('option:checked'),
+  ).toHaveText('— kein Schwimmer —')
+
+  await aktive.getByRole('button', { name: 'Anna', exact: true }).tap()
+  await aktive.getByRole('button', { name: 'Aktive übernehmen' }).tap()
+  await expect(page.getByRole('button', { name: /^Aktive/ })).toContainText('Anna, Ben')
+})

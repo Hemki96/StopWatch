@@ -23,13 +23,43 @@ Nächster Lauf konfigurieren
    Alle im Ziel → Verlauf
 ```
 
-Es gibt drei Wege, einen Lauf zu beginnen:
+Es gibt vier Wege, einen Lauf zu beginnen:
 
 | Weg | Was passiert |
 | --- | --- |
 | **Start** auf der Karte „Nächster Lauf“ | Öffnet die **Startübersicht** mit Becken, Strecke, Bahnen, Schwimmern und Startzeiten. Erst **Jetzt starten** legt den Lauf aus den aktuellen Einstellungen an und startet alle Bahnen. |
+| **Sofort starten** unter der Karte | Beginnt ohne Übersicht eine **offene Strecke** mit einer Bahn. Jeder Tap ist eine Zwischenzeit; das Ziel setzt der Zielknopf. Weitere Personen kommen im laufenden Lauf dazu. |
 | **+** in der Lauf-Leiste | Legt einen weiteren Lauf aus den aktuellen Einstellungen an, startet ihn aber noch nicht. Danach **Start alle** tippen; auch dieser Knopf zeigt zuerst die Startübersicht. |
 | **Start alle** im bereits angelegten Lauf | Öffnet die Startübersicht des Laufs; **Jetzt starten** setzt den Start für alle noch nicht gestarteten Bahnen. |
+
+## Sofortstart
+
+Der **Sofortstart** ist für Messungen ohne vorbereiteten Lauf gedacht, etwa für eine Technikübung
+oder eine Gruppe, deren Umfang noch nicht feststeht. Er richtet sich nicht nach den Einstellungen
+für **Strecke** und **Zwischenzeiten**, sondern beginnt immer mit:
+
+- einer **offenen Strecke**,
+- einer **Bahn**,
+- ohne **Startversatz** und ohne Startübersicht.
+
+Der erste Tap startet die Bahn; jeder weitere Tap ist eine **Zwischenzeit**. Es gibt keine
+Obergrenze durch die Strecke: Die Bahn endet erst über den Knopf **Ziel** auf der Kachel oder über
+**Alle beenden** in der Fußzeile. Damit lassen sich beliebig viele Zwischenzeiten nehmen.
+
+## Personen während des Laufs hinzufügen
+
+In einem einzelnen Lauf steht in der Kopfzeile **Person**. Ein Tipp hängt eine weitere Bahn an den
+Lauf:
+
+- Läuft die Uhr bereits, startet die neue Person **sofort** mit dem Zeitpunkt des Tipps.
+- Ist der Lauf noch nicht gestartet, bleibt die neue Bahn bereit und startet mit **Start alle**.
+- Die Bahn landet in der letzten Reihe; ist sie voll, beginnt eine neue Reihe.
+- Ein Name lässt sich anschließend über die Kopfzeile und die Schwimmerauswahl im Sheet zuordnen.
+
+Bei einer **Serie** und in einem **Trainingssatz** fehlt der Knopf bewusst: Der Plan steht beim
+Anlegen fest, gestartete Trainingssätze sind fest. Für eine geänderte Besetzung den Satz zu Ende
+messen und den nächsten starten.
+
 
 ## Startübersicht
 
@@ -244,6 +274,7 @@ Die Daten bleiben im Verlauf.
 | Feld | Änderbar im laufenden Lauf? |
 | --- | --- |
 | Schwimmerzuordnung | Ja, jederzeit über das Sheet. |
+| Weitere Bahnen | Ja, bei einem einzelnen Lauf über **Person** in der Kopfzeile; die neue Bahn startet sofort. Bei einer Serie oder einem Trainingssatz nein. |
 | Beckenlänge, Strecke, Zwischenzeiten | Nur solange **kein** Anschlag erfasst wurde; bei einer Serie sofort gesperrt. |
 | Startversatz | Nein, er ist beim Anlegen fest. |
 | Wiederholungen / Takt | Nein; eine Serie ist nach dem Anlegen gesperrt. |
@@ -286,14 +317,15 @@ die noch völlig unberührt sind. Vollständige Runden bleiben erhalten. Siehe
 
 ## Grenzen
 
-- **1 bis 10 Bahnen je Reihe** und **1 bis 5 Reihen** pro Lauf.
+- **1 bis 10 Bahnen je Reihe** und **1 bis 5 Reihen** pro Lauf. Beim Nachtragen einer Person
+  gelten dieselben Grenzen; ist die letzte Reihe voll, beginnt eine neue.
 - **1 bis 20 Wiederholungen** pro Serie.
 - **Startversatz** von 0 bis 120 s zwischen zwei Reihen.
 - **Takt** von 10 s bis 60 min in den Einstellungen; gängige Werte stehen als Chip bereit, jeder
   andere lässt sich über Minuten und Sekunden eingeben.
 - **Einheit** ist immer Meter. Eine Auswahl zwischen Meter und Yards gibt es nicht mehr. Alte
   Yard-Läufe bleiben im Verlauf mit ihrer damaligen Einheit sichtbar.
-- **Strecken** 50, 100, 200, 400, 800, 1.500 m oder offen. Die Strecke muss ein Vielfaches der
+- **Strecken** 25, 50, 100, 200, 400, 800, 1.500 m oder offen. Die Strecke muss ein Vielfaches der
   Beckenlänge sein.
 - **Zwischenzeiten** 0 bis 99, automatisch aus Strecke und Beckenlänge oder frei eingestellt. Die
   Zahl ist nach dem ersten Anschlag gesperrt.

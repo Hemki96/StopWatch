@@ -52,6 +52,15 @@ export const STANDARD_KONFIGURATION: LaufKonfiguration = {
 }
 
 /**
+ * Höchstzahl der Bahnen je Reihe und der Reihen (Startgruppen) in einem Lauf.
+ * Dieselben Grenzen gelten für Trainings, die Backup-Prüfung und die
+ * Oberfläche; sie stehen hier, weil `fuegeBahnHinzu` sie braucht und
+ * `domain/training` bereits von diesem Modul abhängt.
+ */
+export const MAX_BAHNEN = 10
+export const MAX_REIHEN = 5
+
+/**
  * Obergrenze der selbst eingestellten Zwischenzeiten. Sie ist eine
  * Bedienentscheidung: Mehr Anschläge nimmt am Beckenrand niemand sinnvoll.
  * Der Wert muss zu `pruefeKonfiguration` in der Sicherung passen.
@@ -177,7 +186,9 @@ export function createLauf(
     startversatzMs: Number.isFinite(optionen.startversatzMs)
       ? Math.max(0, Math.round(optionen.startversatzMs ?? 0))
       : 0,
-    wiederholung: optionen.wiederholung ?? null,
+    wiederholung: Number.isFinite(optionen.wiederholung)
+      ? (optionen.wiederholung as number)
+      : null,
     bahnen: bahnen.map((b) => ({
       id: newId(),
       nummer: b.nummer,
@@ -187,6 +198,76 @@ export function createLauf(
       anschlaege: [],
     })),
   }
+}
+
+/** Optionen für `fuegeBahnHinzu`. */
+export interface BahnHinzufuegenOptionen {
+  /** Schwimmer-ID oder `null` für „ohne Namen“. */
+  schwimmerId?: string | null
+  /**
+   * Monotone Startzeit der neuen Bahn. Fehlt sie, bleibt die Bahn bereit und
+   * startet später mit `startAll`; beim Hinzufügen während einer Messung wird
+   * `now` übergeben, damit die Person sofort läuft.
+   */
+  startMs?: number | null
+  /** Wanduhr-Anker (`Date.now()`), falls der Lauf noch keinen hat. */
+  wallNow?: number
+}
+
+/**
+ * Hängt eine weitere Bahn an einen Lauf.
+ *
+ * Die Bahn landet in der letzten Reihe; ist sie voll, beginnt eine neue Reihe.
+ * Nummern bleiben innerhalb ihrer Reihe fortlaufend. Sind alle Reihen voll,
+ * kommt derselbe Lauf zurück — die Grenzen aus `MAX_BAHNEN`/`MAX_REIHEN`
+ * bleiben damit auch beim Nachtragen erhalten.
+ *
+ * Beim Hinzufügen während einer laufenden Messung startet die neue Bahn mit
+ * `startMs` sofort. Der Wanduhr-Anker des Laufs wird nur gesetzt, wenn er noch
+ * fehlt; ein bereits laufender Lauf behält seinen ursprünglichen Start.
+ */
+export function fuegeBahnHinzu(
+  lauf: Lauf,
+  optionen: BahnHinzufuegenOptionen = {},
+): Lauf {
+  const gruppen = bahnenNachReihen(lauf.bahnen)
+  const letzte = gruppen.at(-1)
+  let reihe = 1
+  let nummer = 1
+  if (letzte) {
+    const belegte = new Set(letzte.bahnen.map((bahn) => bahn.nummer))
+    let kandidat = 1
+    while (kandidat <= MAX_BAHNEN && belegte.has(kandidat)) kandidat += 1
+    if (kandidat <= MAX_BAHNEN) {
+      reihe = letzte.reihe
+      nummer = kandidat
+    } else if (letzte.reihe < MAX_REIHEN) {
+      reihe = letzte.reihe + 1
+      nummer = 1
+    } else {
+      return lauf
+    }
+  }
+
+  const startMs =
+    typeof optionen.startMs === 'number' && Number.isFinite(optionen.startMs)
+      ? optionen.startMs
+      : null
+  const startWallMs =
+    lauf.startWallMs === null &&
+    typeof optionen.wallNow === 'number' &&
+    Number.isFinite(optionen.wallNow)
+      ? optionen.wallNow
+      : lauf.startWallMs
+  const bahn: Bahn = {
+    id: newId(),
+    nummer,
+    reihe,
+    schwimmerId: optionen.schwimmerId ?? null,
+    startMs,
+    anschlaege: [],
+  }
+  return { ...lauf, startWallMs, bahnen: [...lauf.bahnen, bahn] }
 }
 
 /** Eine Reihe ist 1-basiert; fehlende oder unbrauchbare Werte gelten als 1. */
@@ -307,6 +388,23 @@ export function lastSplit(bahn: Bahn): Anschlag | null {
   return bahn.anschlaege.at(-1) ?? null
 }
 
+/**
+ * Längenzeit des letzten Anschlags: sein Split minus dem Split davor. Der erste
+ * Anschlag zählt ab dem Start der Bahn, weil `splitMs` kumuliert ist; nach einer
+ * Korrektur bleibt der Wert bei 0 statt negativ zu werden. `null`, solange die
+ * Bahn keinen Anschlag hat.
+ *
+ * Dieselbe Rechnung wie `laengenZeiten` in domain/analyse, hier nur für den
+ * letzten Anschlag. Die Kachel zeigt den Wert nach jedem Tap, damit der Trainer
+ * die gerade geschwommene Länge ohne Kopfrechnen sieht.
+ */
+export function letzteLaengenzeit(bahn: Bahn): number | null {
+  const letzter = lastSplit(bahn)
+  if (!letzter) return null
+  const vorher = bahn.anschlaege.at(-2)?.splitMs ?? 0
+  return Math.max(0, letzter.splitMs - vorher)
+}
+
 /** Stand der Zwischenzeiten einer Bahn: bereits erfasst und bis zum Ziel. */
 export interface ZwischenzeitStand {
   /** Erfasste Zwischenzeiten; ein Ziel-Anschlag zählt nicht mit. */
@@ -370,7 +468,13 @@ export function startLane(lauf: Lauf, bahnId: string, now: number, wallNow: numb
   )
   // Keine Änderung (unbekannte oder bereits gestartete Bahn): Anker nicht anfassen.
   if (next === lauf) return lauf
-  return { ...next, startWallMs: lauf.startWallMs ?? wallNow }
+  return {
+    ...next,
+    startWallMs:
+      lauf.startWallMs === null && Number.isFinite(wallNow)
+        ? wallNow
+        : lauf.startWallMs,
+  }
 }
 
 /**
@@ -423,7 +527,7 @@ export function planeLauf(
  * gestartet wurde.
  */
 export function rebaseLauf(lauf: Lauf, now: number, wallNow: number): Lauf {
-  if (lauf.startWallMs === null) return lauf
+  if (lauf.startWallMs === null || !Number.isFinite(lauf.startWallMs)) return lauf
   if (!Number.isFinite(now) || !Number.isFinite(wallNow)) return lauf
   const starts = lauf.bahnen
     .map((bahn) => bahn.startMs)
@@ -465,7 +569,14 @@ export function startAll(lauf: Lauf, now: number, wallNow: number): Lauf {
     return { ...bahn, startMs: now + (bahnReihe(bahn) - 1) * versatz }
   })
   if (!changed) return lauf
-  return { ...lauf, bahnen, startWallMs: lauf.startWallMs ?? wallNow }
+  return {
+    ...lauf,
+    bahnen,
+    startWallMs:
+      lauf.startWallMs === null && Number.isFinite(wallNow)
+        ? wallNow
+        : lauf.startWallMs,
+  }
 }
 
 /**
@@ -590,7 +701,7 @@ export function pruefeAnschlagKorrektur(
 ): string | null {
   const bahn = findBahn(lauf, bahnId)
   if (!bahn) return 'Bahn nicht gefunden.'
-  if (!Number.isFinite(splitMs) || splitMs < 0) return 'Die Zeit muss eine positive Dauer sein.'
+  if (!Number.isFinite(splitMs) || splitMs <= 0) return 'Die Zeit muss eine positive Dauer sein.'
   const index = bahn.anschlaege.findIndex((a) => a.laengeNr === laengeNr)
   if (index === -1) return 'Anschlag nicht gefunden.'
   const vorher = bahn.anschlaege[index - 1]
@@ -657,9 +768,9 @@ export function updateStrecke(
   return { ...lauf, konfiguration: { ...konfiguration } }
 }
 
-/** True, sobald alle Bahnen ein Finish haben. */
+/** True, sobald alle Bahnen ein Finish haben. Leere Bahnen gelten nicht als beendet. */
 export function isComplete(lauf: Lauf): boolean {
-  return lauf.bahnen.every(istBahnBeendet)
+  return lauf.bahnen.length > 0 && lauf.bahnen.every(istBahnBeendet)
 }
 
 /**

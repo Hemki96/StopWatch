@@ -110,7 +110,7 @@ Ein Tipp auf einen **offenen** Satz öffnet „Satz N bearbeiten“:
 | --- | --- |
 | **Bezeichnung** | frei, z. B. „Einschwimmen“; leer = automatisch aus der Strecke |
 | **Beckenlänge** | 25 m oder 50 m |
-| **Strecke** | 50, 100, 200, 400, 800, 1.500 m oder **offen** |
+| **Strecke** | 25, 50, 100, 200, 400, 800, 1.500 m oder **offen** |
 | **Zwischenzeiten** | automatisch aus Strecke und Becken oder eine eigene Zahl; danach folgt das Ziel |
 | **Wiederholungen** | 1 bis 20; 1 = einzelner Lauf |
 | **Takt** | nur bei mehreren Wiederholungen; Start zu Start |
@@ -142,12 +142,14 @@ passiert:
 | Zustand | Verhalten |
 | --- | --- |
 | **an** | Sobald der aktuelle Satz vollständig im Ziel ist, beginnt der nächste noch offene Satz direkt. |
-| **aus** | Der Trainer startet den nächsten Satz wie bisher bewusst im Training-Tab. |
+| **aus** | Nach dem letzten Ziel steht im Timer **Nächster Satz** als Hauptknopf. Ein Tipp startet den nächsten Satz, ohne Umweg über diesen Tab. |
 
 Der automatische Wechsel greift nur beim Übergang von „läuft“ nach „fertig“. Ein bereits fertiger
 Satz, den du später im Timer öffnest, startet nichts. Ist der nächste Satz schon einmal angelegt,
 aber noch nicht gestartet, holt die App seine fehlenden Starts nach; ein bereits laufender Satz wird
-nur ausgewählt.
+nur ausgewählt. Derselbe Weg steckt hinter **Nächster Satz**: Der Knopf erscheint nach dem letzten
+Ziel auch bei ausgeschaltetem Wechsel und nennt den nächsten Satz samt Titel. **Neuer Lauf** bleibt
+darunter als kleinerer Knopf für eine Messung außerhalb des Trainings.
 
 Der vorige Satz bleibt in der Laufleiste und im Verlauf erreichbar. Sein Ergebnis geht durch den
 Wechsel nicht verloren. Neue Trainings haben den Schalter standardmäßig an; bei älteren Trainings
@@ -200,8 +202,8 @@ Das Training ist ein Plan, kein starres Formular. Während der Einheit gilt:
 - Die Aktiven, die Aufteilung in Reihen und die Bahnenzahl lassen sich für kommende Sätze anpassen.
 - Gestartete und bereits angelegte Sätze bleiben unverändert und werden im Timer bedient.
 - Der Fortschritt oben zählt nur **vollständig** beendete Sätze.
-- Ist der automatische Wechsel aus, nach jedem Satz zurück zum Tab **Training** wechseln und den
-  nächsten starten. Ist er an, beginnt der nächste Satz direkt im Timer.
+- Ist der automatische Wechsel aus, nach jedem Satz im Timer **Nächster Satz** tippen; ein Wechsel
+  in den Training-Tab ist dafür nicht nötig. Ist er an, beginnt der nächste Satz direkt im Timer.
 
 Die Pause zwischen zwei Sätzen wird bei ausgeschaltetem automatischem Wechsel nicht überbrückt. Die
 App startet den nächsten Satz erst auf ausdrücklichen Tipp. Ein Timer im Hintergrund wäre im
@@ -219,6 +221,32 @@ separaten Statusfeld. Dadurch kann er nach einem Reload oder nach dem Löschen e
 - Eine verwaiste Verknüpfung — der Satz wurde im Verlauf gelöscht — fällt automatisch auf **offen**
   zurück.
 - Wird ein Training gelöscht, bleibt der Verlauf erhalten; der Plan verschwindet.
+
+## Training exportieren
+
+Der Download-Knopf in der Kopfzeile des Trainings öffnet die Formatauswahl:
+
+| Format | Datei | Inhalt |
+| --- | --- | --- |
+| **PDF** | `beckenrand-training-JJJJ-MM-TT.pdf` | Druckfertiger Bericht für Weitergabe oder Ablage |
+| **Markdown** | `beckenrand-training-JJJJ-MM-TT.md` | Derselbe Bericht als lesbarer Text zum Weiterbearbeiten |
+
+Der Bericht zeigt die ganze Einheit in der Reihenfolge des Plans:
+
+- Datum, Bezeichnung und Fortschritt,
+- die **Aktiven** Reihe für Reihe, leere Plätze als `—`,
+- jeden **Trainingssatz** mit Plan (Strecke, Schwimmart, Becken, Takt, Startversatz) und Status,
+- bei gestarteten Sätzen jede Runde mit Startzeit, Bahn, Schwimmer, Zielzeit und allen Splits,
+- korrigierte Anschläge mit dem Zusatz **manuell**.
+
+Noch nicht gestartete Sätze erscheinen als Plan mit **Noch nicht gestartet.**; der Bericht lässt sich
+deshalb auch vor dem Training weitergeben. Er enthält keine Rohdaten wie IDs oder Millisekunden —
+dafür ist der CSV-Export da. Auf Geräten mit Web Share API öffnet sich das Share-Sheet, sonst wird
+die Datei heruntergeladen.
+
+Derselbe Bericht ist auch im **Lauf-Detail** erreichbar: Gehört der Lauf zu einem Training, bietet
+der Download-Knopf neben dem Lauf-CSV das ganze Training als PDF und Markdown an. Ist der Plan
+inzwischen gelöscht, bleibt nur der Lauf-Export.
 
 ## Training löschen
 

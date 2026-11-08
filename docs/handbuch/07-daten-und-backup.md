@@ -104,6 +104,10 @@ privater Modus, blockierte Website-Daten).
 | Für Menschen lesbar | Ja, tabellarisch | Ja, technisches JSON |
 | Empfohlen | Nach jeder Einheit, für die Auswertung | Regelmäßig und vor riskanten Aktionen |
 
+PDF- und Markdown-Berichte eines Trainings sind **kein Backup**: Sie sind lesbar und zum Weitergeben
+gedacht, lassen sich aber nicht wieder einlesen. Die vollständige Sicherung bleibt das JSON-Backup.
+Den Bericht erzeugst du im Training oder im Lauf-Detail über den Download-Knopf.
+
 ## Backup sichern
 
 1. Tab **Mehr** öffnen.

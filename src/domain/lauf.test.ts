@@ -21,19 +21,24 @@ import {
   eingestellteZwischenzeiten,
   finishLane,
   finishMs,
+  fuegeBahnHinzu,
   hatBegonnen,
   hatLaufendeBahn,
+  isComplete,
   isFinished,
   isStartLocked,
   isStreckeLocked,
   korrigiereAnschlag,
   laneStatus,
   laneStatusAt,
+  MAX_BAHNEN,
+  MAX_REIHEN,
   normalisiereReihe,
   planeLauf,
   pruefeAnschlagKorrektur,
   rebaseLauf,
   lastSplit,
+  letzteLaengenzeit,
   laufzeitMs,
   lengthCount,
   reihenVon,
@@ -109,6 +114,22 @@ describe('zwischenzeiten', () => {
   it('meldet für eine einzelne Länge keine Zwischenzeit', () => {
     const lauf = startAll(laufMit({ ...K100, streckeM: 50 }, 1), 0, 1000)
     expect(zwischenzeiten(bahn(lauf), lauf.konfiguration)).toEqual({ erfasst: 0, gesamt: 0 })
+  })
+
+  // 25 m im 25-m-Becken sind genau eine Länge. Ein Tap ist deshalb sofort das
+  // Ziel; die Serien-Ansicht kann 4×25 damit ohne Zwischenzeit stoppen.
+  it('beendet 25 m im 25-m-Becken mit einem einzigen Anschlag', () => {
+    const konfiguration = { ...K100, beckenlaengeM: 25 as const, streckeM: 25 }
+    expect(zwischenzeitenGesamt(konfiguration)).toBe(0)
+
+    let lauf = startAll(laufMit(konfiguration, 1), 0, 1000)
+    expect(zwischenzeiten(bahn(lauf), lauf.konfiguration)).toEqual({ erfasst: 0, gesamt: 0 })
+    lauf = tapLane(lauf, bahn(lauf).id, 15_000, 16_000)
+
+    expect(isFinished(bahn(lauf))).toBe(true)
+    expect(finishMs(bahn(lauf))).toBe(15_000)
+    expect(bahn(lauf).anschlaege).toHaveLength(1)
+    expect(bahn(lauf).anschlaege[0]).toMatchObject({ laengeNr: 1, istFinish: true })
   })
 
   // Eine eigene Zahl löst die Ableitung aus Strecke und Beckenlänge ab: Der
@@ -206,6 +227,65 @@ describe('createLauf', () => {
     expect(lauf.bahnen.map((b) => b.nummer)).toEqual([1, 2, 3, 4, 5, 6])
     expect(lauf.bahnen.every((b) => laneStatus(b) === 'bereit')).toBe(true)
     expect(lauf.startWallMs).toBeNull()
+  })
+})
+
+// Eine weitere Person wird an die letzte Reihe gehängt. Während einer Messung
+// startet sie sofort; vor dem Start bleibt sie bereit. Die Grenzen gelten auch
+// beim Nachtragen.
+describe('fuegeBahnHinzu', () => {
+  it('hängt eine startende Bahn an die letzte Reihe', () => {
+    const lauf = startAll(laufMit(K100, 2), 0, 1_000)
+    const erweitert = fuegeBahnHinzu(lauf, {
+      startMs: 5_000,
+      wallNow: 6_000,
+      schwimmerId: 's1',
+    })
+
+    expect(erweitert.bahnen).toHaveLength(3)
+    expect(erweitert.bahnen[2]).toMatchObject({
+      nummer: 3,
+      reihe: 1,
+      schwimmerId: 's1',
+      startMs: 5_000,
+      anschlaege: [],
+    })
+    // Der Lauf hat schon einen Wanduhr-Anker; er bleibt unverändert.
+    expect(erweitert.startWallMs).toBe(1_000)
+  })
+
+  it('setzt den Wanduhr-Anker, wenn der Lauf noch keinen hat', () => {
+    const lauf = laufMit(K100, 1)
+    const erweitert = fuegeBahnHinzu(lauf, { startMs: 2_000, wallNow: 9_000 })
+    expect(erweitert.startWallMs).toBe(9_000)
+  })
+
+  it('lässt eine neue Bahn vor dem Start bereit', () => {
+    const erweitert = fuegeBahnHinzu(laufMit(K100, 1))
+    expect(erweitert.bahnen[1]!.startMs).toBeNull()
+    expect(laneStatus(erweitert.bahnen[1]!)).toBe('bereit')
+  })
+
+  it('beginnt bei voller Reihe eine neue Reihe', () => {
+    const voll = createLauf(
+      K100,
+      Array.from({ length: MAX_BAHNEN }, (_, index) => ({ nummer: index + 1 })),
+    )
+    const erweitert = fuegeBahnHinzu(voll, { startMs: 1_000, wallNow: 2_000 })
+    const neu = erweitert.bahnen.at(-1)!
+    expect(neu.reihe).toBe(2)
+    expect(neu.nummer).toBe(1)
+  })
+
+  it('fügt nicht über Bahnen- und Reihengrenzen hinaus hinzu', () => {
+    const voll = createLauf(
+      K100,
+      Array.from({ length: MAX_BAHNEN * MAX_REIHEN }, (_, index) => ({
+        nummer: (index % MAX_BAHNEN) + 1,
+        reihe: Math.floor(index / MAX_BAHNEN) + 1,
+      })),
+    )
+    expect(fuegeBahnHinzu(voll, { startMs: 1_000 })).toBe(voll)
   })
 })
 
@@ -346,6 +426,31 @@ describe('undoLane', () => {
   it('lässt eine unberührte Bahn unverändert', () => {
     const lauf = laufMit(K100, 1)
     expect(undoLane(lauf, bahn(lauf).id)).toBe(lauf)
+  })
+})
+
+// Die Kachel zeigt nach jedem Tap die gerade geschwommene Längenzeit: den
+// Abstand zum vorherigen Split, nicht die kumulierte Zeit.
+describe('letzteLaengenzeit', () => {
+  it('ist null, solange kein Anschlag existiert', () => {
+    const lauf = laufMit(K100, 1)
+    const gestartet = startLane(lauf, bahn(lauf).id, 0, 1)
+    expect(letzteLaengenzeit(bahn(gestartet))).toBeNull()
+  })
+
+  it('zählt den ersten Anschlag ab dem Start', () => {
+    const lauf = laufMit(K100, 1)
+    const gestartet = startLane(lauf, bahn(lauf).id, 0, 1)
+    const nachTap = tapLane(gestartet, bahn(gestartet).id, 30_500, 2)
+    expect(letzteLaengenzeit(bahn(nachTap))).toBe(30_500)
+  })
+
+  it('ist die Differenz zum vorherigen Anschlag', () => {
+    const lauf = laufMit(K100, 1)
+    const gestartet = startLane(lauf, bahn(lauf).id, 0, 1)
+    const id = bahn(gestartet).id
+    const nachZweiTaps = tapLane(tapLane(gestartet, id, 30_000, 2), id, 61_750, 3)
+    expect(letzteLaengenzeit(bahn(nachZweiTaps))).toBe(31_750)
   })
 })
 
@@ -732,5 +837,12 @@ describe('rebaseLauf', () => {
     const ohneAnker = startAll(bereit, 100_000, 1_000)
     const ohneAnkerLauf: Lauf = { ...ohneAnker, startWallMs: null }
     expect(rebaseLauf(ohneAnkerLauf, 5_000, 31_000)).toBe(ohneAnkerLauf)
+  })
+})
+
+describe('isComplete: leere Bahnen', () => {
+  it('wertet einen Lauf ohne Bahnen nicht als beendet', () => {
+    const lauf = createLauf(K100, [])
+    expect(isComplete(lauf)).toBe(false)
   })
 })

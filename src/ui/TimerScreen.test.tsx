@@ -55,6 +55,7 @@ const { appWert } = vi.hoisted(() => ({
     starteTrainingsSatz: vi.fn(),
     zeigeToast: vi.fn(),
     neuerLauf: vi.fn(),
+    fuegePersonHinzu: vi.fn(() => 'bahn-neu'),
     setzeKonfiguration: vi.fn(),
     setzeEinstellungen: vi.fn(),
   },
@@ -330,6 +331,47 @@ describe('TimerScreen: automatischer Satzwechsel', () => {
     ergebnis.unmount()
   })
 
+  it('bietet nach dem letzten Ziel den nächsten Satz als Knopf an', () => {
+    const { training, erster } = trainingMitZweiSaetzen()
+    training.autostart = false
+    const lauf = startAll(
+      createLauf(KONFIGURATION, [{ nummer: 1 }, { nummer: 2 }], erster.id),
+      0,
+      1_000,
+    )
+    appWert.aktiverLauf = lauf
+    appWert.aktiverSatz = erster
+    appWert.laeufe = [lauf]
+    appWert.satze = [erster]
+    appWert.trainings = [training]
+    appWert.starteTrainingsSatz = vi.fn(() => 'lauf-neu')
+
+    const ergebnis = render(<TimerScreen />)
+    const beendet = beende(lauf)
+    appWert.aktiverLauf = beendet
+    appWert.laeufe = [beendet]
+    ergebnis.aktualisiere(<TimerScreen />)
+
+    // Der Schalter ist aus, deshalb startet nichts von selbst — der nächste
+    // Satz steht aber direkt als Hauptknopf bereit.
+    expect(appWert.starteTrainingsSatz).not.toHaveBeenCalled()
+    const naechster = [...ergebnis.container.querySelectorAll('button')].find((element) =>
+      element.textContent?.includes('Nächster Satz'),
+    )
+    expect(naechster).toBeDefined()
+    act(() => naechster!.click())
+
+    expect(appWert.starteTrainingsSatz).toHaveBeenCalledWith(
+      training.id,
+      'ts2',
+      expect.any(Number),
+      expect.any(Number),
+    )
+    expect(appWert.zeigeToast).toHaveBeenCalledWith(expect.stringContaining('Satz 2'))
+
+    ergebnis.unmount()
+  })
+
   it('holt bei einem bereits angelegten nächsten Satz die fehlenden Starts nach', () => {
     const { training, erster } = trainingMitZweiSaetzen()
     const zweiter: Satz = { ...erster, id: 'satz-2' }
@@ -365,6 +407,49 @@ describe('TimerScreen: automatischer Satzwechsel', () => {
       expect.any(Number),
     )
     expect(appWert.startAlle).toHaveBeenCalled()
+
+    ergebnis.unmount()
+  })
+})
+
+describe('TimerScreen: Sofortstart und Personen', () => {
+  it('startet ohne Startübersicht einen offenen Lauf mit einer Bahn', () => {
+    appWert.aktiverLauf = null
+    appWert.aktiveEintraege = []
+    appWert.laeufe = []
+    appWert.neuerLauf = vi.fn(() => 'lauf-neu')
+
+    const ergebnis = render(<TimerScreen />)
+    const sofort = [...ergebnis.container.querySelectorAll('button')].find((element) =>
+      element.textContent?.includes('Sofort starten'),
+    )
+    expect(sofort).toBeDefined()
+    act(() => sofort!.click())
+
+    expect(appWert.neuerLauf).toHaveBeenCalledWith(
+      expect.objectContaining({ streckeM: null, zwischenzeiten: null }),
+      1,
+      [null],
+      expect.objectContaining({ startversatzMs: 0, wiederholungen: 1, reihen: 1 }),
+    )
+    expect(appWert.startAlle).toHaveBeenCalledOnce()
+
+    ergebnis.unmount()
+  })
+
+  it('fügt während der Messung eine Person hinzu', () => {
+    const ergebnis = render(<TimerScreen />)
+    const person = ergebnis.container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Person hinzufügen"]',
+    )
+    expect(person).not.toBeNull()
+
+    act(() => person!.click())
+
+    expect(appWert.fuegePersonHinzu).toHaveBeenCalledWith(
+      expect.any(Number),
+      expect.any(Number),
+    )
 
     ergebnis.unmount()
   })

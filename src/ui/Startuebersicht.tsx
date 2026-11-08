@@ -50,7 +50,7 @@ interface StartuebersichtProps {
   onStart: () => void
   onClose: () => void
   /** Öffnet die Einstellungen zum Korrigieren; fehlt, wenn es nichts zu ändern gibt. */
-  onAendern?: () => void
+  onAendern?: (() => void) | undefined
   aendernLabel?: string
   children: ReactNode
 }
@@ -75,27 +75,37 @@ export function Startuebersicht({
   children,
 }: StartuebersichtProps) {
   return (
-    <Sheet open={open} onClose={onClose} titel={titel}>
+    <Sheet
+      open={open}
+      onClose={onClose}
+      titel={titel}
+      // Die Bestätigung bleibt immer erreichbar. In einem scrollenden Sheet
+      // lag sie auf kleinen Handys und im Querformat unterhalb des sichtbaren
+      // Bereichs — der Start wirkte dann wie eine Sackgasse.
+      fuss={
+        <>
+          <button
+            type="button"
+            onClick={onStart}
+            className="flex h-16 w-full items-center justify-center gap-2 rounded-2xl bg-accent text-xl font-bold text-accent-fg shadow-lg active:opacity-90 short:h-12 short:text-lg"
+          >
+            <CheckIcon className="h-6 w-6" />
+            {startLabel}
+          </button>
+          {onAendern ? (
+            <button
+              type="button"
+              onClick={onAendern}
+              className="mt-2 h-12 w-full rounded-xl border border-line bg-surface2 text-sm font-semibold text-muted short:h-10"
+            >
+              {aendernLabel}
+            </button>
+          ) : null}
+        </>
+      }
+    >
       <p className="text-sm leading-relaxed text-muted">{text}</p>
       <div className="mt-4 rounded-2xl border border-line bg-surface2/60 px-3">{children}</div>
-
-      <button
-        type="button"
-        onClick={onStart}
-        className="mt-5 flex h-16 w-full items-center justify-center gap-2 rounded-2xl bg-accent text-xl font-bold text-accent-fg shadow-lg active:scale-[0.99]"
-      >
-        <CheckIcon className="h-6 w-6" />
-        {startLabel}
-      </button>
-      {onAendern ? (
-        <button
-          type="button"
-          onClick={onAendern}
-          className="mt-2 h-12 w-full rounded-xl border border-line bg-surface2 text-sm font-semibold text-muted"
-        >
-          {aendernLabel}
-        </button>
-      ) : null}
     </Sheet>
   )
 }

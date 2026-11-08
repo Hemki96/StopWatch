@@ -9,7 +9,7 @@
  * der aktive Zustand kommen aus app/AppProvider. `useNow` liefert die monotone
  * Zeit, `useWakeLock` hält den Bildschirm an, solange etwas läuft.
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useApp, type AktiverEintrag, type Einstellungen } from '../app/AppProvider'
 import { useNow } from '../app/useNow'
 import { useWakeLock } from '../app/useWakeLock'
@@ -17,6 +17,7 @@ import { formatCountdown, formatStrecke, formatTakt, formatTime } from '../domai
 import { einheitVon, formatBeckenlaenge } from '../domain/einheit'
 import {
   bahnenNachReihen,
+  finishMs,
   hasStarted,
   isComplete,
   isFinished,
@@ -38,6 +39,7 @@ import {
   trainingVonSatz,
   trainingsFortschritt,
   trainingsSatzTitel,
+  type TrainingsSatzFortschritt,
 } from '../domain/training'
 import {
   type Bahn,
@@ -54,7 +56,7 @@ import { LaufErgebnis } from './LaufErgebnis'
 import { Ruecknahme, type RuecknahmeZiel } from './Ruecknahme'
 import { SerieAnsicht } from './SerieAnsicht'
 import { Startuebersicht, StartuebersichtLauf } from './Startuebersicht'
-import { TrashIcon, XIcon } from './icons'
+import { ChevronRightIcon, PlusIcon, TrashIcon, XIcon } from './icons'
 
 /**
  * Einzeilige Beschreibung eines Laufs für Kopfzeile und Vorschau:
@@ -90,6 +92,14 @@ function beschriftung(
   return teile.join(' · ')
 }
 
+/** Datum und Uhrzeit des letzten Laufs im Bereit-Zustand. */
+const zuletztFormat = new Intl.DateTimeFormat('de-DE', {
+  day: '2-digit',
+  month: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+})
+
 /** Kurztitel für die Laufleiste; Serien nennen die Wiederholungszahl mit. */
 function kurzTitel(lauf: Lauf, satz: Satz | null): string {
   const strecke = formatStrecke(lauf.konfiguration.streckeM, einheitVon(lauf.konfiguration))
@@ -111,6 +121,21 @@ function planAusEinstellungen(einstellungen: Einstellungen): SatzPlan | null {
         startversatzMs: einstellungen.startversatzMs,
       }
     : null
+}
+
+/**
+ * Vorlage für „Diesen Lauf wiederholen“.
+ *
+ * Sie beschreibt einen einzelnen Lauf vollständig: Konfiguration, Bahnen je
+ * Reihe, Reihen, Schwimmerzuordnung und Startversatz. Eine Serie ist bewusst
+ * ausgenommen, weil ihr Plan beim Anlegen feststeht.
+ */
+interface StartVorlage {
+  konfiguration: LaufKonfiguration
+  bahnen: number
+  reihen: number
+  schwimmerProBahn: (string | null)[]
+  startversatzMs: number
 }
 
 /**
@@ -332,7 +357,7 @@ function LaufLeiste({
                 {kurzTitel(eintrag.lauf, eintrag.satz)}
               </span>
               {!eintrag.serie ? (
-                <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide text-muted">
+                <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-muted">
                   {status === 'fertig' ? 'Ziel' : status === 'laeuft' ? 'läuft' : 'bereit'}
                 </span>
               ) : null}
@@ -348,7 +373,7 @@ function LaufLeiste({
         onClick={onAnlegen}
         // `aria-label`, weil das Plus allein nichts Vorlesbares ist.
         aria-label="Weiteren Lauf anlegen"
-        className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-line bg-surface text-lg font-bold text-muted"
+        className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-line bg-surface text-lg font-bold text-muted"
       >
         +
       </button>
@@ -360,7 +385,12 @@ function LaufLeiste({
  * Timer-Tab. Zeigt entweder die Vorschau des nächsten Laufs oder die laufende
  * Messung und führt Start, Anschlag, Ziel und Verwerfen aus.
  */
-export function TimerScreen() {
+export function TimerScreen({
+  onLaufImVerlauf,
+}: {
+  /** Wechselt in den Verlauf und öffnet dort das Detail dieses Laufs. */
+  onLaufImVerlauf?: ((laufId: string) => void) | undefined
+} = {}) {
   const app = useApp()
   const lauf = app.aktiverLauf
   const satz = app.aktiverSatz
@@ -372,7 +402,9 @@ export function TimerScreen() {
   const [frageVerwerfen, setFrageVerwerfen] = useState(false)
   // Startübersicht: `'neu'` prüft die Vorgaben für einen neuen Lauf, `'aktiv'`
   // den bereits angelegten Lauf, dessen Uhr noch nicht läuft. `null` = zu.
-  const [startPruefen, setStartPruefen] = useState<'neu' | 'aktiv' | null>(null)
+  const [startPruefen, setStartPruefen] = useState<'neu' | 'aktiv' | 'wiederholung' | null>(null)
+  // Vorlage des beendeten Laufs, solange die Wiederholung bestätigt wird.
+  const [wiederholung, setWiederholung] = useState<StartVorlage | null>(null)
   // Zuletzt bediente Bahn beziehungsweise Serienzeile im aktiven Lauf. Sie ist
   // das Ziel der sichtbaren Rücknahme in der Fußzeile; die Lauf-ID verhindert,
   // dass ein Wechsel des aktiven Laufs ein altes Ziel weiterführt.
@@ -397,17 +429,23 @@ export function TimerScreen() {
       : lauf.bahnen.every(isFinished)
     : false
 
-  // Gehört der sichtbare Satz zu einem Training mit automatischem Wechsel?
-  // Der nächste Eintrag wird erst beim Übergang „fertig“ benötigt; `useMemo`
-  // hält die Suche aus dem 30-fps-Render der laufenden Messung heraus.
+  // Gehört der sichtbare Satz zu einem Training? `useMemo` hält die Suche aus
+  // dem 30-fps-Render der laufenden Messung heraus. Der nächste Satz wird
+  // unabhängig vom Schalter berechnet: Mit Automatik startet er sofort, ohne
+  // Automatik bietet die Fußzeile ihn als Knopf an.
   const autoTraining = useMemo(
     () => trainingVonSatz(app.trainings, satz?.id ?? null),
     [app.trainings, satz?.id],
   )
-  const autoNaechster = useMemo(() => {
-    if (!beendetJetzt || autoTraining?.autostart !== true) return null
-    return naechsterSatz(trainingsFortschritt(autoTraining, app.satze, app.laeufe))
-  }, [beendetJetzt, autoTraining, app.satze, app.laeufe])
+  const naechsterImTraining = useMemo(
+    () =>
+      autoTraining
+        ? naechsterSatz(trainingsFortschritt(autoTraining, app.satze, app.laeufe))
+        : null,
+    [autoTraining, app.satze, app.laeufe],
+  )
+  const autoNaechster =
+    beendetJetzt && autoTraining?.autostart === true ? naechsterImTraining : null
 
   // Ein Wechsel des aktiven Laufs oder das Schließen darf keine alte Ansage
   // stehen lassen; sonst würde ein späteres Ziel an den vorigen Text anhängen.
@@ -435,40 +473,45 @@ export function TimerScreen() {
     vorherFertig.current = { fertig: beendetJetzt, laufId }
   }, [beendetJetzt, laufId, serie])
 
+  // Automatischer Satzwechsel und der Knopf „Nächster Satz“ teilen sich denselben
+  // Weg: Ein offener Satz wird angelegt und gestartet, ein bereits angelegter
+  // bekommt seine fehlenden Starts, ein laufender wird nur ausgewählt.
+  const { startAlle, starteTrainingsSatz, zeigeToast } = app
+  const wechsleZuNaechstemSatz = useCallback(
+    (ziel: TrainingsSatzFortschritt) => {
+      if (!autoTraining) return false
+      const neuerLaufId = starteTrainingsSatz(
+        autoTraining.id,
+        ziel.eintrag.id,
+        performance.now(),
+        Date.now(),
+      )
+      if (!neuerLaufId) return false
+      // Ein „bereiter“ Satz wurde schon einmal angelegt, aber noch nicht
+      // gestartet. `starteTrainingsSatz` wählt ihn nur aus; die fehlenden
+      // Starts holt `startAlle` nach. Ein laufender Satz bleibt unangetastet.
+      if (ziel.status === 'bereit') startAlle(performance.now(), Date.now())
+      zeigeToast(
+        ziel.status === 'laeuft'
+          ? `Zum laufenden Satz ${ziel.index + 1}: ${trainingsSatzTitel(ziel.eintrag)}`
+          : `Satz ${ziel.index + 1} gestartet: ${trainingsSatzTitel(ziel.eintrag)}`,
+      )
+      return true
+    },
+    [autoTraining, startAlle, starteTrainingsSatz, zeigeToast],
+  )
+
   // Automatischer Satzwechsel: Nur der Übergang von „läuft“ nach „fertig“
   // zählt. Ein bereits fertiger Satz beim Öffnen des Tabs startet nichts, und
   // nach dem Wechsel verhindert die neue Lauf-ID einen zweiten Start.
   const vorherAuto = useRef({ fertig: beendetJetzt, laufId })
-  const { startAlle, starteTrainingsSatz, zeigeToast } = app
   useEffect(() => {
     const vorher = vorherAuto.current
     vorherAuto.current = { fertig: beendetJetzt, laufId }
     if (!beendetJetzt || vorher.fertig || vorher.laufId !== laufId) return
-    if (!autoTraining || autoTraining.autostart !== true || !autoNaechster) return
-
-    const neuerLaufId = starteTrainingsSatz(
-      autoTraining.id,
-      autoNaechster.eintrag.id,
-      performance.now(),
-      Date.now(),
-    )
-    if (!neuerLaufId) return
-    // Ein „bereiter“ Satz wurde schon einmal angelegt, aber noch nicht
-    // gestartet. `starteTrainingsSatz` wählt ihn nur aus; die fehlenden Starts
-    // holt `startAlle` nach. Ein laufender Satz wird dagegen nicht angefasst.
-    if (autoNaechster.status === 'bereit') startAlle(performance.now(), Date.now())
-    zeigeToast(
-      `Satz ${autoNaechster.index + 1} gestartet: ${trainingsSatzTitel(autoNaechster.eintrag)}`,
-    )
-  }, [
-    autoNaechster,
-    autoTraining,
-    beendetJetzt,
-    laufId,
-    startAlle,
-    starteTrainingsSatz,
-    zeigeToast,
-  ])
+    if (!autoNaechster) return
+    wechsleZuNaechstemSatz(autoNaechster)
+  }, [autoNaechster, beendetJetzt, laufId, wechsleZuNaechstemSatz])
 
   // Die Zeit läuft nur, solange irgendwo etwas plant oder läuft; sonst bliebe
   // ein Render-Loop ohne sichtbaren Nutzen. Der Wake-Lock hält den Bildschirm
@@ -522,6 +565,59 @@ export function TimerScreen() {
   }
 
   /**
+   * Startet einen Lauf aus einer Vorlage („Diesen Lauf wiederholen“). Die
+   * globalen Einstellungen bleiben unverändert; nur dieser eine Start nutzt
+   * die Werte des beendeten Laufs.
+   */
+  const starteVorlage = (vorlage: StartVorlage) => {
+    const perf = performance.now()
+    const wall = Date.now()
+    const laufId = app.neuerLauf(vorlage.konfiguration, vorlage.bahnen, vorlage.schwimmerProBahn, {
+      startversatzMs: vorlage.startversatzMs,
+      wiederholungen: 1,
+      reihen: vorlage.reihen,
+    })
+    if (!laufId) return
+    app.startAlle(perf, wall)
+    melde('Lauf gestartet')
+  }
+
+  /**
+   * Sofortstart ohne Startübersicht: eine offene Strecke mit einer Bahn.
+   * Die offene Strecke ist die einzige Form, in der jeder Tap ein Split ist
+   * und das Ziel erst der Zielknopf setzt; so sind beliebig viele
+   * Zwischenzeiten möglich. Weitere Personen kommen im laufenden Lauf über
+   * „Person hinzufügen“ dazu.
+   */
+  const starteSofort = () => {
+    const perf = performance.now()
+    const wall = Date.now()
+    const laufId = app.neuerLauf(
+      {
+        ...app.einstellungen.konfiguration,
+        streckeM: null,
+        zwischenzeiten: null,
+      },
+      1,
+      [null],
+      { startversatzMs: 0, wiederholungen: 1, reihen: 1 },
+    )
+    if (!laufId) return
+    app.startAlle(perf, wall)
+    melde('Lauf gestartet')
+  }
+
+  /**
+   * Hängt eine weitere Bahn an den sichtbaren Lauf. Läuft die Uhr bereits,
+   * startet die neue Person mit diesem Tap; vor dem Start bleibt sie bereit.
+   * Serien und Trainingssätze sind ausgenommen, weil ihr Plan feststeht.
+   */
+  const personHinzufuegen = () => {
+    const bahnId = app.fuegePersonHinzu(performance.now(), Date.now())
+    if (bahnId) melde('Person hinzugefügt')
+  }
+
+  /**
    * Setzt die fehlenden Starts eines bereits angelegten Laufs. `startAlle`
    * ergänzt nur Bahnen ohne Startzeit; nach einem Reload bleiben so gemessene
    * Zeiten unangetastet.
@@ -548,6 +644,9 @@ export function TimerScreen() {
         gruppe.bahnen.map((bahn) => schwimmerName(bahn.schwimmerId)),
       )
     : []
+  const namenWiederholung = wiederholung
+    ? wiederholung.schwimmerProBahn.map((id) => schwimmerName(id))
+    : []
 
   /**
    * Übersicht vor dem Start. Sie zeigt nur Werte; erst „Jetzt starten“ setzt
@@ -557,22 +656,37 @@ export function TimerScreen() {
   const startUebersicht = (
     <Startuebersicht
       open={startPruefen !== null}
-      titel="Start prüfen"
-      text="Prüfe Becken, Strecke, Bahnen und Schwimmer. Erst mit „Jetzt starten“ beginnt die Uhr."
+      titel={startPruefen === 'wiederholung' ? 'Lauf wiederholen' : 'Start prüfen'}
+      text={
+        startPruefen === 'wiederholung'
+          ? 'Prüfe die Werte des beendeten Laufs. Erst mit „Jetzt starten“ beginnt die Uhr.'
+          : 'Prüfe Becken, Strecke, Bahnen und Schwimmer. Erst mit „Jetzt starten“ beginnt die Uhr.'
+      }
       startLabel="Jetzt starten"
-      onClose={() => setStartPruefen(null)}
+      onClose={() => {
+        setStartPruefen(null)
+        setWiederholung(null)
+      }}
       onStart={() => {
         const herkunft = startPruefen
         setStartPruefen(null)
         // Ein bereits angelegter Lauf braucht nur die fehlenden Starts; ein
-        // neuer Lauf entsteht erst mit `starte`.
+        // neuer Lauf entsteht erst mit `starte`/`starteVorlage`.
         if (herkunft === 'aktiv') weiter()
-        else starte()
+        else if (herkunft === 'wiederholung' && wiederholung) {
+          starteVorlage(wiederholung)
+          setWiederholung(null)
+        } else starte()
       }}
-      onAendern={() => {
-        setStartPruefen(null)
-        setSheet(true)
-      }}
+      onAendern={
+        startPruefen === 'wiederholung'
+          ? undefined
+          : () => {
+              setStartPruefen(null)
+              setWiederholung(null)
+              setSheet(true)
+            }
+      }
       aendernLabel="Einstellungen ändern"
     >
       {startPruefen === 'aktiv' && lauf ? (
@@ -583,6 +697,15 @@ export function TimerScreen() {
           namen={namenAktiv}
           startversatzMs={lauf.startversatzMs}
           plan={satz?.plan ?? null}
+        />
+      ) : startPruefen === 'wiederholung' && wiederholung ? (
+        <StartuebersichtLauf
+          konfiguration={wiederholung.konfiguration}
+          bahnen={wiederholung.bahnen}
+          reihen={wiederholung.reihen}
+          namen={namenWiederholung}
+          startversatzMs={wiederholung.startversatzMs}
+          plan={null}
         />
       ) : (
         <StartuebersichtLauf
@@ -599,6 +722,21 @@ export function TimerScreen() {
 
   // Kein aktiver Lauf: Vorschau der Einstellungen mit Startknopf.
   if (!lauf) {
+    // Jüngster begonnener Lauf für den Rückblick. Geplante, nie gestartete
+    // Wiederholungen bleiben außen vor.
+    const letzterLauf = app.laeufe.reduce<Lauf | null>((spaet, kandidat) => {
+      if (kandidat.startWallMs === null) return spaet
+      if (!spaet || (spaet.startWallMs ?? 0) < kandidat.startWallMs) return kandidat
+      return spaet
+    }, null)
+    const letzterStart = letzterLauf?.startWallMs ?? null
+    const zeiten = letzterLauf
+      ? letzterLauf.bahnen
+          .map((bahn) => finishMs(bahn))
+          .filter((ms): ms is number => ms !== null)
+      : []
+    const schnellste = zeiten.length > 0 ? Math.min(...zeiten) : null
+
     return (
       <div className="flex h-full flex-col">
         {/* Live-Region auch vor dem ersten Lauf, damit „Lauf gestartet“ aus
@@ -612,7 +750,7 @@ export function TimerScreen() {
           onWaehlen={app.waehleLauf}
           onAnlegen={app.anlegenLauf}
         />
-        <div className="flex-1 overflow-y-auto px-4 pb-4 pt-6 rail:px-6">
+        <div className="pool-muster flex-1 overflow-y-auto px-4 pb-4 pt-6 rail:px-6">
           <div className="mx-auto w-full max-w-2xl">
             <h1 className="sr-only">Timer</h1>
             <p className="text-[11px] font-bold uppercase tracking-wider text-muted">
@@ -637,15 +775,62 @@ export function TimerScreen() {
               <span className="mt-1 block text-sm text-accent">Ändern</span>
             </button>
 
-            <div className="mt-10 space-y-3 text-sm leading-relaxed text-muted">
-              <p>
-                „Start“ zeigt zuerst eine Übersicht. Erst dort startet „Jetzt starten“ alle Bahnen.
-                Mit Reihen startet die nächste Gruppe nach dem eingestellten Versatz.
-              </p>
-              <p>
-                Danach tippst du jede Bahn bei jedem Anschlag an. Der letzte Anschlag ist das Ziel.
-              </p>
-              <p>Langes Drücken nimmt die letzte Aktion einer Bahn zurück.</p>
+            {/* Der letzte Lauf gibt Kontext und führt direkt ins Detail.
+                Nur mit Rückweg-Callback, damit der Screen ohne Navigation
+                (etwa in Tests) keine tote Schaltfläche zeigt. */}
+            {letzterLauf && letzterStart !== null && onLaufImVerlauf ? (
+              <button
+                type="button"
+                onClick={() => onLaufImVerlauf(letzterLauf.id)}
+                className="mt-3 flex w-full items-center gap-3 rounded-2xl border border-line bg-surface p-4 text-left"
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[11px] font-bold uppercase tracking-wider text-muted">
+                    Zuletzt
+                  </span>
+                  <span className="block text-sm font-semibold">
+                    {letzterLauf.bahnen.length}{' '}
+                    {letzterLauf.bahnen.length === 1 ? 'Bahn' : 'Bahnen'} ·{' '}
+                    {formatStrecke(letzterLauf.konfiguration.streckeM, einheitVon(letzterLauf.konfiguration))}
+                  </span>
+                  <span className="tabular block text-xs text-muted">
+                    {zuletztFormat.format(letzterStart)} Uhr
+                    {schnellste !== null ? ` · schnellste ${formatTime(schnellste)}` : ''}
+                  </span>
+                </span>
+                <ChevronRightIcon className="h-4 w-4 shrink-0 text-muted" />
+              </button>
+            ) : null}
+
+            <div
+              className={`${letzterLauf && onLaufImVerlauf ? 'mt-6' : 'mt-10'} space-y-3 text-sm leading-relaxed text-muted`}
+            >
+              {app.laeufe.length === 0 ? (
+                <>
+                  <p>
+                    „Start“ zeigt zuerst eine Übersicht. Erst dort startet „Jetzt starten“ alle
+                    Bahnen. Mit Reihen startet die nächste Gruppe nach dem eingestellten Versatz.
+                  </p>
+                  <p>
+                    „Sofort starten“ beginnt ohne Übersicht eine offene Strecke mit einer Bahn.
+                    Jeder Tap ist dann eine Zwischenzeit, das Ziel setzt der Zielknopf.
+                  </p>
+                  <p>
+                    Weitere Personen kommen im laufenden Lauf über „Person“ in der Kopfzeile dazu
+                    und starten sofort mit.
+                  </p>
+                  <p>Langes Drücken nimmt die letzte Aktion einer Bahn zurück.</p>
+                </>
+              ) : (
+                // Für wiederkehrende Nutzer ist die Einführung bekannt; eine
+                // Zeile erinnert an die beiden Gesten, ohne die halbe Fläche zu
+                // füllen. Die Erklärung erscheint wieder, wenn kein Lauf mehr
+                // existiert (etwa nach „Alle Daten löschen“).
+                <p>
+                  Tippen ist der Anschlag, langes Drücken nimmt ihn zurück. Weitere Personen
+                  kommen über „Person“ in der Kopfzeile dazu.
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -655,9 +840,20 @@ export function TimerScreen() {
             <button
               type="button"
               onClick={() => setStartPruefen('neu')}
-              className="h-20 w-full rounded-2xl bg-accent text-2xl font-bold text-accent-fg shadow-lg active:scale-[0.99]"
+              className="h-20 w-full rounded-2xl bg-accent text-2xl font-bold text-accent-fg shadow-lg active:opacity-90"
             >
               Start
+            </button>
+            {/* Zweiter Weg ohne Konfiguration: offene Strecke, eine Bahn. */}
+            <button
+              type="button"
+              onClick={starteSofort}
+              className="mt-2 flex min-h-14 w-full flex-col items-center justify-center rounded-2xl border border-line bg-surface px-4 py-2 text-center active:opacity-90"
+            >
+              <span className="text-base font-bold">Sofort starten</span>
+              <span className="text-xs text-muted">
+                Offener Lauf, eine Bahn – Personen jederzeit ergänzen
+              </span>
             </button>
           </div>
         </div>
@@ -720,6 +916,25 @@ export function TimerScreen() {
     1,
     app.aktiveEintraege.findIndex((eintrag) => eintrag.id === lauf.id) + 1,
   )
+
+  /**
+   * Vorlage für eine Wiederholung des sichtbaren Laufs. Bei einer Serie gibt
+   * es keine Vorlage: Ihr Plan steht beim Anlegen fest, und „dieselbe Serie“
+   * wäre nicht dasselbe wie eine neue Runde.
+   */
+  const wiederholungVorlage = (): StartVorlage | null => {
+    if (serie) return null
+    const gruppen = bahnenNachReihen(lauf.bahnen)
+    return {
+      konfiguration: lauf.konfiguration,
+      bahnen: Math.max(1, ...gruppen.map((gruppe) => gruppe.bahnen.length)),
+      reihen: reihenVon(lauf),
+      schwimmerProBahn: gruppen.flatMap((gruppe) =>
+        gruppe.bahnen.map((bahn) => bahn.schwimmerId),
+      ),
+      startversatzMs: lauf.startversatzMs,
+    }
+  }
 
   /**
    * Die sichtbare Rücknahme merkt sich die zuletzt bediente Bahn, bevor sie
@@ -859,6 +1074,20 @@ export function TimerScreen() {
   const hatUnterbrochene = (serie ? runden.flatMap((runde) => runde.bahnen) : lauf.bahnen).some(
     (bahn) => bahn.startMs === null && bahn.anschlaege.length > 0 && !isFinished(bahn),
   )
+  // Warnungen bleiben auch im Querformat stehen; der reine Bedienhinweis darf
+  // dort entfallen, damit die Messfläche die gewonnene Höhe behält.
+  const hinweisIstWichtig =
+    (app.brauchtTakt && !wach) || hatUnterbrochene || hatFehlendeStarts
+  // Nach dem letzten Ziel führt der Hauptknopf direkt in den nächsten Satz des
+  // Trainings — auch ohne automatischen Wechsel. Ein bereits laufender Satz
+  // wird nur ausgewählt, ein angelegter fortgesetzt.
+  const naechsterSatzKnopf = naechsterImTraining
+    ? naechsterImTraining.status === 'offen'
+      ? 'Nächster Satz'
+      : naechsterImTraining.status === 'bereit'
+        ? `Satz ${naechsterImTraining.index + 1} fortsetzen`
+        : 'Zum laufenden Satz'
+    : null
 
   return (
     <div className="flex h-full flex-col">
@@ -883,25 +1112,44 @@ export function TimerScreen() {
         <button
           type="button"
           onClick={() => setSheet(true)}
-          className="min-w-0 flex-1 text-left"
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
         >
-          <span className="block text-[10px] font-bold uppercase tracking-wider text-muted">
-            {serie
-              ? `Serie · Runde ${rundeJetzt}/${plan?.wiederholungen ?? runden.length}`
-              : gestartet
-                ? 'Lauf'
-                : 'Bereit'}
+          <span className="min-w-0 flex-1">
+            <span className="block text-[10px] font-bold uppercase tracking-wider text-muted">
+              {serie
+                ? `Serie · Runde ${rundeJetzt}/${plan?.wiederholungen ?? runden.length}`
+                : gestartet
+                  ? 'Lauf'
+                  : 'Bereit'}
+            </span>
+            <span className="line-clamp-2 text-sm font-medium">
+              {beschriftung(
+                lauf.konfiguration,
+                lauf.bahnen.length,
+                reihenVon(lauf),
+                startversatzMs,
+                plan,
+              )}
+            </span>
           </span>
-          <span className="line-clamp-2 text-sm font-medium">
-            {beschriftung(
-              lauf.konfiguration,
-              lauf.bahnen.length,
-              reihenVon(lauf),
-              startversatzMs,
-              plan,
-            )}
-          </span>
+          {/* Der Kopf ist der einzige Weg zur Konfiguration; der Pfeil macht
+              das sichtbar, ohne einen zusätzlichen Knopf zu belegen. */}
+          <ChevronRightIcon className="h-4 w-4 shrink-0 text-muted" />
         </button>
+        {/* Weitere Person direkt im laufenden Lauf. Serien und Trainingssätze
+            sind ausgenommen: Bei einer Serie müsste die Bahn in allen Runden
+            entstehen, ein gestarteter Trainingssatz ist fest. */}
+        {!serie && !autoTraining && !alleBeendet ? (
+          <button
+            type="button"
+            onClick={personHinzufuegen}
+            aria-label="Person hinzufügen"
+            className="flex h-10 shrink-0 items-center gap-1 rounded-xl border border-line bg-surface px-2.5 text-xs font-semibold text-muted active:opacity-90"
+          >
+            <PlusIcon className="h-4 w-4" />
+            Person
+          </button>
+        ) : null}
         {/* Fertige Läufe werden geschlossen (X), laufende verworfen (Papierkorb
             mit Rückfrage). Zwei getrennte Wege, weil Schließen nichts löscht. */}
         {alleBeendet ? (
@@ -909,7 +1157,7 @@ export function TimerScreen() {
             type="button"
             onClick={app.schliesseAktivenLauf}
             aria-label={serie ? 'Serie schließen' : 'Lauf schließen'}
-            className="grid h-10 w-10 place-items-center rounded-xl text-muted"
+            className="grid h-11 w-11 place-items-center rounded-xl text-muted"
           >
             <XIcon className="h-5 w-5" />
           </button>
@@ -918,7 +1166,7 @@ export function TimerScreen() {
             type="button"
             onClick={() => setFrageVerwerfen(true)}
             aria-label={serie ? 'Serie abbrechen' : 'Lauf verwerfen'}
-            className="grid h-10 w-10 place-items-center rounded-xl text-muted"
+            className="grid h-11 w-11 place-items-center rounded-xl text-muted"
           >
             <TrashIcon className="h-5 w-5" />
           </button>
@@ -966,7 +1214,7 @@ export function TimerScreen() {
                   </span>
                 </h2>
               ) : null}
-              <div className={`grid auto-rows-[minmax(7.5rem,1fr)] gap-2 rail:gap-3 ${bahnSpalten}`}>
+              <div className={`grid auto-rows-[minmax(7.5rem,1fr)] gap-2 short:auto-rows-[minmax(6.25rem,1fr)] short:gap-1.5 rail:gap-3 ${bahnSpalten}`}>
                 {gruppe.bahnen.map((bahn) => (
                   <LaneTile
                     key={bahn.id}
@@ -992,7 +1240,7 @@ export function TimerScreen() {
 
       {/* Fußzeile mit der jeweils nächsten sinnvollen Aktion: starten,
           abschließen oder den Fortschritt bestätigen. */}
-      <div className="border-t border-line p-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] rail:px-4">
+      <div className="border-t border-line p-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] short:p-2 rail:px-4">
         <div className="mx-auto w-full max-w-3xl">
         {/* Während der Messung steht die Rücknahme sichtbar in der Fußzeile,
             außerhalb der Messflächen. Nach dem letzten Ziel übernimmt
@@ -1006,7 +1254,7 @@ export function TimerScreen() {
           <button
             type="button"
             onClick={() => setStartPruefen('aktiv')}
-            className="h-16 w-full rounded-2xl bg-accent text-xl font-bold text-accent-fg shadow-lg active:scale-[0.99]"
+            className="h-16 w-full rounded-2xl bg-accent text-xl font-bold text-accent-fg shadow-lg active:opacity-90"
           >
             Start alle
           </button>
@@ -1023,13 +1271,71 @@ export function TimerScreen() {
                 </span>
               ) : null}
             </p>
+            {naechsterImTraining ? (
+              <button
+                type="button"
+                onClick={() => wechsleZuNaechstemSatz(naechsterImTraining)}
+                className="h-16 w-full rounded-2xl bg-accent px-4 text-accent-fg shadow-lg active:opacity-90"
+              >
+                <span className="block truncate text-lg font-bold">{naechsterSatzKnopf}</span>
+                <span className="block truncate text-xs font-medium opacity-80">
+                  {trainingsSatzTitel(naechsterImTraining.eintrag)}
+                </span>
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => setStartPruefen('neu')}
-              className="h-16 w-full rounded-2xl bg-accent text-xl font-bold text-accent-fg shadow-lg active:scale-[0.99]"
+              className={
+                naechsterImTraining
+                  ? 'h-12 w-full rounded-xl border border-line bg-surface text-sm font-semibold text-muted'
+                  : 'h-16 w-full rounded-2xl bg-accent text-xl font-bold text-accent-fg shadow-lg active:opacity-90'
+              }
             >
               Neuer Lauf
             </button>
+            {!serie && !autoTraining ? (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const vorlage = wiederholungVorlage()
+                    if (!vorlage) return
+                    setWiederholung(vorlage)
+                    setStartPruefen('wiederholung')
+                  }}
+                  className="h-11 flex-1 rounded-xl border border-line bg-surface px-2 text-[11px] font-semibold leading-tight text-fg"
+                >
+                  Diesen Lauf wiederholen
+                </button>
+                {onLaufImVerlauf ? (
+                  <button
+                    type="button"
+                    onClick={() => onLaufImVerlauf(lauf.id)}
+                    className="h-11 flex-1 rounded-xl border border-line bg-surface px-2 text-[11px] font-semibold leading-tight text-accent"
+                  >
+                    Im Verlauf ansehen
+                  </button>
+                ) : null}
+              </div>
+            ) : onLaufImVerlauf ? (
+              <button
+                type="button"
+                onClick={() => onLaufImVerlauf(lauf.id)}
+                className="h-11 w-full rounded-xl border border-line bg-surface px-2 text-[11px] font-semibold leading-tight text-accent"
+              >
+                Im Verlauf ansehen
+              </button>
+            ) : null}
+            {!naechsterImTraining ? (
+              <button
+                type="button"
+                onClick={starteSofort}
+                className="h-10 w-full rounded-xl text-xs font-semibold text-muted underline-offset-2 hover:underline"
+              >
+                Sofort starten · offener Lauf mit einer Bahn
+              </button>
+            ) : null}
           </div>
         ) : (
           <div className="flex items-center justify-between gap-3">
@@ -1052,7 +1358,11 @@ export function TimerScreen() {
               </p>
               {/* Ein Hinweis zur Zeit: Wake-Lock, fehlende Starts, offene
                   Strecke oder der normale Ablauf. */}
-              <p className={`text-xs ${app.brauchtTakt && !wach ? 'text-warn' : 'text-muted'}`}>
+              <p
+                className={`text-xs ${app.brauchtTakt && !wach ? 'text-warn' : 'text-muted'} ${
+                  hinweisIstWichtig ? '' : 'short:hidden'
+                }`}
+              >
                 {app.brauchtTakt && !wach
                   ? 'Display-Sperre nicht aktiv — Bildschirm kann sich ausschalten.'
                   : hatUnterbrochene

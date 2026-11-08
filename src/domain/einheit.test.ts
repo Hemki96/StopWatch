@@ -73,7 +73,9 @@ describe('Einheit und Beckenlänge', () => {
     // Eine Meter-Konfiguration ohne Einheitenfeld bleibt unverändert; ein
     // ausdrückliches `einheit: 'm'` wird entfernt.
     const meter = { beckenlaengeM: 50, streckeM: 100, schwimmart: 'brust' } as const
-    expect(alsMeterKonfiguration(meter)).toBe(meter)
+    // Immer eine flache Kopie, auch bei Meter-Konfiguration.
+    expect(alsMeterKonfiguration(meter)).not.toBe(meter)
+    expect(alsMeterKonfiguration(meter)).toEqual(meter)
     expect(alsMeterKonfiguration({ ...meter, einheit: 'm' })).toEqual(meter)
   })
 })

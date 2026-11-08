@@ -84,12 +84,26 @@ function Abweichung({ ms }: { ms: number | null }) {
   )
 }
 
-/** Leerzustand, wenn noch kein Satz Splits hat. */
-function Leer() {
+/**
+ * Leerzustand, wenn noch kein Satz Splits hat. Der Weg dorthin führt über den
+ * Timer; ein reiner Erklärsatz wäre eine Sackgasse.
+ */
+function Leer({ onZumTimer }: { onZumTimer?: (() => void) | undefined }) {
   return (
-    <p className="mt-16 px-4 text-center text-sm leading-relaxed text-muted">
-      Noch keine auswertbaren Sätze. Splits entstehen im Training bei jedem Anschlag.
-    </p>
+    <div className="mt-16 px-4 text-center">
+      <p className="text-sm leading-relaxed text-muted">
+        Noch keine auswertbaren Sätze. Splits entstehen im Training bei jedem Anschlag.
+      </p>
+      {onZumTimer ? (
+        <button
+          type="button"
+          onClick={onZumTimer}
+          className="mt-4 h-12 rounded-xl bg-accent px-5 text-sm font-semibold text-accent-fg"
+        >
+          Zum Timer
+        </button>
+      ) : null}
+    </div>
   )
 }
 
@@ -104,10 +118,12 @@ function SatzListe({
   seiten,
   onMehr,
   onOeffnen,
+  onZumTimer,
 }: {
   seiten: number
   onMehr: () => void
   onOeffnen: (satzId: string) => void
+  onZumTimer?: (() => void) | undefined
 }) {
   const app = useApp()
   // Einmal gruppieren statt für jeden Satz alle Läufe zu filtern (#68). Die
@@ -142,7 +158,7 @@ function SatzListe({
   // Der im Verlauf vergebene Tagesname erscheint auch hier an der Überschrift.
   const tagesNamen = useMemo(() => tagesnamen(app.satze), [app.satze])
 
-  if (saetze.length === 0) return <Leer />
+  if (saetze.length === 0) return <Leer onZumTimer={onZumTimer} />
 
   return (
     <>
@@ -242,7 +258,7 @@ function Kopf({
       <button
         type="button"
         onClick={onZurueck}
-        className="flex h-9 items-center gap-1 rounded-xl text-sm font-medium text-accent"
+        className="flex h-11 items-center gap-1 rounded-xl text-sm font-medium text-accent"
       >
         <ChevronLeftIcon className="h-4 w-4" />
         {zurueckLabel}
@@ -330,7 +346,7 @@ function SatzMatrix({
                         }`}
                       >
                         R{nummer}
-                        {laeuft ? <span className="block text-[9px] normal-case">läuft</span> : null}
+                        {laeuft ? <span className="block text-[10px] normal-case">läuft</span> : null}
                       </th>
                     )
                   })}
@@ -400,7 +416,7 @@ function SatzMatrix({
                             )}
                             <Abweichung ms={zelle.abweichungMs} />
                             {zelle.manuell ? (
-                              <span className="block text-[9px] leading-tight text-warn">
+                              <span className="block text-[10px] leading-tight text-warn">
                                 korr.
                               </span>
                             ) : null}
@@ -502,7 +518,7 @@ function PersonDrilldown({
                           <span className="tabular block">{formatTime(zelle.zeitMs)}</span>
                           <Abweichung ms={zelle.abweichungMs} />
                           {zelle.manuell ? (
-                            <span className="block text-[9px] leading-tight text-warn">korr.</span>
+                            <span className="block text-[10px] leading-tight text-warn">korr.</span>
                           ) : null}
                         </>
                       ) : (
@@ -525,7 +541,7 @@ function PersonDrilldown({
  * geht beim Tab-Wechsel bewusst verloren; die Auswertung selbst kommt aus den
  * gespeicherten Läufen.
  */
-export function AnalyseScreen() {
+export function AnalyseScreen({ onZumTimer }: { onZumTimer?: (() => void) | undefined }) {
   const app = useApp()
   const [satzId, setSatzId] = useState<string | null>(null)
   const [personIndex, setPersonIndex] = useState<number | null>(null)
@@ -560,6 +576,7 @@ export function AnalyseScreen() {
         seiten={seiten}
         onMehr={() => setSeiten((anzahl) => anzahl + 1)}
         onOeffnen={setSatzId}
+        onZumTimer={onZumTimer}
       />
     </div>
   )

@@ -24,7 +24,7 @@ test.describe('Tablet', () => {
     await oeffneApp(page)
 
     const nav = page.getByRole('navigation', { name: 'Bereiche' })
-    const main = page.locator('main').first()
+    const main = page.locator('main')
     const navBox = await nav.boundingBox()
     const mainBox = await main.boundingBox()
     expect(navBox).not.toBeNull()

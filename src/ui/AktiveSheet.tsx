@@ -10,6 +10,7 @@ import { useState } from 'react'
 import { MAX_BAHNEN, MAX_REIHEN, bahnenGesamt, ordneAktiveUm } from '../domain/training'
 import type { Schwimmer, Training } from '../domain/types'
 import { Feld } from './Felder'
+import { SchwimmerSchnellwahl } from './SchwimmerSchnellwahl'
 import { Sheet } from './Sheet'
 
 interface AktiveSheetProps {
@@ -39,7 +40,10 @@ export function AktiveSheet({
   // Lokaler Entwurf: Änderungen wirken erst beim Speichern.
   const [bahnen, setBahnen] = useState(training.bahnen)
   const [reihen, setReihen] = useState(training.reihen)
-  const [aktive, setAktive] = useState<(string | null)[]>(() => [...training.aktive])
+  const [aktive, setAktive] = useState<(string | null)[]>(() => {
+    const personen = bahnenGesamt(training.bahnen, training.reihen)
+    return Array.from({ length: personen }, (_, index) => training.aktive[index] ?? null)
+  })
   // Gelöschte Schwimmer können noch als Id in den Aktiven stehen. Der Abgleich
   // verhindert, dass das Auswahlfeld einen Wert anzeigt, den es nicht gibt.
   const bekannteIds = new Set(schwimmer.map((eintrag) => eintrag.id))
@@ -68,7 +72,22 @@ export function AktiveSheet({
   }
 
   return (
-    <Sheet open onClose={onClose} titel="Aktive">
+    <Sheet
+      open
+      onClose={onClose}
+      titel="Aktive"
+      fuss={
+        // Erst hier wird der Entwurf verbindlich; ohne Klick bleibt der Plan
+        // unverändert. Die Leiste bleibt auch bei vielen Bahnen sichtbar.
+        <button
+          type="button"
+          onClick={() => onSpeichern(bahnen, reihen, aktive)}
+          className="h-14 w-full rounded-xl bg-accent text-base font-bold text-accent-fg"
+        >
+          Aktive übernehmen
+        </button>
+      }
+    >
       <Feld
         label="Bahnen pro Reihe"
         hint="Wie viele Personen gleichzeitig starten. Die Zahl gilt für alle noch nicht gestarteten Sätze. Gestartete Sätze behalten ihre Bahnen."
@@ -127,59 +146,67 @@ export function AktiveSheet({
       </Feld>
 
       <Feld label="Wer schwimmt mit?">
-        <div className="space-y-3">
-          {/* Ein Abschnitt pro Reihe, darin eine Auswahlzeile pro Bahn; die
-              Bahnnummer ist nur Anzeige, keine Eingabe. */}
-          {Array.from({ length: reihen }, (_, reiheIndex) => (
-            <div key={reiheIndex} className="space-y-2">
-              {reihen > 1 ? (
-                <p className="text-[11px] font-bold uppercase tracking-wider text-muted">
-                  Reihe {reiheIndex + 1}
-                </p>
-              ) : null}
-              {Array.from({ length: bahnen }, (_, bahnIndex) => {
-                const index = reiheIndex * bahnen + bahnIndex
-                const wert = aktive[index] ?? null
-                return (
-                  <div key={index} className="flex items-center gap-3">
-                    <span className="tabular w-6 text-sm text-muted">{bahnIndex + 1}</span>
-                    <select
-                      // Unbekannte Ids (gelöschter Schwimmer) werden als „kein
-                      // Schwimmer“ angezeigt, statt eine leere Option zu erzeugen.
-                      value={wert && bekannteIds.has(wert) ? wert : ''}
-                      onChange={(event) => setzeAktiven(index, event.target.value || null)}
-                      aria-label={`Schwimmer für Reihe ${reiheIndex + 1}, Bahn ${bahnIndex + 1}`}
-                      className="h-11 flex-1 rounded-xl border border-line bg-surface2 px-3 text-sm"
-                    >
-                      <option value="">— kein Schwimmer —</option>
-                      {schwimmer.map((eintrag) => (
-                        <option key={eintrag.id} value={eintrag.id}>
-                          {eintrag.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )
-              })}
-            </div>
-          ))}
-        </div>
         {schwimmer.length === 0 ? (
-          <p className="mt-2 text-xs text-muted">
-            Noch keine Schwimmer angelegt. Das geht im Tab „Schwimmer“.
+          // Ohne angelegte Schwimmer wären sechs leere Auswahlfelder nur eine
+          // Sackgasse. Der Hinweis nennt den einzigen sinnvollen nächsten
+          // Schritt; Bahnen und Reihen bleiben trotzdem einstellbar.
+          <p className="rounded-xl bg-surface2 px-3 py-3 text-xs leading-relaxed text-muted">
+            Noch keine Schwimmer angelegt. Lege sie im Tab „Schwimmer“ an; danach lassen sie sich
+            hier je Bahn zuordnen. Du kannst das Training auch ohne Namen starten.
           </p>
-        ) : null}
+        ) : (
+          <>
+            {/* Schneller Weg für die Vorbereitung: ein Tipp pro Person. Die
+                Auswahlfelder darunter bleiben für gezielte Änderungen. */}
+            <SchwimmerSchnellwahl
+              schwimmer={schwimmer}
+              zuordnung={aktive}
+              onAendern={(schwimmerId, platz) =>
+                setAktive((aktuell) =>
+                  aktuell.map((wert, index) => (index === platz ? schwimmerId : wert)),
+                )
+              }
+            />
+            <div className="space-y-3">
+              {/* Ein Abschnitt pro Reihe, darin eine Auswahlzeile pro Bahn; die
+                  Bahnnummer ist nur Anzeige, keine Eingabe. */}
+              {Array.from({ length: reihen }, (_, reiheIndex) => (
+                <div key={reiheIndex} className="space-y-2">
+                  {reihen > 1 ? (
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-muted">
+                      Reihe {reiheIndex + 1}
+                    </p>
+                  ) : null}
+                  {Array.from({ length: bahnen }, (_, bahnIndex) => {
+                    const index = reiheIndex * bahnen + bahnIndex
+                    const wert = aktive[index] ?? null
+                    return (
+                      <div key={index} className="flex items-center gap-3">
+                        <span className="tabular w-6 text-sm text-muted">{bahnIndex + 1}</span>
+                        <select
+                          // Unbekannte Ids (gelöschter Schwimmer) werden als „kein
+                          // Schwimmer“ angezeigt, statt eine leere Option zu erzeugen.
+                          value={wert && bekannteIds.has(wert) ? wert : ''}
+                          onChange={(event) => setzeAktiven(index, event.target.value || null)}
+                          aria-label={`Schwimmer für Reihe ${reiheIndex + 1}, Bahn ${bahnIndex + 1}`}
+                          className="h-11 flex-1 rounded-xl border border-line bg-surface2 px-3 text-sm"
+                        >
+                          <option value="">— kein Schwimmer —</option>
+                          {schwimmer.map((eintrag) => (
+                            <option key={eintrag.id} value={eintrag.id}>
+                              {eintrag.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )
+                  })}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </Feld>
-
-      {/* Erst hier wird der Entwurf verbindlich; ohne Klick bleibt der Plan
-          unverändert. */}
-      <button
-        type="button"
-        onClick={() => onSpeichern(bahnen, reihen, aktive)}
-        className="h-14 w-full rounded-xl bg-accent text-base font-bold text-accent-fg"
-      >
-        Aktive übernehmen
-      </button>
     </Sheet>
   )
 }

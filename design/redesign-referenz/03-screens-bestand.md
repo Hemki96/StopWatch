@@ -32,7 +32,8 @@ Flächen, damit das Redesign sie nicht vergisst. Es gelten dieselben Regeln aus 
 ### Toast
 
 - `role="status"`, `aria-live="polite"`, `aria-atomic="true"`, dauerhaft im DOM.
-- Position: 96 px über dem unteren Rand (über der Aktionsleiste), auf `rail` 128 px.
+- Position: am oberen Rand des Inhaltsbereichs, 8 px unter den Bannern; `z-30`, damit Sheets
+  und Dialoge darüber liegen. Der Toast überdeckt keine Aktionsleiste.
 - Pill, `--fg`-Fläche, `--bg`-Text, max. 320 px, 14 px.
 - Dauer 3 s, keine Aktion, kein Stapeln. Ein neuer Toast ersetzt den alten.
 

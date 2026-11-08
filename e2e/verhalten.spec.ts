@@ -40,7 +40,9 @@ async function langdruck(page: Page, ziel: Locator): Promise<void> {
   await page.mouse.down()
   // Der Statustext erscheint, bevor der Undo greift.
   await expect(ziel.locator('[data-haltend="true"]')).toBeVisible()
-  await page.waitForTimeout(550)
+  // Der Undo feuert nach der Halteschwelle; das Overlay verschwindet dann,
+  // ohne dass eine feste Zeit gewartet werden muss.
+  await expect(ziel.locator('[data-haltend="true"]')).toHaveCount(0)
   await page.mouse.up()
 }
 
@@ -93,7 +95,7 @@ test('Offene Strecke: Ziel beendet die Bahn, weitere Taps ändern nichts', async
   // nennt beide möglichen Beschriftungen („Nächster Lauf“ und die
   // Kurzfassung „50 m · …“) und nimmt den ersten Treffer, weil beide dasselbe
   // Sheet öffnen — so bricht der Test nicht, wenn eine Karte umbenannt wird.
-  await page.getByRole('button', { name: /Nächster Lauf|m ·/ }).first().click()
+  await page.getByRole('button', { name: /50 m · 100 m · 6 Bahnen/ }).click()
   const dialog = page.getByRole('dialog')
   await expect(dialog).toBeVisible()
   await dialog.getByRole('button', { name: 'offen', exact: true }).click()
@@ -143,7 +145,7 @@ test('Schwimmer anlegen, Bahn zuordnen und Reload überstehen', async ({ page })
   // Zuordnung im Konfigurations-Sheet der Bahn; `selectOption` löst das
   // change-Ereignis aus, das die App speichert.
   await page.getByRole('button', { name: 'Timer' }).tap()
-  await page.getByRole('button', { name: /m ·/ }).first().click()
+  await page.getByRole('button', { name: /50 m · 100 m · 6 Bahnen/ }).click()
   const dialog = page.getByRole('dialog')
   await dialog.getByLabel('Schwimmer für Reihe 1, Bahn 1').selectOption({ label: 'Mia' })
   await dialog.getByRole('button', { name: 'Schließen', exact: true }).click()
@@ -173,7 +175,7 @@ test('Satz löschen entfernt den Satz samt Läufen', async ({ page }) => {
   await expect(page.getByText('1 Lauf')).toBeVisible()
 
   // Der Papierkorb am Satz öffnet die Rückfrage mit der Anzahl der Läufe.
-  await page.getByRole('button', { name: /^Satz löschen, 1 Läufe$/ }).click()
+  await page.getByRole('button', { name: /^Satz löschen, 1 Lauf$/ }).click()
   await expect(page.getByText('1 Lauf wird mitgelöscht.')).toBeVisible()
   await page.getByRole('button', { name: 'Satz löschen', exact: true }).click()
 

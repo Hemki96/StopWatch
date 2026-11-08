@@ -66,7 +66,7 @@ Eine kurze Erklärung von **Lauf**, **Bahn** und **Anschlag**:
 | Feld | Bedeutung |
 | --- | --- |
 | **Beckenlänge** | 25 m oder 50 m. Bestimmt, wie viele Längen eine Strecke hat. |
-| **Strecke** | 50, 100, 200, 400, 800 oder 1.500 m — oder **Offene Strecke**. |
+| **Strecke** | 25, 50, 100, 200, 400, 800 oder 1.500 m — oder **Offene Strecke**. |
 
 Die App rechnet und beschriftet immer in Metern. Die Strecke muss ein Vielfaches der Beckenlänge
 sein. Bei einem Wechsel der Beckenlänge korrigiert die App eine unpassende Strecke automatisch auf
@@ -108,6 +108,10 @@ aktuellen Konfiguration, z. B.:
 
 Ein Tipp auf die Karte öffnet das Konfigurations-Sheet. Der große **Start**-Knopf öffnet zuerst die
 **Startübersicht** mit allen Werten; erst **Jetzt starten** beginnt die Messung.
+
+Wer ohne festen Plan messen will, tippt stattdessen **Sofort starten** unter der Karte. Das beginnt
+eine offene Strecke mit einer Bahn; jeder Tap ist eine Zwischenzeit. Weitere Personen kommen über
+**Person** in der Kopfzeile dazu und starten sofort mit.
 
 ## Die erste Messung in fünf Minuten
 

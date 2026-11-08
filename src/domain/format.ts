@@ -19,7 +19,8 @@ import type { Einheit } from './types'
  * So entstehen keine Abweichungen zu offiziellen Schwimmzeiten.
  */
 export function truncateToHundredths(ms: number): number {
-  return Math.trunc(ms / 10) * 10
+  const wert = Math.trunc(ms / 10) * 10
+  return wert === 0 ? 0 : wert
 }
 
 /** Füllt eine Zahl links mit Nullen auf; Werte mit mehr Stellen bleiben ganz. */
@@ -106,7 +107,7 @@ export function formatZwischenzeiten(erfasst: number, gesamt: number | null): st
 export function parseTime(eingabe: string): number | null {
   // Leerraum wird überall entfernt, damit „ 01:00,00 “ und „1: 00“ gleich wirken.
   const text = eingabe.trim().replace(/\s/g, '').replace(',', '.')
-  if (!/^\d{1,3}(:\d{1,2}){0,2}(\.\d{1,2})?$/.test(text)) return null
+  if (!/^\d{1,2}(:\d{1,2}){0,2}(\.\d{1,2})?$/.test(text)) return null
 
   const teile = text.split(':')
   const mitMinuten = teile.length > 1

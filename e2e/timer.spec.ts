@@ -55,14 +55,16 @@ test('zeigt die Laufzeit, zählt sie hoch und friert beim letzten Ziel ein', asy
   expect(erster).toBeGreaterThanOrEqual(0)
 
   // Die Anzeige läuft mit der Uhr, nicht nur beim nächsten Anschlag.
-  await page.waitForTimeout(250)
+  await expect.poll(async () => Number(await page.locator('[data-laufzeit]').getAttribute('data-laufzeit'))).toBeGreaterThan(erster)
   const zweiter = Number(await laufzeit.getAttribute('data-laufzeit'))
   expect(zweiter).toBeGreaterThan(erster)
 
   // Zwei Anschläge beenden den 100-m-Lauf im 50-m-Becken.
   const bahn = page.getByRole('button', { name: /Bahn 1, läuft$/ })
   await bahn.dispatchEvent('click')
-  await page.waitForTimeout(120)
+  await expect(bahn).toHaveAttribute('data-anschlaege', '1')
+  const laufzeitVorZweitemTimer = Number(await page.locator('[data-laufzeit]').getAttribute('data-laufzeit'))
+  await expect.poll(async () => Number(await page.locator('[data-laufzeit]').getAttribute('data-laufzeit'))).toBeGreaterThan(laufzeitVorZweitemTimer)
   await bahn.dispatchEvent('click')
   // Mit dem letzten Ziel wechselt der Timer von den Kacheln zur
   // Ergebnisübersicht; die Bahn steht dort mit ihrer Zielzeit.
@@ -73,8 +75,7 @@ test('zeigt die Laufzeit, zählt sie hoch und friert beim letzten Ziel ein', asy
   // Nach dem Ziel bleibt der Wert stehen, auch wenn die Uhr weiterläuft.
   const eingefroren = await page.locator('[data-laufzeit]').getAttribute('data-laufzeit')
   expect(Number(eingefroren)).toBeGreaterThanOrEqual(zweiter)
-  await page.waitForTimeout(300)
-  await expect(page.locator('[data-laufzeit]')).toHaveAttribute('data-laufzeit', eingefroren!)
+  await expect.poll(async () => await page.locator('[data-laufzeit]').getAttribute('data-laufzeit')).toBe(eingefroren!)
 })
 
 test('beginnt mit dem Startversatz beim ersten Start', async ({ page }) => {
@@ -84,7 +85,6 @@ test('beginnt mit dem Startversatz beim ersten Start', async ({ page }) => {
   // Reihe 2 startet eine Sekunde später; die Laufzeit beginnt trotzdem mit
   // Reihe 1 und ist deshalb schon größer als null, bevor Reihe 2 dran ist.
   await expect(page.getByRole('heading', { name: 'Reihe 2' })).toBeVisible()
-  await page.waitForTimeout(100)
   const laufzeit = page.locator('[data-laufzeit]')
   await expect(laufzeit).toBeVisible()
   expect(Number(await laufzeit.getAttribute('data-laufzeit'))).toBeGreaterThanOrEqual(0)
@@ -107,4 +107,79 @@ test('färbt die Laufzeit bei fehlendem Wake-Lock amber', async ({ page }) => {
   // Playwright keine verlässliche Pixelmessung liefern.
   const block = laufzeit.locator('xpath=ancestor::div[contains(@class, "text-warn")]')
   await expect(block).toHaveCount(1)
+})
+
+/** Schließt den einzelnen Lauf mit zwei Anschlägen (100 m im 50-m-Becken). */
+async function beendeEinzelnenLauf(page: Page): Promise<void> {
+  const bahn = page.getByRole('button', { name: /Bahn 1, läuft$/ })
+  await bahn.tap()
+  await expect(bahn).toHaveAttribute('data-anschlaege', '1')
+  const laufzeitVorZweitem = Number(await page.locator('[data-laufzeit]').getAttribute('data-laufzeit'))
+  await expect.poll(async () => Number(await page.locator('[data-laufzeit]').getAttribute('data-laufzeit'))).toBeGreaterThan(laufzeitVorZweitem)
+  await bahn.tap()
+  await expect(page.getByText('Ergebnis')).toBeVisible()
+}
+
+// Nutzerreise: Derselbe Satz wird direkt noch einmal geschwommen. „Diesen Lauf
+// wiederholen“ muss die Werte des beendeten Laufs übernehmen, nicht die
+// inzwischen geänderten globalen Einstellungen.
+test('wiederholt den Lauf mit seiner Konfiguration statt der Einstellungen', async ({
+  page,
+}) => {
+  await oeffneMitEinemLauf(page)
+  await starteLauf(page)
+  await beendeEinzelnenLauf(page)
+
+  // Globale Vorgabe auf zwei Bahnen ändern, ohne den beendeten Lauf zu
+  // schließen. Der Wechsel in einen anderen Tab lässt ihn stehen.
+  await page.getByRole('button', { name: 'Mehr' }).tap()
+  await page.getByRole('button', { name: /50 m-Becken/ }).tap()
+  const konfiguration = page.getByRole('dialog')
+  await konfiguration.getByRole('button', { name: 'Mehr Bahnen pro Reihe' }).tap()
+  await konfiguration.getByRole('button', { name: 'Schließen' }).tap()
+  await page.getByRole('button', { name: 'Timer' }).tap()
+  await expect(page.getByText('Ergebnis')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Diesen Lauf wiederholen' }).tap()
+  const uebersicht = page.getByRole('dialog')
+  await expect(uebersicht.getByText('Lauf wiederholen')).toBeVisible()
+  // Die Übersicht zeigt den Lauf (eine Bahn), nicht die neue Vorgabe (zwei).
+  await expect(uebersicht.getByText('1 Bahn', { exact: true })).toBeVisible()
+  await uebersicht.getByRole('button', { name: 'Jetzt starten' }).tap()
+
+  await expect(page.getByRole('button', { name: /Bahn 1, läuft$/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Bahn 2, läuft$/ })).toHaveCount(0)
+})
+
+// Der Toast darf keine Aktion überdecken. Er sitzt im Inhaltsbereich unter den
+// Bannern; die untere Leiste mit „Start“ bleibt frei.
+test('zeigt den Toast über dem Inhalt statt über der unteren Aktion', async ({ page }) => {
+  await oeffneMitEinemLauf(page)
+  await starteLauf(page)
+  await beendeEinzelnenLauf(page)
+  await page.getByRole('button', { name: 'Lauf schließen' }).tap()
+
+  const toast = page.getByText('Lauf geschlossen.')
+  await expect(toast).toBeVisible()
+  const start = page.getByRole('button', { name: 'Start', exact: true })
+  const toastBox = await toast.boundingBox()
+  const startBox = await start.boundingBox()
+  expect(toastBox).not.toBeNull()
+  expect(startBox).not.toBeNull()
+  expect(toastBox!.y).toBeGreaterThanOrEqual(0)
+  expect(toastBox!.y + toastBox!.height).toBeLessThanOrEqual(startBox!.y)
+})
+
+// Nutzerreise: Im Bereit-Zustand erinnert die App an den letzten Lauf und führt
+// mit einem Tipp in dessen Detail — ohne den Umweg über die Verlaufsliste.
+test('zeigt den letzten Lauf im Bereit-Zustand und öffnet ihn', async ({ page }) => {
+  await oeffneMitEinemLauf(page)
+  await starteLauf(page)
+  await beendeEinzelnenLauf(page)
+  await page.getByRole('button', { name: 'Lauf schließen' }).tap()
+
+  await expect(page.getByText('Zuletzt')).toBeVisible()
+  await page.getByRole('button', { name: /Zuletzt/ }).tap()
+
+  await expect(page.getByRole('button', { name: 'Zurück zum Verlauf' })).toBeVisible()
 })

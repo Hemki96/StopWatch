@@ -19,7 +19,7 @@ Handy                              Tablet
 ├──────────────────────────────┤    │ …    │                           │
 │ Timer Training Verlauf …     │    │      ├───────────────────────────┤
 └──────────────────────────────┘    └──────┴───────────────────────────┘
-        Toast (schwebend, optional)
+        Toast (schwebend, oben im Inhalt)
 ```
 
 - Die Navigation hat fünf Einträge. Auf dem Handy liegt sie unten und verteilt sich auf fünf
@@ -33,8 +33,8 @@ Handy                              Tablet
   `env(safe-area-inset-left/right)` über die Utility `safe-x`.
 - Banner sind statusgerollt (`role="status"` bzw. `role="alert"`) und verschieben den Inhalt nach
   unten, statt ihn zu überdecken.
-- Der Toast bleibt dauerhaft im DOM, damit Screenreader Änderungen ansagen; er sitzt oberhalb der
-  unteren Aktionsleiste.
+- Der Toast bleibt dauerhaft im DOM, damit Screenreader Änderungen ansagen. Er sitzt am oberen
+  Rand des Inhaltsbereichs unter den Bannern und kann deshalb keine Aktionsleiste überdecken.
 
 ### Breakpoints
 
@@ -75,7 +75,11 @@ seitlichen Navigation. Das Manifest erlaubt deshalb beide Ausrichtungen (`orient
 
 Drei Zustände:
 
-1. **Kein aktiver Lauf** — Karte „Nächster Lauf“, Startknopf, kurze Bedienhinweise.
+1. **Kein aktiver Lauf** — Karte „Nächster Lauf“, Startknopf und ein zweiter Weg
+   („Sofort starten“). Darunter erinnert die Karte **Zuletzt** an den jüngsten begonnenen Lauf
+   (Bahnzahl, Strecke, Datum/Uhrzeit, schnellste Zeit) und führt direkt in dessen Detail. Die
+   ausführlichen Bedienhinweise erscheinen nur, solange noch kein Lauf existiert; danach erinnert
+   eine Zeile an die beiden Gesten.
 2. **Lauf aktiv** — Lauf-Leiste, Konfigurationskopf, Bahnenraster, Statuszeile, Aktionsleiste.
 3. **Serie aktiv** — statt des Rasters die Serienansicht.
 
@@ -88,8 +92,12 @@ scrollt der Bereich, statt die Kacheln unter die Mindesthöhe zu drücken. Die Z
 skaliert über eine Container-Abfrage (`cqw`) mit der Kachelbreite, nicht mit dem Viewport — so bleibt
 sie bei zehn Bahnen auf dem Handy und bei einer Bahn auf dem Tablet gleichermaßen lesbar.
 
-Die Kopfzeile des Laufs ist gleichzeitig ein Knopf zum Öffnen des Konfigurations-Sheets. Rechts
-steht entweder **X** (alle im Ziel) oder der **Papierkorb** (verwerfen).
+Die Kopfzeile des Laufs ist gleichzeitig ein Knopf zum Öffnen des Konfigurations-Sheets; ein
+Chevron macht das sichtbar. Rechts steht entweder **X** (alle im Ziel) oder der **Papierkorb**
+(verwerfen).
+
+Im Querformat (`short`) sind Kacheln, Abstände und Fußzeile flacher. Der reine Bedienhinweis
+entfällt dort; Wake-Lock-, Unterbrechungs- und Startwarnungen bleiben sichtbar.
 
 Während der Messung steht in der Fußzeile ein sekundärer **Zurück**-Knopf. Er nennt in der
 Beschriftung die zuletzt bediente Bahn (bei Serien samt Runde), ist nur aktiv, solange es etwas
@@ -97,17 +105,32 @@ zurückzunehmen gibt, und erklärt daneben die Geste. Langes Drücken auf der Ka
 schnelle Weg; Backspace/Delete auf der fokussierten Messfläche bleibt die Tastaturabkürzung. Nach
 dem letzten Ziel übernimmt `LaufErgebnis` die Rücknahme.
 
+Nach dem letzten Ziel bleibt die Ergebnisübersicht stehen. Die Fußzeile bietet den nächsten Schritt
+an: **Neuer Lauf** (bzw. den nächsten Trainingssatz), **Diesen Lauf wiederholen** (nur bei einem
+einzelnen Lauf außerhalb eines Trainings) und **Im Verlauf ansehen**. Die Wiederholung übernimmt
+Konfiguration, Bahnen, Reihen und Schwimmerzuordnung des beendeten Laufs; die globalen Einstellungen
+bleiben unverändert. „Im Verlauf ansehen“ öffnet das Lauf-Detail direkt, ohne den Lauf in der Liste
+zu suchen.
+
 ### Training
 
 Der Screen hat zwei Zustände:
 
-- **Liste** — alle Trainings, leerer Zustand, „Neues Training“.
+- **Liste** — alle Trainings, laufende zuerst, dann offene, dann abgeschlossene; im Kopf ein
+  `+` (44 px), im Leerzustand die große Aktion „Neues Training“.
 - **Detail** — Kopf mit Zurück, Datum, Name, Löschen; Aktive-Karte; Fortschrittsbalken;
   Schalter „Sätze automatisch starten“; Satzliste; „Satz hinzufügen“; feste Aktionsleiste mit
   nächstem Schritt.
 
 Die Satzzeile ist ein großer Button mit Nummer, Titel, Status-Badge und Metazeile. Nur offene Sätze
-öffnen die Bearbeitung; bereite und laufende führen in den Timer; fertige sind deaktiviert.
+öffnen die Bearbeitung; bereite und laufende führen in den Timer; fertige sind deaktiviert. Der
+Trainingsname im Kopf trägt einen Stift und öffnet das Umbenennen-Sheet. Die Liste sortiert laufende
+Trainings nach oben, danach offene und abgeschlossene; innerhalb einer Gruppe nach Datum absteigend.
+
+Im Aktive-Sheet stehen über den Auswahlfeldern die Schwimmer als Chips. Ein Tipp legt die Person auf
+den nächsten freien Platz, ein zweiter Tipp entfernt sie. Die Auswahlfelder darunter bleiben für
+gezielte Änderungen. Dasselbe Muster nutzt das Konfigurations-Sheet; so lassen sich sechs bis zehn
+Personen ohne sechs Menüs zuordnen.
 
 Ist der automatische Wechsel an, beobachtet der Timer den Übergang des sichtbaren Trainingssatzes
 nach „fertig“ und startet über `trainingVonSatz`, `trainingsFortschritt` und `naechsterSatz` den
@@ -118,7 +141,9 @@ nächsten Satz. Der vorige Satz bleibt in der Laufleiste erreichbar.
 Der Verlauf ist eine Liste von Satzgruppen, zunächst auf die neuesten 50 begrenzt. „Mehr laden“
 ergänzt weitere Gruppen unterhalb der Liste, ohne Gruppierung, Sortierung oder Scrollposition zu
 verändern. Jede Gruppe zeigt an der Tagesüberschrift zusätzlich den optionalen Tagesnamen; er gilt
-für alle Sätze desselben Datums und wird dort inline gepflegt (`domain/tag.ts`). Die Satzliste der
+für alle Sätze desselben Datums und wird dort inline gepflegt (`domain/tag.ts`). Tag,
+Satzbezeichnung und Papierkorb sind mindestens 44 px hoch. Ohne Messungen führt ein Knopf
+**Zum Timer** direkt in den Messfluss, statt nur den Tab zu nennen. Die Satzliste der
 **Analyse** folgt derselben Grenze und nutzt dieselbe Fußzeile
 (`MehrLaden`): Erst die sichtbaren Sätze werden ausgewertet und gerendert. Das Detail ist ein
 Vollbild-**Dialog** über `Dialog` (`role="dialog"`, `aria-modal`,
@@ -132,8 +157,10 @@ Verlauf und aus den Bestzeiten im Schwimmer-Tab; der Rückweg nennt jeweils den 
 Karten mit Zeilen:
 
 - **Darstellung:** Segment-Control für System/Hell/Dunkel.
-- **Nächster Lauf:** öffnet das Konfigurations-Sheet.
-- **Daten:** CSV, Backup, Import, Speicherschutz, alles löschen.
+- **Nächster Lauf:** öffnet das Konfigurations-Sheet. Links stehen Becken und Strecke, rechts
+  Bahnen, Reihen, Versatz und Takt; jede Angabe erscheint genau einmal.
+- **Daten:** CSV, Backup, Import, Speicherschutz, alles löschen. Die CSV-Zeile zählt nur begonnene
+  Läufe — dieselbe Zahl wie der Verlauf.
 - **Installation:** Status oder Anleitung.
 - **Fußzeile:** Version und Datenschutzhinweis.
 
@@ -160,20 +187,24 @@ Bottom Sheet auf Basis von `Dialog`:
 
 - Griff oben,
 - Ziehen nach unten > 90 px schließt,
-- maximal 88 % der Viewport-Höhe, intern scrollbar,
+- feste Kopfzeile und scrollender Inhalt,
+- optionale feste **Aktionsleiste** (`fuss`) unter dem Inhalt, mit Safe-Area; die primäre Aktion
+  bleibt dadurch auch auf kleinen Handys und im Querformat erreichbar,
+- maximal 88 % der Viewport-Höhe,
 - `overscroll-contain`, damit die Seite dahinter nicht mitscrollt,
-- Safe-Area unten.
+- Schließen-Knopf 44 × 44 px.
 - Auf dem Tablet (`rail`) wird daraus ein zentriertes Fenster mit `max-w-xl`; der Griff entfällt,
   die Ziehgeste bleibt als Maus- und Touch-Geste erhalten.
 
 Das Sheet wird für Konfiguration, Aktive, Sätze, Namen, Zeiten, Import und die Startübersicht
-verwendet.
+verwendet. Primäre Aktionen gehören in `fuss`, nicht ans Ende des Inhalts.
 
 ### `Startuebersicht`
 
 `src/ui/Startuebersicht.tsx` ist die letzte Prüfung vor dem Start der Uhr. Der Rahmen ist ein
 `Sheet` mit Titel, einer ruhigen Liste (Label links, Wert rechts), einem bestätigenden **Jetzt
-starten** und optional **Ändern**:
+starten** und optional **Ändern**. Beide Aktionen stehen in der festen Aktionsleiste des Sheets und
+sind damit auf jedem Gerät sichtbar, ohne im Inhalt zu scrollen.
 
 - `StartuebersichtLauf` zeigt Beckenlänge, Strecke, Zwischenzeiten, Bahnen und Reihen, Startzeiten,
   Takt und die Schwimmer je Bahn; eine leere Bahn heißt ausdrücklich „frei“.
@@ -362,12 +393,12 @@ gehört in den Provider und die Persistenz.
 
 ## Leere Zustände und Fehler
 
-Jeder Screen hat einen erklärenden Leerzustand:
+Jeder Screen hat einen erklärenden Leerzustand **mit der passenden Aktion**:
 
-- Timer: „Nächster Lauf“ mit Bedienhinweisen.
-- Training: „Noch kein Training vorbereitet“.
-- Verlauf: „Noch keine Messungen.“
-- Schwimmer: „Noch keine Schwimmer.“
+- Timer: „Nächster Lauf“ mit Bedienhinweisen und Start.
+- Training: „Noch kein Training vorbereitet“ mit „Neues Training“.
+- Verlauf: „Noch keine Messungen.“ mit **Zum Timer**.
+- Schwimmer: „Noch keine Schwimmer.“ mit **Schwimmer anlegen**.
 
 Fehler werden nicht als Alert-Box mitten im Inhalt versteckt:
 
@@ -378,10 +409,12 @@ Fehler werden nicht als Alert-Box mitten im Inhalt versteckt:
 
 ## Regeln für neue Oberfläche
 
-1. **Ein Screen, eine Hauptaktion.** Die primäre Aktion gehört in die untere Leiste.
+1. **Ein Screen, eine Hauptaktion.** Die primäre Aktion gehört in die untere Leiste; in Sheets in
+   die feste Aktionsleiste (`fuss`).
 2. **Keine schwebenden Speichern-Knöpfe über der Navigation.**
 3. **Dialoge immer über `Dialog`/`Sheet`.** Kein eigenes Fokus- oder Scroll-Handling.
-4. **Touchziele nicht verkleinern**, um mehr Inhalt zu zeigen. Lieber scrollen.
+4. **Touchziele nicht verkleinern**, um mehr Inhalt zu zeigen. Lieber scrollen; Ziel sind
+   44 × 44 px, auch für sekundäre Aktionen in Gruppenköpfen.
 5. **Status nie nur über Farbe.** Immer Text, Badge oder ARIA-Label ergänzen.
 6. **Deutsche Labels**, konsistent mit dem Glossar.
 7. **Zahlen tabellarisch** und mit `formatTime`.

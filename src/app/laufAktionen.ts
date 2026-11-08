@@ -19,11 +19,13 @@ import {
   type Lauf,
   type LaufKonfiguration,
   type Satz,
+  type Training,
 } from '../domain/types'
 import {
   bahnReihe,
   createLauf,
   finishLane,
+  fuegeBahnHinzu,
   hasStarted,
   isComplete,
   isFinished,
@@ -38,7 +40,7 @@ import {
 } from '../domain/lauf'
 import { letzterAnschlag, runden as rundenVon, istSerie } from '../domain/serie'
 import { setzeTagesnamen } from '../domain/tag'
-import { MAX_BAHNEN, bahnenGesamt } from '../domain/training'
+import { MAX_BAHNEN, bahnenGesamt, trainingVonSatz } from '../domain/training'
 import { newId } from '../domain/id'
 import { deleteLauf, deleteSatzUndLaeufe, saveLauf, saveMehrere, saveSatz } from '../storage/repository'
 import {
@@ -72,6 +74,7 @@ export interface LaufAktionenDeps {
   verfolge: <T>(vorgang: () => Promise<T>) => Promise<T>
   laeufeRef: Ref<Lauf[]>
   satzeRef: Ref<Satz[]>
+  trainingsRef: Ref<Training[]>
   aktiveIdsRef: Ref<string[]>
   aktiverLaufIdRef: Ref<string | null>
   setLaeufe: (laeufe: Lauf[]) => void
@@ -93,6 +96,17 @@ export interface LaufAktionen {
   setzeSchwimmer: (bahnId: string, schwimmerId: string | null) => void
   setzeSchwimmerSerie: (bahnIndex: number, schwimmerId: string | null) => void
   setzeSchwimmerImLauf: (laufId: string, bahnId: string, schwimmerId: string | null) => void
+  /**
+   * Hängt dem sichtbaren Lauf eine weitere Bahn an. Läuft die Messung bereits,
+   * startet die neue Bahn zum übergebenen Zeitpunkt sofort; sonst bleibt sie
+   * bereit. Liefert die ID der neuen Bahn oder `null` (Serie, Trainingssatz,
+   * keine Änderung).
+   */
+  fuegePersonHinzu: (
+    now: number,
+    wallNow: number,
+    schwimmerId?: string | null,
+  ) => string | null
   korrigiereAnschlag: (laufId: string, bahnId: string, laengeNr: number, splitMs: number) => void
   setzeKonfiguration: (konfiguration: LaufKonfiguration) => void
   neuerLauf: (
@@ -138,6 +152,7 @@ export function createLaufAktionen(deps: LaufAktionenDeps): LaufAktionen {
     verfolge,
     laeufeRef,
     satzeRef,
+    trainingsRef,
     aktiveIdsRef,
     aktiverLaufIdRef,
     setLaeufe,
@@ -450,6 +465,40 @@ export function createLaufAktionen(deps: LaufAktionenDeps): LaufAktionen {
     verfolge(() => saveLauf(naechster))
   }
 
+  /**
+   * Hängt eine Person an den sichtbaren Lauf. Serien und Trainingssätze bleiben
+   * außen vor: Bei einer Serie müsste die neue Bahn in allen Runden entstehen,
+   * und ein gestarteter Trainingssatz ist fest (ADR 0007). Bei einem einzelnen
+   * Lauf startet die neue Bahn sofort, sobald die Uhr schon läuft; vor dem Start
+   * bleibt sie bereit und wird von `startAlle` mitgenommen.
+   */
+  function fuegePersonHinzu(
+    now: number,
+    wallNow: number,
+    schwimmerId: string | null = null,
+  ): string | null {
+    if (!istAktiv()) return null
+    const id = aktiverLaufIdRef.current
+    if (!id) return null
+    const lauf = laeufeRef.current.find((eintrag) => eintrag.id === id)
+    if (!lauf) return null
+    const satz = lauf.satzId
+      ? satzeRef.current.find((eintrag) => eintrag.id === lauf.satzId)
+      : undefined
+    if (istSerie(satz) || trainingVonSatz(trainingsRef.current, satz?.id ?? null)) return null
+
+    const naechster = fuegeBahnHinzu(lauf, {
+      schwimmerId,
+      startMs: hasStarted(lauf) ? now : null,
+      wallNow,
+    })
+    if (naechster === lauf) return null
+    setLaeufe(laeufeRef.current.map((eintrag) => (eintrag.id === id ? naechster : eintrag)))
+    verfolge(() => saveLauf(naechster))
+    zeigeToast('Person hinzugefügt.')
+    return naechster.bahnen.at(-1)?.id ?? null
+  }
+
   /** Korrigiert einen erfassten Anschlag; die Domäne prüft die Reihenfolge. */
   function korrigiereAnschlag(
     laufId: string,
@@ -647,13 +696,18 @@ export function createLaufAktionen(deps: LaufAktionenDeps): LaufAktionen {
     verfolge(() => deleteLauf(id))
 
     // War der gelöschte Lauf der Anker einer Serie, übernimmt die nächste
-    // verbliebene Wiederholung die Rolle in der Leiste.
+    // verbliebene Wiederholung die Rolle in der Leiste. Die Länge kann dabei
+    // unverändert bleiben, deshalb wird die Ersetzung separat verfolgt.
     let naechsteAktive = aktiveIdsRef.current.filter((eintrag) => eintrag !== id)
+    let ankerErsetzt = false
     if (naechsteAktive.length !== aktiveIdsRef.current.length && istSerie(satz) && satz) {
       const rest = rundenVon(verbleibend, satz.id)
-      if (rest.length > 0) naechsteAktive = [rest[0]!.id, ...naechsteAktive]
+      if (rest.length > 0) {
+        naechsteAktive = [rest[0]!.id, ...naechsteAktive]
+        ankerErsetzt = true
+      }
     }
-    if (naechsteAktive.length !== aktiveIdsRef.current.length) {
+    if (ankerErsetzt || naechsteAktive.length !== aktiveIdsRef.current.length) {
       setAktiveIds(naechsteAktive)
       if (aktiverLaufIdRef.current === id) setAktivenLaufId(naechsteAktive[0] ?? null)
     }
@@ -738,6 +792,7 @@ export function createLaufAktionen(deps: LaufAktionenDeps): LaufAktionen {
       aktualisiereAktiven((l) => setSchwimmerOnLane(l, bahnId, schwimmerId)),
     setzeSchwimmerSerie,
     setzeSchwimmerImLauf,
+    fuegePersonHinzu,
     korrigiereAnschlag,
     setzeKonfiguration: (konfiguration) =>
       aktualisiereAktiven((l) => updateStrecke(l, konfiguration)),

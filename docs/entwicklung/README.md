@@ -32,7 +32,7 @@ Für die Handy-Ansicht am Rechner zeigt `http://localhost:5173/preview.html` die
 ├── src/
 │   ├── domain/        Reine Fachlogik, kein React, keine Browser-APIs
 │   ├── storage/       IndexedDB, Normalisierung, Backup-Prüfung
-│   ├── export/        CSV und Datei-Ausgabe
+│   ├── export/        CSV, PDF, Markdown und Datei-Ausgabe
 │   ├── app/           React-Kontext, Tab-Koordination, Hooks, PWA
 │   ├── ui/            Screens, Dialoge, Kacheln, Sheets
 │   ├── App.tsx        Navigation und globale Banner
@@ -62,6 +62,7 @@ Für die Handy-Ansicht am Rechner zeigt `http://localhost:5173/preview.html` die
 7. [Beitragen](beitragen.md) — Konventionen und Checkliste
 8. [Design-Referenz](../../design/redesign-referenz/README.md) — Zielbild, Sollmaße und offene Designentscheidungen
 9. [Audit 2026-10-29](audit-2026-10-29.md) — Ausgangslage, Änderungen, Messungen und offene Schuld
+10. [UX-Analyse 2026-10-30](ux-audit-2026-10-30.md) — Nutzerreisen, priorisierte Befunde und umgesetzte Optimierungen
 
 ## Leitprinzipien
 

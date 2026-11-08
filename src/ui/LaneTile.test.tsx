@@ -188,6 +188,7 @@ describe('LaneTile: Zeit für Screenreader', () => {
     expect(beschreibung()).toContain('Zeit 00:01,00')
     expect(beschreibung()).toContain('Länge 2 von 2')
     expect(beschreibung()).toContain('Letzter Anschlag 00:30,00')
+    expect(beschreibung()).toContain('Längenzeit 00:30,00')
 
     // Viele Frame-Renders innerhalb derselben Sekunde ändern nichts.
     tile.aktualisiere(darstellen(1_500))
@@ -210,6 +211,36 @@ describe('LaneTile: Zeit für Screenreader', () => {
     act(() => vi.advanceTimersByTime(5_000))
     expect(tile.container.querySelector('[aria-live]')).toBeNull()
 
+    tile.unmount()
+  })
+})
+
+describe('LaneTile: Längenzeit', () => {
+  it('zeigt den Abstand zwischen letztem und vorherigem Anschlag', () => {
+    const lauf = laufendeBahn()
+    const bahn = {
+      ...lauf.bahnen[0]!,
+      anschlaege: [
+        { laengeNr: 1, splitMs: 30_000, erfasstAt: 2, istFinish: false },
+        { laengeNr: 2, splitMs: 45_500, erfasstAt: 3, istFinish: true },
+      ],
+    }
+    const tile = render(
+      <LaneTile
+        bahn={bahn}
+        konfiguration={lauf.konfiguration}
+        now={50_000}
+        ersatzName="Lauf 1, Bahn 1"
+        schwimmerName={null}
+        onTap={() => undefined}
+        onUndo={() => undefined}
+        onFinish={() => undefined}
+      />,
+    )
+
+    // Groß steht die Zielzeit, unten rechts nur die letzte Längenzeit.
+    expect(tile.container.textContent).toContain('00:45,50')
+    expect(tile.container.querySelector('[data-laengenzeit]')?.textContent).toBe('00:15,50')
     tile.unmount()
   })
 })

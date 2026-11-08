@@ -105,6 +105,21 @@ Für `Verlauf`/`Analyse` und `System`/`Hell`/`Dunkel`.
 - `autocomplete="off"` für Namen und Zeiten.
 - Kein Feld ohne Label; Placeholder nur als Beispiel, nie als Beschriftung.
 
+## Schwimmer-Schnellwahl
+
+**Datei:** `src/ui/SchwimmerSchnellwahl.tsx` · **Einsatz:** Aktive, Konfiguration
+
+```
+[ Anna ] [ Ben ] [ Clara ]       44 px, 12 px Radius, aktiv Akzentfüllung
+Tippen legt die Person auf den nächsten freien Platz; erneutes Tippen entfernt sie.
+```
+
+- Ein Chip je Schwimmer, `aria-pressed` für die Zuordnung.
+- Ein Tipp belegt den nächsten freien Platz (Reihe für Reihe), ein zweiter Tipp gibt ihn frei.
+- Ist kein Platz frei, sind nicht zugeordnete Chips gesperrt; ein Hinweis erklärt es.
+- Die Auswahlfelder je Bahn bleiben darunter als präziser Weg erhalten.
+- Lange Namen brechen um; die Leiste wächst nach unten, statt zu scrollen.
+
 ## Bahn-Kachel (`LaneTile`)
 
 **Datei:** `src/ui/LaneTile.tsx` · **Einsatz:** Timer, einzelner Lauf
@@ -276,7 +291,7 @@ Für `Verlauf`/`Analyse` und `System`/`Hell`/`Dunkel`.
 | --- | --- |
 | geschlossen | nichts im DOM |
 | öffnend | von unten, 180 ms, Backdrop 0 → 60 % |
-| offen | max. 88 dvh, Kopf klebt, Inhalt scrollt |
+| offen | max. 88 dvh, Kopf fest, Inhalt scrollt, optionale Aktionsleiste fest |
 | ziehend | folgt dem Finger, kein Übergang |
 | zurückfedernd | 150 ms `ease-out`, zurück auf 0 |
 | schließend | 150 ms nach unten, dann unmount |
@@ -287,6 +302,9 @@ Für `Verlauf`/`Analyse` und `System`/`Hell`/`Dunkel`.
 - Ziehen nur am Kopf; `touch-action: none` dort.
 - Schließen per X, Backdrop, Escape, Zug > 90 px. Ein `pointercancel` schließt nie.
 - `overscroll-contain`; die Seite dahinter scrollt nicht.
+- **Feste Aktionsleiste:** Primäre Aktionen („Jetzt starten“, „Speichern“, „Aktive übernehmen“)
+  stehen unter dem scrollenden Inhalt, nicht darin. Sie ist Teil des Panels, respektiert die
+  Safe-Area und bleibt auf kleinen Handys und im Querformat sichtbar. Der Inhalt scrollt darüber.
 
 ## Dialog
 
@@ -303,6 +321,8 @@ Für `Verlauf`/`Analyse` und `System`/`Hell`/`Dunkel`.
 ## Toast und Banner
 
 - Toast: `--fg`-Fläche, `--bg`-Text, Pill, 36 px, 14 px, 3 s, `role="status"`.
+- Position: oberer Rand des Inhaltsbereichs, unter den Bannern; `z-30`, damit Sheets und Dialoge
+  darüber liegen. Der Toast überdeckt nie eine Aktionsleiste.
 - Banner: `--surface-2`, 1-px-Unterlinie, 32–40 px, 11–12 px, Aktion 28–32 px sichtbar /
   44 px Ziel.
 - Kein Stacking von Toasts; ein neuer ersetzt den alten.

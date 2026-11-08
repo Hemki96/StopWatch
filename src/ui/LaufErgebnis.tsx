@@ -133,7 +133,7 @@ export function LaufErgebnis({
                 type="button"
                 onClick={() => onUndo(zeile.bahnId)}
                 aria-label={`Ziel von Bahn ${zeile.nummer} zurücknehmen`}
-                className="shrink-0 rounded-lg px-2 py-1 text-[11px] font-medium text-muted"
+                className="grid min-h-11 shrink-0 place-items-center rounded-lg px-2 text-[11px] font-medium text-muted"
               >
                 Zurück
               </button>

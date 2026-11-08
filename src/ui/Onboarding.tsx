@@ -25,7 +25,7 @@ import {
 } from '../domain/lauf'
 import { type Beckenlaenge, type LaufKonfiguration } from '../domain/types'
 
-const STRECKEN = [50, 100, 200, 400, 800, 1500] as const
+const STRECKEN = [25, 50, 100, 200, 400, 800, 1500] as const
 
 const SCHRITTE = ['So funktioniert es', 'Becken und Strecke', 'Bahnen und Namen'] as const
 

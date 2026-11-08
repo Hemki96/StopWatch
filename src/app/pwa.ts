@@ -41,12 +41,14 @@ function starteServiceWorker(): void {
         for (const listener of updateListener) listener()
       },
       onRegisterError(error) {
+        registrierungGestartet = false
         // Ohne Service Worker läuft die App weiter, ist aber nicht offline
         // verfügbar. Die Ursache muss deshalb in der Konsole auffindbar sein.
         console.error('Service-Worker-Registrierung fehlgeschlagen:', error)
       },
     })
   } catch (error) {
+    registrierungGestartet = false
     console.error('Service-Worker-Registrierung fehlgeschlagen:', error)
   }
 }

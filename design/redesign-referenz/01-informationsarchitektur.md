@@ -34,7 +34,7 @@ Handy 390 × 844                         Tablet 820 × 1180
 ├──────────────────────────────┤        │      │                             │
 │ Tab-Leiste (56 px)           │        │      │                             │
 └──────────────────────────────┘        └──────┴─────────────────────────────┘
-              Toast: schwebend oberhalb der Aktionsleiste
+              Toast: schwebend am oberen Rand des Inhalts
 ```
 
 - Das Gerüst füllt `100dvh`. Nur der Inhaltsbereich scrollt.
@@ -42,8 +42,9 @@ Handy 390 × 844                         Tablet 820 × 1180
   der Tab-Leiste. Auf dem Tablet gibt es keine Tab-Leiste, die Aktionsleiste bleibt.
 - `env(safe-area-inset-bottom)` gilt an jedem unteren Rand, im Querformat zusätzlich links/rechts
   über `safe-x`.
-- Banner schieben den Inhalt nach unten, statt ihn zu überdecken. Der Toast liegt darüber und
-  blockiert keine Taps.
+- Banner schieben den Inhalt nach unten, statt ihn zu überdecken. Der Toast liegt am oberen Rand
+  des Inhaltsbereichs, unter den Bannern und über dem Screen; er blockiert keine Taps und keine
+  Aktionsleiste.
 
 ## Navigation
 
@@ -75,9 +76,9 @@ Regeln:
 | --- | --- | --- | --- | --- |
 | 0 | Screen | Timer, Training, Verlauf, Schwimmer, Einstellungen | füllt den Inhaltsbereich | — |
 | 0 | Lauf-Detail | Vollbild über Verlauf/Schwimmer | eigener Kopf mit Zurück, eigene Aktionen | 30 |
-| 1 | `Sheet` | Konfiguration, Startübersicht, Aktive, Satz, Name, Import, Zeitkorrektur | von unten, 88 dvh, Ziehen > 90 px schließt; auf Tablet zentriert | 40 |
+| 1 | `Sheet` | Konfiguration, Startübersicht, Aktive, Satz, Name, Import, Zeitkorrektur | von unten, 88 dvh, Ziehen > 90 px schließt; auf Tablet zentriert; primäre Aktion in fester Leiste | 40 |
 | 2 | `Dialog` / `Bestaetigung` | Verwerfen, Löschen, Import bestätigen | `alertdialog`, Fokus auf Abbrechen, nur oberster reagiert | 50+ |
-| — | Toast | Rückmeldung nach Aktion | `role="status"`, bleibt im DOM | 50 |
+| — | Toast | Rückmeldung nach Aktion | `role="status"`, bleibt im DOM, oberer Inhaltsrand | 30 |
 | — | Banner | Update, Offline, Speicherfehler, fremder Tab | schiebt Inhalt, `role="status"`/`alert` | — |
 
 - **Sheet über Sheet ist erlaubt**, aber nur eine Ebene tief: Die Startübersicht kann die
@@ -206,7 +207,7 @@ Kein Bereich zeigt eine leere Fläche mit nur einem Strich.
 | --- | --- | --- |
 | Timer | „Nächster Lauf“ mit Bedienhinweisen | `Start` |
 | Training | „Noch kein Training vorbereitet“ | `Neues Training` |
-| Verlauf | „Noch keine Messungen.“ | Hinweis auf Timer |
+| Verlauf | „Noch keine Messungen.“ | `Zum Timer` |
 | Schwimmer | „Noch keine Schwimmer.“ | `Schwimmer anlegen` |
 
 ## Was die IA bewusst nicht hat
