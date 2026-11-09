@@ -295,7 +295,7 @@ export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetP
             </div>
             <p className="mt-2 text-xs text-muted">Startzeiten: {reihenStartplan}</p>
             {reihenGemeinsam ? (
-              <p className="mt-1 text-xs text-warn">
+              <p className="mt-1 text-xs text-warn-text">
                 Alle Reihen starten gemeinsam. Für einen Versatz oben einen Wert wählen.
               </p>
             ) : null}
@@ -365,7 +365,7 @@ export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetP
           </div>
         ) : null}
 
-        {warnung ? <p className="mt-2 text-xs text-warn">{warnung}</p> : null}
+        {warnung ? <p className="mt-2 text-xs text-warn-text">{warnung}</p> : null}
       </Feld>
 
       {modus === 'lauf' && lauf ? (

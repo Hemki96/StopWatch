@@ -393,7 +393,7 @@ export function HistoryScreen({
                             einheitVon(lauf.konfiguration),
                           )}
                           {!vollstaendig ? (
-                            <span className="ml-2 rounded bg-warn/15 px-1.5 py-0.5 text-[10px] font-bold text-warn">
+                            <span className="ml-2 rounded bg-warn/15 px-1.5 py-0.5 text-[10px] font-bold text-warn-text">
                               unvollständig
                             </span>
                           ) : null}

@@ -903,12 +903,12 @@ export function TimerScreen({
         : bahnProReihe === 3
           ? 'grid-cols-2 min-[560px]:grid-cols-3'
           : bahnProReihe === 4
-            ? 'grid-cols-2 short:grid-cols-4 lg:grid-cols-4'
+            ? 'grid-cols-2 short:grid-cols-4 rail:grid-cols-4'
             : bahnProReihe <= 6
               ? 'grid-cols-2 min-[560px]:grid-cols-3'
               : bahnProReihe <= 8
-                ? 'grid-cols-2 min-[560px]:grid-cols-3 lg:grid-cols-4'
-                : 'grid-cols-2 min-[560px]:grid-cols-3 lg:grid-cols-5'
+                ? 'grid-cols-2 min-[560px]:grid-cols-3 rail:grid-cols-4'
+                : 'grid-cols-2 min-[560px]:grid-cols-3 rail:grid-cols-5'
 
   // Position des sichtbaren Laufs in der aktiven Leiste. Die Bahnkachel nutzt
   // sie als Ersatz, wenn keine Schwimmer:in ausgewählt ist („Lauf 1, Bahn 2“).
@@ -1341,7 +1341,7 @@ export function TimerScreen({
           <div className="flex items-center justify-between gap-3">
             {/* Fehlt der Wake-Lock, wird der Fortschritt gelb gewarnt: Der
                 Bildschirm kann mitten in der Messung ausgehen. */}
-            <div className={app.brauchtTakt && !wach ? 'text-warn' : ''}>
+            <div className={app.brauchtTakt && !wach ? 'text-warn-text' : ''}>
               <p className="tabular text-sm font-semibold">
                 {serie && fortschritt
                   ? `${fortschritt.fertig} von ${fortschritt.gesamt} Runden vollständig`
@@ -1359,7 +1359,7 @@ export function TimerScreen({
               {/* Ein Hinweis zur Zeit: Wake-Lock, fehlende Starts, offene
                   Strecke oder der normale Ablauf. */}
               <p
-                className={`text-xs ${app.brauchtTakt && !wach ? 'text-warn' : 'text-muted'} ${
+                className={`text-xs ${app.brauchtTakt && !wach ? 'text-warn-text' : 'text-muted'} ${
                   hinweisIstWichtig ? '' : 'short:hidden'
                 }`}
               >

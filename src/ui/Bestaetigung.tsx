@@ -78,7 +78,7 @@ export function Bestaetigung({
           type="button"
           onClick={onBestaetigen}
           className={`h-12 flex-1 rounded-xl text-sm font-semibold ${
-            gefahr ? 'bg-danger text-danger-fg' : 'bg-accent text-accent-fg'
+            gefahr ? 'bg-danger-fill text-danger-fg' : 'bg-accent text-accent-fg'
           }`}
         >
           {bestaetigenLabel}

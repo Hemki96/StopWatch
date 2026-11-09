@@ -252,7 +252,7 @@ export function StartuebersichtLauf({
         <SchwimmerListe bahnen={bahnen} reihen={reihen} namen={namen} />
       </Abschnitt>
       {warnung ? (
-        <p role="status" className="mb-3 rounded-xl bg-warn/10 px-3 py-2 text-xs text-warn">
+        <p role="status" className="mb-3 rounded-xl bg-warn/10 px-3 py-2 text-xs text-warn-text">
           {warnung}
         </p>
       ) : null}

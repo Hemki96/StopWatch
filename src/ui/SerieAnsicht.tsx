@@ -203,9 +203,9 @@ function Zeile({
     zeile.status === 'laeuft'
       ? 'text-accent'
       : zeile.status === 'ueberfaellig'
-        ? 'text-warn'
+        ? 'text-warn-text'
         : zeile.status === 'geplant'
-          ? 'text-warn'
+          ? 'text-warn-text'
           : zeile.status === 'fertig'
             ? 'text-ok'
             : 'text-muted'
@@ -394,7 +394,7 @@ function Zeile({
               </span>
             ) : null}
             {hatUeberholung && neuesteOffene?.lauf.wiederholung ? (
-              <span className="rounded bg-warn/15 px-1.5 py-0.5 font-bold text-warn">
+              <span className="rounded bg-warn/15 px-1.5 py-0.5 font-bold text-warn-text">
                 R{neuesteOffene.lauf.wiederholung} läuft schon
               </span>
             ) : null}

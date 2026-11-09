@@ -324,7 +324,7 @@ export function Onboarding({ onFertig }: { onFertig: () => void }) {
         <button
           type="button"
           onClick={ueberspringen}
-          className="mt-3 h-10 w-full text-xs font-medium text-muted"
+          className="mt-3 h-11 w-full text-xs font-medium text-muted"
         >
           Überspringen und Standardwerte verwenden
         </button>

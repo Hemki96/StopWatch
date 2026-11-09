@@ -230,7 +230,7 @@ export default function App() {
       {tabGesperrt ? (
         <div
           role="status"
-          className="flex items-center gap-2 border-b border-warn/40 bg-warn/10 px-3 py-2 text-[11px] text-warn"
+          className="flex items-center gap-2 border-b border-warn/40 bg-warn/10 px-3 py-2 text-[11px] text-warn-text"
         >
           <span className="min-w-0 flex-1 font-medium">
             Beckenrand ist bereits in einem anderen Tab offen. Dieser Tab ist nur lesend.

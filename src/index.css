@@ -20,15 +20,20 @@
   --surface: #ffffff;
   --surface-2: #e4eaf2;
   --fg: #0a1524;
+  --digit: #0a1524;
   --muted: #56657e;
   --line: #cdd7e4;
+  --line-strong: #64748b;
   --accent: #0369a1;
   --accent-fg: #ffffff;
   --ok: #047857;
   --ok-fg: #ffffff;
-  --warn: #854d0e;
+  /* Warnfläche bleibt amber; Warntext nutzt den dunkleren Wert für AA. */
+  --warn: #a16207;
+  --warn-text: #854d0e;
   --warn-fg: #ffffff;
   --danger: #be123c;
+  --danger-fill: #be123c;
   --danger-fg: #ffffff;
 }
 
@@ -37,16 +42,20 @@
   --surface: #111a2b;
   --surface-2: #1a2538;
   --fg: #f2f6fc;
+  --digit: #ffffff;
   --muted: #94a6c2;
   --line: #26344c;
+  --line-strong: #556b8c;
   --accent: #38bdf8;
   --accent-fg: #04202e;
   --ok: #34d399;
-  --ok-fg: #04202e;
+  --ok-fg: #000000;
   --warn: #fbbf24;
-  --warn-fg: #04202e;
+  --warn-text: #fbbf24;
+  --warn-fg: #000000;
   --danger: #fb7185;
-  --danger-fg: #04202e;
+  --danger-fill: #e11d48;
+  --danger-fg: #ffffff;
 }
 
 @theme inline {
@@ -54,15 +63,19 @@
   --color-surface: var(--surface);
   --color-surface2: var(--surface-2);
   --color-fg: var(--fg);
+  --color-digit: var(--digit);
   --color-muted: var(--muted);
   --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
   --color-accent: var(--accent);
   --color-accent-fg: var(--accent-fg);
   --color-ok: var(--ok);
   --color-ok-fg: var(--ok-fg);
   --color-warn: var(--warn);
+  --color-warn-text: var(--warn-text);
   --color-warn-fg: var(--warn-fg);
   --color-danger: var(--danger);
+  --color-danger-fill: var(--danger-fill);
   --color-danger-fg: var(--danger-fg);
 }
 

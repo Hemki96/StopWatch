@@ -238,7 +238,7 @@ export function LaufDetail({
             Diese Runde hat noch nicht begonnen.
           </p>
         ) : !lauf.bahnen.every(istBahnBeendet) ? (
-          <p className="mt-3 rounded-xl border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn">
+          <p className="mt-3 rounded-xl border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn-text">
             Dieser Lauf ist unvollständig und zählt nicht als Bestzeit.
           </p>
         ) : null}
@@ -291,7 +291,7 @@ export function LaufDetail({
                       </p>
                     ) : null}
                     {delta === null && finishManuell ? (
-                      <p className="text-xs text-warn">manuell korrigiert</p>
+                      <p className="text-xs text-warn-text">manuell korrigiert</p>
                     ) : null}
                   </div>
                   <p
@@ -403,7 +403,7 @@ export function LaufDetail({
                               {/* Handkorrekturen bleiben sichtbar, damit eine
                                   Bestzeit nicht unbemerkt von Hand entsteht. */}
                               {anschlag.manuell ? (
-                                <span className="rounded bg-warn/15 px-1.5 py-0.5 text-[10px] font-bold text-warn">
+                                <span className="rounded bg-warn/15 px-1.5 py-0.5 text-[10px] font-bold text-warn-text">
                                   manuell
                                 </span>
                               ) : null}

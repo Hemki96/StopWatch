@@ -223,7 +223,7 @@ export function LaneTile({
   // Die Zeit bleibt rein (fg), der Status sitzt in Rahmen, Label und Fortschritt.
   // Nur bei einer unterbrochenen Bahn bleibt die Warnfarbe, weil sie einen
   // fehlenden Startzeitstempel markiert (#60-adjacent).
-  const zeitFarbe = unterbrochen ? 'text-warn' : 'text-fg'
+  const zeitFarbe = unterbrochen ? 'text-warn-text' : 'text-digit'
 
   // Gefüllte Segmente der Fortschrittsleiste: eines pro erfasstem Anschlag.
   const abgeschlosseneLaengen = bahn.anschlaege.length
@@ -354,7 +354,7 @@ export function LaneTile({
             ohne die Kachel auf schmalen Displays zu sprengen. */}
         <div
           className={`tabular whitespace-nowrap text-center font-semibold leading-none ${zeitFarbe}`}
-          style={{ fontSize: 'clamp(1.35rem, 15cqw, 3.25rem)' }}
+          style={{ fontSize: 'clamp(1.375rem, 15cqw, 3.25rem)' }}
         >
           {status === 'geplant' ? formatCountdown(zeit) : formatTime(zeit)}
         </div>

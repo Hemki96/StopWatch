@@ -187,7 +187,7 @@ function SatzListe({
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="truncate text-sm font-semibold">{satzTitel(satz)}</h2>
                   {unvollstaendig ? (
-                    <span className="rounded bg-warn/15 px-1.5 py-0.5 text-[10px] font-bold text-warn">
+                    <span className="rounded bg-warn/15 px-1.5 py-0.5 text-[10px] font-bold text-warn-text">
                       unvollständig
                     </span>
                   ) : null}
@@ -312,7 +312,7 @@ function SatzMatrix({
 
       <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-8 pt-3 rail:px-4">
         {unvollstaendig ? (
-          <p className="mb-2 rounded-xl border border-warn/40 bg-warn/10 px-3 py-2 text-[11px] text-warn">
+          <p className="mb-2 rounded-xl border border-warn/40 bg-warn/10 px-3 py-2 text-[11px] text-warn-text">
             Der Satz ist unvollständig. Fehlende Zeiten bleiben leer und zählen nicht als
             Abweichung.
           </p>
@@ -416,7 +416,7 @@ function SatzMatrix({
                             )}
                             <Abweichung ms={zelle.abweichungMs} />
                             {zelle.manuell ? (
-                              <span className="block text-[10px] leading-tight text-warn">
+                              <span className="block text-[10px] leading-tight text-warn-text">
                                 korr.
                               </span>
                             ) : null}
@@ -518,7 +518,7 @@ function PersonDrilldown({
                           <span className="tabular block">{formatTime(zelle.zeitMs)}</span>
                           <Abweichung ms={zelle.abweichungMs} />
                           {zelle.manuell ? (
-                            <span className="block text-[10px] leading-tight text-warn">korr.</span>
+                            <span className="block text-[10px] leading-tight text-warn-text">korr.</span>
                           ) : null}
                         </>
                       ) : (

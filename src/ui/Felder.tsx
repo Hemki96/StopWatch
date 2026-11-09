@@ -188,7 +188,7 @@ export function TaktWahl({
           disabled={disabled}
           onChange={(event) => setze(zahl(event.target.value), sekunden)}
           aria-label="Takt Minuten"
-          className="tabular h-11 w-16 rounded-xl border border-line bg-surface2 px-2 text-center text-sm disabled:opacity-40"
+          className="tabular h-11 w-16 rounded-xl border border-line-strong bg-surface2 px-2 text-center text-sm disabled:opacity-40"
         />
         <span className="text-sm font-semibold text-muted">:</span>
         <input
@@ -201,7 +201,7 @@ export function TaktWahl({
           disabled={disabled}
           onChange={(event) => setze(minuten, zahl(event.target.value))}
           aria-label="Takt Sekunden"
-          className="tabular h-11 w-16 rounded-xl border border-line bg-surface2 px-2 text-center text-sm disabled:opacity-40"
+          className="tabular h-11 w-16 rounded-xl border border-line-strong bg-surface2 px-2 text-center text-sm disabled:opacity-40"
         />
         <span className="text-xs text-muted">min:s</span>
       </div>
@@ -270,7 +270,7 @@ export function ZwischenzeitenWahl({
           aria-label="Weniger Zwischenzeiten"
           disabled={disabled || effektiv === 0}
           onClick={() => aendere(-1)}
-          className="h-12 w-12 rounded-xl border border-line bg-surface2 text-xl font-bold disabled:opacity-40"
+          className="h-12 w-12 rounded-xl border border-line-strong bg-surface2 text-xl font-bold disabled:opacity-40"
         >
           −
         </button>
@@ -286,14 +286,14 @@ export function ZwischenzeitenWahl({
           onBlur={() => setEingabe(null)}
           aria-label="Anzahl Zwischenzeiten"
           data-zwischenzeiten={effektiv === null ? 'offen' : effektiv}
-          className="tabular h-12 w-16 rounded-xl border border-line bg-surface2 px-2 text-center text-2xl font-semibold disabled:opacity-40"
+          className="tabular h-12 w-16 rounded-xl border border-line-strong bg-surface2 px-2 text-center text-2xl font-semibold disabled:opacity-40"
         />
         <button
           type="button"
           aria-label="Mehr Zwischenzeiten"
           disabled={disabled || (effektiv !== null && effektiv >= MAX_ZWISCHENZEITEN)}
           onClick={() => aendere(1)}
-          className="h-12 w-12 rounded-xl border border-line bg-surface2 text-xl font-bold disabled:opacity-40"
+          className="h-12 w-12 rounded-xl border border-line-strong bg-surface2 text-xl font-bold disabled:opacity-40"
         >
           +
         </button>
