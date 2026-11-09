@@ -213,7 +213,7 @@ export function HistoryScreen({
         {/* Zwei Segmente statt eines siebten Tabs: Die untere Leiste ist voll,
             und die Analyse gehört inhaltlich zum Verlauf. */}
         <div
-          role="group"
+          role="radiogroup"
           aria-label="Ansicht"
           className="mt-2 grid grid-cols-2 gap-1 rounded-xl bg-surface2 p-0.5"
         >
@@ -222,17 +222,35 @@ export function HistoryScreen({
               ['verlauf', 'Verlauf'],
               ['analyse', 'Analyse'],
             ] as const
-          ).map(([wert, label]) => (
+          ).map(([wert, label], index, liste) => (
             <button
               key={wert}
               type="button"
+              role="radio"
+              aria-checked={bereich === wert}
+              tabIndex={bereich === wert ? 0 : -1}
               onClick={() => {
                 setBereich(wert)
                 // Der Analyse-Bereich schließt ein offenes Detail; sonst
                 // erschiene es beim Zurückwechseln unerwartet wieder.
                 if (wert === 'analyse') setOffenerLauf(null)
               }}
-              aria-pressed={bereich === wert}
+              onKeyDown={(e) => {
+                const ziel =
+                  e.key === 'ArrowRight' || e.key === 'ArrowDown'
+                    ? liste[(index + 1) % liste.length]?.[0]
+                    : e.key === 'ArrowLeft' || e.key === 'ArrowUp'
+                      ? liste[(index - 1 + liste.length) % liste.length]?.[0]
+                      : null
+                if (!ziel) return
+                e.preventDefault()
+                setBereich(ziel)
+                if (ziel === 'analyse') setOffenerLauf(null)
+                const knopf = e.currentTarget.parentElement?.querySelector(
+                  'button[aria-checked="true"]',
+                ) as HTMLButtonElement | null
+                knopf?.focus()
+              }}
               className={`min-h-11 rounded-lg text-xs font-semibold transition-colors ${
                 bereich === wert ? 'bg-accent text-accent-fg' : 'text-muted'
               }`}

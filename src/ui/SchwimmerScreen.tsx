@@ -409,6 +409,7 @@ export function SchwimmerScreen() {
                     type="button"
                     onClick={() => setOffen(aufgeklappt ? null : schwimmer.id)}
                     aria-expanded={aufgeklappt}
+                    aria-controls={`schwimmer-details-${schwimmer.id}`}
                     className="flex min-w-0 flex-1 items-center gap-3 p-3 text-left"
                   >
                     <div className="min-w-0 flex-1">
@@ -441,7 +442,7 @@ export function SchwimmerScreen() {
                 </div>
 
                 {aufgeklappt ? (
-                  <div className="border-t border-line px-3 py-3">
+                  <div id={`schwimmer-details-${schwimmer.id}`} className="border-t border-line px-3 py-3">
                     <Bestzeiten
                       gruppen={gruppen}
                       schwimmerName={schwimmer.name}

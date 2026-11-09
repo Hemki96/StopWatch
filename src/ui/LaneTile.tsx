@@ -331,7 +331,7 @@ export function LaneTile({
             onUndo(bahn.id)
           }
         }}
-        className="relative flex min-h-[7.5rem] flex-1 select-none flex-col justify-between p-3 short:min-h-[6.25rem] short:p-2 rail:p-4"
+        className="relative flex min-h-[7.5rem] flex-1 select-none flex-col justify-between p-3 short:min-h-[6rem] short:p-2 rail:min-h-[8rem] rail:p-4"
         // `pan-y` lässt die Seite scrollen, verhindert aber Doppeltipp-Zoom.
         // `none` würde auf kleinen Displays auch das Scrollen blockieren.
         // Die Container-Abfrage lässt die Zeit mit der Kachel statt mit dem
