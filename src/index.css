@@ -162,6 +162,13 @@
   }
 }
 
+@media (prefers-contrast: more) {
+  /* Im hohen Kontrast entfällt das Beckenmuster. */
+  .pool-muster {
+    background-image: none !important;
+  }
+}
+
 @utility tabular {
   font-variant-numeric: tabular-nums;
   font-feature-settings: 'tnum' 1;
