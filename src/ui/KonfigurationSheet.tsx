@@ -238,7 +238,7 @@ export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetP
                 onClick={() =>
                   setzeAufteilung(app.einstellungen.bahnen - 1, app.einstellungen.reihen)
                 }
-                className="h-12 w-12 rounded-xl border border-line bg-surface2 text-xl font-bold disabled:opacity-40"
+                className="h-12 w-12 rounded-xl border border-line-strong bg-surface2 text-xl font-bold disabled:opacity-40"
               >
                 −
               </button>
@@ -252,7 +252,7 @@ export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetP
                 onClick={() =>
                   setzeAufteilung(app.einstellungen.bahnen + 1, app.einstellungen.reihen)
                 }
-                className="h-12 w-12 rounded-xl border border-line bg-surface2 text-xl font-bold disabled:opacity-40"
+                className="h-12 w-12 rounded-xl border border-line-strong bg-surface2 text-xl font-bold disabled:opacity-40"
               >
                 +
               </button>
@@ -271,7 +271,7 @@ export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetP
                 onClick={() =>
                   setzeAufteilung(app.einstellungen.bahnen, app.einstellungen.reihen - 1)
                 }
-                className="h-12 w-12 rounded-xl border border-line bg-surface2 text-xl font-bold disabled:opacity-40"
+                className="h-12 w-12 rounded-xl border border-line-strong bg-surface2 text-xl font-bold disabled:opacity-40"
               >
                 −
               </button>
@@ -285,7 +285,7 @@ export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetP
                 onClick={() =>
                   setzeAufteilung(app.einstellungen.bahnen, app.einstellungen.reihen + 1)
                 }
-                className="h-12 w-12 rounded-xl border border-line bg-surface2 text-xl font-bold disabled:opacity-40"
+                className="h-12 w-12 rounded-xl border border-line-strong bg-surface2 text-xl font-bold disabled:opacity-40"
               >
                 +
               </button>
@@ -338,7 +338,7 @@ export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetP
             aria-label="Weniger Wiederholungen"
             disabled={modus === 'lauf' || wiederholungen <= 1}
             onClick={() => setzeEinstellung({ wiederholungen: wiederholungen - 1 })}
-            className="h-12 w-12 rounded-xl border border-line bg-surface2 text-xl font-bold disabled:opacity-40"
+            className="h-12 w-12 rounded-xl border border-line-strong bg-surface2 text-xl font-bold disabled:opacity-40"
           >
             −
           </button>
@@ -348,7 +348,7 @@ export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetP
             aria-label="Mehr Wiederholungen"
             disabled={modus === 'lauf' || wiederholungen >= 20}
             onClick={() => setzeEinstellung({ wiederholungen: wiederholungen + 1 })}
-            className="h-12 w-12 rounded-xl border border-line bg-surface2 text-xl font-bold disabled:opacity-40"
+            className="h-12 w-12 rounded-xl border border-line-strong bg-surface2 text-xl font-bold disabled:opacity-40"
           >
             +
           </button>
@@ -407,7 +407,7 @@ export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetP
                                 : app.setzeSchwimmer(bahn.id, e.target.value || null)
                             }
                             aria-label={`Schwimmer für Reihe ${bahn.reihe}, Bahn ${bahn.nummer}`}
-                            className="h-11 flex-1 rounded-xl border border-line bg-surface2 px-3 text-sm"
+                            className="h-11 flex-1 rounded-xl border border-line-strong bg-surface2 px-3 text-sm"
                           >
                             <option value="">— kein Schwimmer —</option>
                             {app.schwimmer.map((s) => (
@@ -472,7 +472,7 @@ export function KonfigurationSheet({ open, onClose, modus }: KonfigurationSheetP
                               })
                             }}
                             aria-label={`Schwimmer für Reihe ${reiheIndex + 1}, Bahn ${bahnIndex + 1}`}
-                            className="h-11 flex-1 rounded-xl border border-line bg-surface2 px-3 text-sm"
+                            className="h-11 flex-1 rounded-xl border border-line-strong bg-surface2 px-3 text-sm"
                           >
                             <option value="">— kein Schwimmer —</option>
                             {app.schwimmer.map((s) => (

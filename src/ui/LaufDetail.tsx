@@ -234,7 +234,7 @@ export function LaufDetail({
         {/* Zwei verschiedene Hinweise: noch gar nicht gestartet oder gestartet,
             aber nicht auf allen Bahnen im Ziel. */}
         {!begonnen ? (
-          <p className="mt-3 rounded-xl border border-line bg-surface2 px-3 py-2 text-xs text-muted">
+          <p className="mt-3 rounded-xl border border-line-strong bg-surface2 px-3 py-2 text-xs text-muted">
             Diese Runde hat noch nicht begonnen.
           </p>
         ) : !lauf.bahnen.every(istBahnBeendet) ? (
@@ -376,7 +376,7 @@ export function LaufDetail({
                                     ? `Zeit für Zwischenzeit ${anschlag.laengeNr}`
                                     : `Zeit für Länge ${anschlag.laengeNr}`
                                 }
-                                className="tabular h-10 min-w-0 flex-1 rounded-md border border-line bg-surface2 px-2"
+                                className="tabular h-10 min-w-0 flex-1 rounded-md border border-line-strong bg-surface2 px-2"
                               />
                               <button
                                 type="submit"

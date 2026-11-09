@@ -156,7 +156,7 @@ export function TrainingsSatzSheet({
           onChange={(event) => aendere({ bezeichnung: event.target.value })}
           placeholder="optional, z. B. Einschwimmen"
           aria-label="Bezeichnung des Satzes"
-          className="h-11 w-full rounded-xl border border-line bg-surface2 px-3 text-sm"
+          className="h-11 w-full rounded-xl border border-line-strong bg-surface2 px-3 text-sm"
         />
       </Feld>
 
@@ -226,7 +226,7 @@ export function TrainingsSatzSheet({
             aria-label="Weniger Wiederholungen"
             disabled={entwurf.wiederholungen <= 1}
             onClick={() => aendere({ wiederholungen: entwurf.wiederholungen - 1 })}
-            className="h-12 w-12 rounded-xl border border-line bg-surface2 text-xl font-bold disabled:opacity-40"
+            className="h-12 w-12 rounded-xl border border-line-strong bg-surface2 text-xl font-bold disabled:opacity-40"
           >
             −
           </button>
@@ -238,7 +238,7 @@ export function TrainingsSatzSheet({
             aria-label="Mehr Wiederholungen"
             disabled={entwurf.wiederholungen >= 20}
             onClick={() => aendere({ wiederholungen: entwurf.wiederholungen + 1 })}
-            className="h-12 w-12 rounded-xl border border-line bg-surface2 text-xl font-bold disabled:opacity-40"
+            className="h-12 w-12 rounded-xl border border-line-strong bg-surface2 text-xl font-bold disabled:opacity-40"
           >
             +
           </button>
@@ -282,7 +282,7 @@ export function TrainingsSatzSheet({
               type="button"
               disabled={!kannNachOben}
               onClick={() => onVerschieben(-1)}
-              className="h-11 flex-1 rounded-xl border border-line bg-surface2 text-sm font-semibold disabled:opacity-40"
+              className="h-11 flex-1 rounded-xl border border-line-strong bg-surface2 text-sm font-semibold disabled:opacity-40"
             >
               Nach oben
             </button>
@@ -290,7 +290,7 @@ export function TrainingsSatzSheet({
               type="button"
               disabled={!kannNachUnten}
               onClick={() => onVerschieben(1)}
-              className="h-11 flex-1 rounded-xl border border-line bg-surface2 text-sm font-semibold disabled:opacity-40"
+              className="h-11 flex-1 rounded-xl border border-line-strong bg-surface2 text-sm font-semibold disabled:opacity-40"
             >
               Nach unten
             </button>
