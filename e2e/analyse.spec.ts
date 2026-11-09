@@ -142,8 +142,8 @@ test('zeigt Satzliste, Matrix mit Referenz und Längenzeiten der Person', async 
   // Umschalter: Der Verlauf bleibt erreichbar, die Analyse listet nur
   // auswertbare Sätze.
   await page
-    .getByRole('group', { name: 'Ansicht' })
-    .getByRole('button', { name: 'Analyse' })
+    .getByRole('radiogroup', { name: 'Ansicht' })
+    .getByRole('radio', { name: 'Analyse' })
     .tap()
   await expect(page.getByRole('button', { name: /Serie KW 44/ })).toBeVisible()
   await expect(page.getByRole('button', { name: /Serie KW 43/ })).toBeVisible()
@@ -178,8 +178,8 @@ test('zeigt Satzliste, Matrix mit Referenz und Längenzeiten der Person', async 
   await expect(page.getByRole('columnheader', { name: 'R2' })).toBeVisible()
   await page.getByRole('button', { name: 'Satzliste' }).tap()
   await page
-    .getByRole('group', { name: 'Ansicht' })
-    .getByRole('button', { name: 'Verlauf' })
+    .getByRole('radiogroup', { name: 'Ansicht' })
+    .getByRole('radio', { name: 'Verlauf' })
     .tap()
   await expect(page.getByText('4 Läufe')).toBeVisible()
 })

@@ -188,7 +188,7 @@ test('führt aus dem leeren Verlauf direkt zum Timer', async ({ page }) => {
 test('führt aus der leeren Analyse direkt zum Timer', async ({ page }) => {
   await oeffneApp(page)
   await page.getByRole('button', { name: 'Verlauf' }).tap()
-  await page.getByRole('button', { name: 'Analyse' }).tap()
+  await page.getByRole('radio', { name: 'Analyse' }).tap()
 
   await expect(page.getByText('Noch keine auswertbaren Sätze.')).toBeVisible()
   await page.getByRole('button', { name: 'Zum Timer' }).tap()
