@@ -807,6 +807,7 @@ export function createLaufAktionen(deps: LaufAktionenDeps): LaufAktionen {
       })
     },
     waehleLauf: (id) => {
+      if (!istAktiv()) return
       if (!aktiveIdsRef.current.includes(id)) return
       setAktivenLaufId(id)
     },

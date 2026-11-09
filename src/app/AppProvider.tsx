@@ -353,8 +353,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setAktiveIds = useCallback((ids: string[]) => {
     aktiveIdsRef.current = ids
     setAktiveIdsState(ids)
-    speichereAktiveIds(ids)
-  }, [])
+    // Nur der aktive Tab darf die Leiste persistieren; ein gesperrter Tab
+    // würde sonst die Auswahl des Halters überschreiben.
+    if (istAktiv()) speichereAktiveIds(ids)
+  }, [istAktiv])
 
   /**
    * Wechselt den sichtbaren Lauf. Maßgeblich ist `aktiveIds`; der Einzelwert
@@ -381,6 +383,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setToast((aktuell) => (aktuell === nachricht ? null : aktuell))
       toastTimerRef.current = null
     }, 3200)
+  }, [])
+
+  // Beim Unmount des Providers den Toast-Timer aufräumen, damit kein
+  // State-Update nach dem Abbau läuft.
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current !== null) {
+        window.clearTimeout(toastTimerRef.current)
+        toastTimerRef.current = null
+      }
+    }
   }, [])
 
   /**
@@ -510,7 +523,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Verwaiste und vollständig beendete Einträge fallen weg. Bleibt nichts
     // übrig, wird der zuletzt gestartete offene Lauf angeboten; bei einer Serie
     // ist das ihr Anker, nicht die zuletzt gestartete Wiederholung.
-    let aktive = bereinigeAktiveIds(leseAktiveIds(), laeufe, daten.satze)
+    // Gesperrte Tabs dürfen die Leiste nicht aus localStorage übernehmen, sonst
+    // racen sie mit dem aktiven Tab. Sie behalten ihren eigenen (leeren) Stand.
+    const quelle = istAktiv() ? leseAktiveIds() : aktiveIdsRef.current
+    let aktive = bereinigeAktiveIds(quelle, laeufe, daten.satze)
     if (aktive.length === 0) {
       const offen = waehleOffenenLauf(laeufe, daten.satze)
       if (offen) aktive = [offen]
@@ -541,6 +557,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSatzeSafe,
     setTrainingsSafe,
     zeigeToast,
+    istAktiv,
   ])
 
   // Die Ref zeigt immer auf die jüngste Fassung. Der Koordinator greift darauf

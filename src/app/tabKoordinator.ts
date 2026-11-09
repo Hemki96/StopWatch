@@ -373,6 +373,9 @@ export class TabKoordinator {
         // Übernahme-Timeout ist damit erledigt.
         if (this.takeoverTimer !== null) globalThis.clearTimeout(this.takeoverTimer)
         this.takeoverTimer = null
+        // Ein verspätetes yield nach einem Timeout darf einen bereits
+        // übernommenen/aktiven Tab nicht erneut umschalten.
+        if (this.rolle === 'aktiv') return
         this.werdeAktiv()
         break
     }

@@ -63,7 +63,7 @@ export function useWakeLock(aktiv: boolean): boolean {
         // und der veraltete Sentinel darf nicht wiederverwendet werden.
         neu.addEventListener('release', () => {
           if (sentinel === neu) sentinel = null
-          setAktiviert(false)
+          if (!abgebrochen) setAktiviert(false)
         })
         setAktiviert(true)
       } catch {

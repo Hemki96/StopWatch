@@ -87,7 +87,11 @@ export function waehleDatei(akzeptiert: string): Promise<File | null> {
 
     // Genau einmal auflösen und dabei aufräumen; beide Ereignisse können je
     // nach Browser auch ausbleiben, dann bleibt die Promise offen.
+    let erledigt = false
     const fertig = (datei: File | null) => {
+      if (erledigt) return
+      erledigt = true
+      window.clearTimeout(timer)
       input.remove()
       resolve(datei)
     }
@@ -95,6 +99,10 @@ export function waehleDatei(akzeptiert: string): Promise<File | null> {
     input.onchange = () => fertig(input.files?.[0] ?? null)
     // `cancel` meldet den Abbruch; nicht jeder Browser unterstützt es.
     input.oncancel = () => fertig(null)
+
+    // Fallback für Browser ohne `cancel`: Nach 60 s als abgebrochen werten,
+    // damit die Promise nicht ewig hängt.
+    const timer = window.setTimeout(() => fertig(null), 60_000)
 
     // Ein nicht eingehängtes Input verweigert Safari in manchen Versionen
     // den Klick. Nach dem Auswählen wird es wieder entfernt.

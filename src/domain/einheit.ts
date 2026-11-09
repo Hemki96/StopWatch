@@ -102,6 +102,7 @@ export function istBeckenlaenge(wert: unknown): wert is Beckenlaenge {
  * 91,44 m, nicht 100 m: Ein 1:00 auf 100 yd ergibt 60 000, nicht 65 616.
  */
 export function pacePro100Einheit(ms: number, streckeM: number, einheit: Einheit): number {
+  if (!Number.isFinite(streckeM) || streckeM <= 0) return ms
   if (einheit === 'yd') return (ms * STRECKE_100_YD_M) / streckeM
   return (ms / streckeM) * 100
 }

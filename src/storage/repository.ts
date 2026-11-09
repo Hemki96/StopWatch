@@ -211,11 +211,40 @@ export async function loadAll(optionen: { behalteLaufende?: boolean } = {}): Pro
     // abbricht.
     await tx.done
     return {
-      schwimmer: schwimmer.sort((a, b) => a.name.localeCompare(b.name, 'de')),
-      satze: satze.map(normalizeSatzOnLoad).sort((a, b) => b.datum.localeCompare(a.datum)),
-      laeufe: laeufe.map((lauf) => normalizeOnLoad(lauf, optionen)),
+      schwimmer: schwimmer
+        .filter((eintrag): eintrag is Schwimmer => !!eintrag && typeof eintrag === 'object')
+        .sort((a, b) => a.name.localeCompare(b.name, 'de')),
+      satze: satze
+        .filter((eintrag): eintrag is Satz => !!eintrag && typeof eintrag === 'object')
+        .map((eintrag) => {
+          try {
+            return normalizeSatzOnLoad(eintrag)
+          } catch {
+            return null
+          }
+        })
+        .filter((eintrag): eintrag is Satz => eintrag !== null)
+        .sort((a, b) => b.datum.localeCompare(a.datum)),
+      laeufe: laeufe
+        .filter((eintrag): eintrag is Lauf => !!eintrag && typeof eintrag === 'object')
+        .map((eintrag) => {
+          try {
+            return normalizeOnLoad(eintrag, optionen)
+          } catch {
+            return null
+          }
+        })
+        .filter((eintrag): eintrag is Lauf => eintrag !== null),
       trainings: trainings
-        .map(normalizeTrainingOnLoad)
+        .filter((eintrag): eintrag is Training => !!eintrag && typeof eintrag === 'object')
+        .map((eintrag) => {
+          try {
+            return normalizeTrainingOnLoad(eintrag)
+          } catch {
+            return null
+          }
+        })
+        .filter((eintrag): eintrag is Training => eintrag !== null)
         .sort((a, b) => b.datum.localeCompare(a.datum) || b.erstelltAm - a.erstelltAm),
     }
   } catch (fehler) {
